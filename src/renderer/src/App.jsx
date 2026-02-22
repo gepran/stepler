@@ -745,10 +745,7 @@ export default function App() {
                           className="group/task relative -ml-1.5 flex items-start p-1.5"
                         >
                           {dt && (
-                            <div className="absolute right-full top-1 mr-2 mt-0.5 flex w-16 flex-col items-end justify-center opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
-                              <span className="mb-0.5 whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
-                                {dt.date}
-                              </span>
+                            <div className="absolute right-full top-1 mr-2 mt-1 flex w-16 justify-end opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
                               <span className="whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
@@ -853,10 +850,7 @@ export default function App() {
                           }`}
                         >
                           {dt && (
-                            <div className="absolute right-full top-1 mr-2 mt-1.5 flex w-16 flex-col items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
-                              <span className="mb-0.5 whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
-                                {dt.date}
-                              </span>
+                            <div className="absolute right-full top-1 mr-2 mt-2 flex w-16 justify-end opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
                               <span className="whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
@@ -864,7 +858,7 @@ export default function App() {
                           )}
                           <button
                             onClick={() => toggleTask(task.id)}
-                            className="mt-0.5 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
+                            className="mt-1 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
                           >
                             {task.completed ? (
                               <CheckCircle2
@@ -914,7 +908,7 @@ export default function App() {
                                     setEditText(task.text);
                                   }
                                 }}
-                                className={`block w-full cursor-text whitespace-pre-wrap pt-0.5 text-[15px] leading-relaxed ${
+                                className={`block w-full cursor-text whitespace-pre-wrap text-[15px] leading-relaxed ${
                                   task.completed
                                     ? "text-neutral-400 line-through dark:text-neutral-500"
                                     : "text-neutral-800 dark:text-neutral-200"
