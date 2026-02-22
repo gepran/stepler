@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
+const isMac = window.electron?.process?.platform === "darwin" || /Mac/.test(navigator.userAgent);
 
 async function loadAppData() {
   if (ipc) {
@@ -45,14 +46,14 @@ function saveAppData(partial) {
 function formatAcceleratorForDisplay(acc) {
   if (!acc) return "";
   return acc
-    .replace(/CommandOrControl/g, "⌘")
-    .replace(/CmdOrCtrl/g, "⌘")
-    .replace(/Command/g, "⌘")
-    .replace(/Control/g, "⌃")
-    .replace(/Shift/g, "⇧")
-    .replace(/Alt/g, "⌥")
-    .replace(/\+/g, "")
-    .replace(/Space/, "␣");
+    .replace(/CommandOrControl/g, isMac ? "⌘" : "Ctrl")
+    .replace(/CmdOrCtrl/g, isMac ? "⌘" : "Ctrl")
+    .replace(/Command/g, isMac ? "⌘" : "Win")
+    .replace(/Control/g, isMac ? "⌃" : "Ctrl")
+    .replace(/Shift/g, isMac ? "⇧" : "Shift")
+    .replace(/Alt/g, isMac ? "⌥" : "Alt")
+    .replace(/\+/g, isMac ? "" : " + ")
+    .replace(/Space/, isMac ? "␣" : "Space");
 }
 
 function keyEventToAccelerator(e) {
@@ -201,7 +202,7 @@ function SettingsPanel({ onClose }) {
             </div>
           )}
           <p className="mt-2 text-xs text-neutral-400 dark:text-neutral-500">
-            Toggle Stepler from anywhere on your Mac.
+            Toggle Stepler from anywhere on your {isMac ? "Mac" : "PC"}.
           </p>
         </div>
       </div>
@@ -709,7 +710,7 @@ export default function App() {
               <button
                 onClick={() => setShowSettings(true)}
                 className="ml-1 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-                title="Settings (⌘,)"
+                title={`Settings (${isMac ? "⌘," : "Ctrl+,"})`}
               >
                 <Settings size={15} />
               </button>
@@ -1199,7 +1200,7 @@ export default function App() {
                       className={`flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                         isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                       }`}
-                      title="Start Dictation (Fn twice)"
+                      title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
                     >
                       <Mic size={16} />
                       {isExpanded && <span>Dictate</span>}

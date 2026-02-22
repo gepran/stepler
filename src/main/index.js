@@ -19,7 +19,11 @@ let mainWindow = null;
 // --------------- Settings persistence ---------------
 
 const settingsPath = join(app.getPath("userData"), "stepler-settings.json");
-const defaults = { hotkey: "Shift+CommandOrControl+Space", theme: "dark" };
+const isMac = process.platform === "darwin";
+const defaults = {
+  hotkey: isMac ? "Shift+Command+Space" : "Ctrl+Shift+Space",
+  theme: "dark",
+};
 
 function loadSettings() {
   try {
