@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  
+  <!-- Outer subtle shadow for the squircle icon -->
+  <rect x="5" y="5" width="90" height="90" rx="20" fill="#000000" opacity="0.1"/>
+  <rect x="5" y="7" width="90" height="90" rx="20" fill="#000000" opacity="0.1"/>
+  
+  <!-- Mac App Icon Squircle Background -->
+  <rect x="5" y="5" width="90" height="90" rx="20" fill="#ffffff" />
+
+  <defs>
+    <!-- Ribbon top gradient -->
+    <linearGradient id="steplerRibbonTop" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#f97316" />
+      <stop offset="100%" stopColor="#8b5cf6" />
+    </linearGradient>
+    
+    <!-- Ribbon bottom gradient -->
+    <linearGradient id="steplerRibbonBottom" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#8b5cf6" />
+      <stop offset="100%" stopColor="#f43f5e" />
+    </linearGradient>
+  </defs>
+
+  <!-- Group to scale down the Ribbon S slightly so it fits beautifully inside the icon -->
+  <g transform="translate(10, 10) scale(0.8)">
+    <path
+      d="M 65 20 C 85 20, 85 50, 65 50 L 35 50 C 25 50, 15 40, 15 35 C 15 25, 25 20, 35 20 Z"
+      fill="url(#steplerRibbonTop)"
+    />
+    <path
+      d="M 35 80 C 15 80, 15 50, 35 50 L 65 50 C 75 50, 85 60, 85 65 C 85 75, 75 80, 65 80 Z"
+      fill="url(#steplerRibbonBottom)"
+    />
+    <path
+      d="M 35 50 L 65 50 L 50 65 Z"
+      fill="#000000"
+      opacity="0.15"
+    />
+  </g>
+</svg>

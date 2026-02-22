@@ -1,0 +1,264 @@
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  Menu,
+  nativeTheme,
+  Notification,
+} from "electron";
+import { join } from "path";
+import { readFileSync, writeFileSync } from "fs";
+import { exec } from "child_process";
+import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import icon from "../../resources/icon.png?asset";
+
+let mainWindow = null;
+
+// --------------- Settings persistence ---------------
+
+const settingsPath = join(app.getPath("userData"), "stepler-settings.json");
+const defaults = { hotkey: "Shift+CommandOrControl+Space", theme: "dark" };
+
+function loadSettings() {
+  try {
+    return { ...defaults, ...JSON.parse(readFileSync(settingsPath, "utf-8")) };
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function saveSettings(partial) {
+  const merged = { ...loadSettings(), ...partial };
+  writeFileSync(settingsPath, JSON.stringify(merged, null, 2));
+  return merged;
+}
+
+// --------------- App data persistence (tasks, history) ---------------
+
+const dataPath = join(app.getPath("userData"), "stepler-data.json");
+const dataDefaults = {
+  tasks: [],
+  history: [],
+  currentDate: null,
+  firedReminders: [],
+};
+
+function loadAppData() {
+  try {
+    return { ...dataDefaults, ...JSON.parse(readFileSync(dataPath, "utf-8")) };
+  } catch {
+    return { ...dataDefaults };
+  }
+}
+
+function saveAppData(partial) {
+  const merged = { ...loadAppData(), ...partial };
+  writeFileSync(dataPath, JSON.stringify(merged, null, 2));
+  return merged;
+}
+
+// --------------- Hotkey management ---------------
+
+let currentHotkey = null;
+
+function registerHotkey(accelerator) {
+  if (currentHotkey) {
+    try {
+      globalShortcut.unregister(currentHotkey);
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    globalShortcut.register(accelerator, toggleWindow);
+    currentHotkey = accelerator;
+    return true;
+  } catch {
+    if (currentHotkey && currentHotkey !== accelerator) {
+      try {
+        globalShortcut.register(currentHotkey, toggleWindow);
+      } catch {
+        /* lost */
+      }
+    }
+    return false;
+  }
+}
+
+// --------------- Theme ---------------
+
+function applyTheme(theme) {
+  nativeTheme.themeSource = theme;
+}
+
+// --------------- Window toggle ---------------
+
+function toggleWindow() {
+  if (!mainWindow) return;
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+// --------------- macOS application menu ---------------
+
+function buildMenu() {
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { label: "About Stepler", role: "about" },
+        { type: "separator" },
+        {
+          label: "Settings…",
+          accelerator: "CmdOrCtrl+,",
+          click: () => mainWindow?.webContents.send("open-settings"),
+        },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      role: "editMenu",
+    },
+    {
+      label: "Window",
+      submenu: [{ role: "minimize" }, { role: "close" }],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// --------------- Window creation ---------------
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 900,
+    height: 670,
+    show: false,
+    titleBarStyle: "hiddenInset",
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    autoHideMenuBar: true,
+    ...(process.platform === "linux" ? { icon } : {}),
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: false,
+    },
+  });
+
+  mainWindow.on("ready-to-show", () => {
+    mainWindow.show();
+  });
+
+  mainWindow.on("close", (e) => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url);
+    return { action: "deny" };
+  });
+
+  if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+  } else {
+    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+  }
+}
+
+// --------------- IPC handlers ---------------
+
+function setupIPC() {
+  ipcMain.handle("get-settings", () => loadSettings());
+
+  ipcMain.handle("update-settings", (_, partial) => {
+    const settings = saveSettings(partial);
+    if (partial.hotkey !== undefined) registerHotkey(settings.hotkey);
+    if (partial.theme !== undefined) applyTheme(settings.theme);
+    return settings;
+  });
+
+  ipcMain.handle("load-app-data", () => loadAppData());
+
+  ipcMain.handle("save-app-data", (_, partial) => {
+    return saveAppData(partial);
+  });
+
+  ipcMain.handle("start-dictation", () => {
+    // The most reliable way to trigger dictation across all macOS contexts
+    // is to send the default Dictation shortcut (double tap Fn/Globe key).
+    const script = `
+      tell application "System Events"
+        key code 63
+        delay 0.05
+        key code 63
+      end tell
+    `;
+    exec(`osascript -e '${script}'`, (error) => {
+      if (error) console.error("Dictation AppleScript error:", error);
+    });
+  });
+
+  ipcMain.handle("show-notification", (_, { title, body }) => {
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title, body, silent: false });
+    n.on("click", () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    n.show();
+    return true;
+  });
+}
+
+// --------------- App lifecycle ---------------
+
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId("com.stepler.app");
+
+  app.on("browser-window-created", (_, window) => {
+    optimizer.watchWindowShortcuts(window);
+  });
+
+  const settings = loadSettings();
+  applyTheme(settings.theme);
+
+  buildMenu();
+  setupIPC();
+  createWindow();
+  registerHotkey(settings.hotkey);
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+});
+
+app.on("before-quit", () => {
+  app.isQuitting = true;
+  globalShortcut.unregisterAll();
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
