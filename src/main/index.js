@@ -101,8 +101,15 @@ function applyTheme(theme) {
 
 function toggleWindow() {
   if (!mainWindow) return;
-  if (mainWindow.isVisible() && mainWindow.isFocused()) {
-    mainWindow.hide();
+
+  const isFocused = mainWindow.isFocused();
+
+  if (mainWindow.isVisible() && isFocused) {
+    if (process.platform === "darwin") {
+      app.hide();
+    } else {
+      mainWindow.hide();
+    }
   } else {
     mainWindow.show();
     mainWindow.focus();
@@ -168,7 +175,11 @@ function createWindow() {
   mainWindow.on("close", (e) => {
     if (!app.isQuitting) {
       e.preventDefault();
-      mainWindow.hide();
+      if (process.platform === "darwin") {
+        app.hide();
+      } else {
+        mainWindow.hide();
+      }
     }
   });
 
