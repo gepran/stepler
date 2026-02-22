@@ -745,8 +745,8 @@ export default function App() {
                           className="group/task relative -ml-1.5 flex items-start p-1.5"
                         >
                           {dt && (
-                            <div className="absolute right-full top-1 mr-2 mt-1 flex w-16 justify-end opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
-                              <span className="whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
+                            <div className="absolute right-full inset-y-0 flex items-center pr-3 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
+                              <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
                             </div>
@@ -850,8 +850,8 @@ export default function App() {
                           }`}
                         >
                           {dt && (
-                            <div className="absolute right-full top-1 mr-2 mt-2 flex w-16 justify-end opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
-                              <span className="whitespace-nowrap text-[10px] font-medium leading-[1.1] tracking-wide text-neutral-400 dark:text-neutral-500">
+                            <div className="absolute right-full inset-y-0 flex items-center pr-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
+                              <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
                             </div>
@@ -1059,7 +1059,7 @@ export default function App() {
           className={`z-40 flex shrink-0 justify-center transition-all duration-300 ${
             isExpanded
               ? "fixed inset-0 bg-neutral-950 p-6 md:p-12 z-[100]"
-              : "border-t border-neutral-200 bg-neutral-100/90 p-4 backdrop-blur-md md:p-6 dark:border-neutral-800 dark:bg-neutral-900/90"
+              : "p-4 md:p-6"
           }`}
         >
           <div
