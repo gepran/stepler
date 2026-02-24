@@ -1,12 +1,9 @@
-import { useState, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import PropTypes from "prop-types";
-import { Search, CalendarDays, Settings } from "lucide-react";
+import { CalendarDays, Settings } from "lucide-react";
 import SteplerLogo from "./SteplerLogo";
 
-export default function Sidebar({ show, history, tasks, onDayClick, onSettingsClick, onSearchClick }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef(null);
-
+export default function Sidebar({ show, history, tasks, onDayClick, onSettingsClick }) {
   const allDays = useMemo(() => {
     const todayTasksCount = tasks.length;
 
@@ -22,34 +19,6 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
     ];
   }, [history, tasks]);
 
-  const filteredDays = useMemo(() => {
-    if (!searchQuery.trim()) return allDays;
-    const lowerQ = searchQuery.toLowerCase();
-    return allDays.filter(
-      (d) =>
-        d.date.toLowerCase().includes(lowerQ) ||
-        d.count.toString().includes(lowerQ),
-    );
-  }, [allDays, searchQuery]);
-
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const lowerQ = searchQuery.toLowerCase();
-    const allTasks = [
-      ...tasks.map(t => ({ ...t, dateLabel: "Today" })),
-      ...history.flatMap(day => day.tasks.map(t => ({ ...t, dateLabel: day.date })))
-    ];
-
-    return allTasks
-      .filter(t => t.text?.toLowerCase().includes(lowerQ))
-      .sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        const idA = parseInt(a.id || 0, 10);
-        const idB = parseInt(b.id || 0, 10);
-        return idB - idA;
-      });
-  }, [tasks, history, searchQuery]);
-
   const maxTasks = useMemo(() => {
     if (allDays.length === 0) return 0;
     return Math.max(...allDays.map((d) => d.count));
@@ -63,9 +32,9 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
         month: d.toLocaleString("en-US", { month: "short" }),
       };
     }
-    const parts = dateStr.replace(",", "").split(" ");
+    const parts = dateStr.split(" ");
+    const day = parts[0] || "";
     const month = parts[1] ? parts[1].substring(0, 3) : "";
-    const day = parts[2] || "";
     return { day, month };
   };
 
@@ -75,13 +44,11 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
         show ? "w-64" : "w-16"
       }`}
     >
-      {/* Fake Navbar area, always visible in this column */}
       <div
         className="absolute top-0 left-0 w-full h-8 shrink-0 border-b border-neutral-200 bg-neutral-100/80 backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/80 z-20"
         style={{ WebkitAppRegion: "drag", borderRightWidth: 0 }}
       />
 
-      {/* Expanded Content */}
       <div
         className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-64 flex-col bg-white overflow-hidden transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
           show
@@ -91,30 +58,13 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
       >
         <div className="px-4 pb-4 pt-3 shrink-0 flex flex-col">
           <div
-            className="flex items-center mb-4 text-neutral-800 dark:text-neutral-200"
+            className="flex items-center text-neutral-800 dark:text-neutral-200"
             style={{ WebkitAppRegion: "no-drag" }}
           >
             <SteplerLogo size={50} className="mr-2.5" />
             <span className="text-xl font-bold tracking-wide">
               Stepler
             </span>
-          </div>
-          <div
-            className="w-full relative"
-            style={{ WebkitAppRegion: "no-drag" }}
-          >
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500"
-              size={14}
-            />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-neutral-100 dark:bg-neutral-800/80 text-sm text-neutral-800 dark:text-neutral-200 rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-300 dark:focus:ring-neutral-600 transition-all placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
-            />
           </div>
         </div>
 
@@ -124,88 +74,49 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
           </div>
 
           <div className="space-y-1.5 pb-6">
-            {!searchQuery.trim() ? (
-              <>
-                {filteredDays.map((day, idx) => {
-                  const intensity = maxTasks > 0 ? day.count / maxTasks : 0;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => onDayClick?.(day.date)}
-                      className="group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
+            {allDays.map((day, idx) => {
+              const intensity = maxTasks > 0 ? day.count / maxTasks : 0;
+              return (
+                <div
+                  key={idx}
+                  onClick={() => onDayClick?.(day.date)}
+                  className="group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span
+                      className={`text-sm font-medium ${day.isToday ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"}`}
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <span
-                          className={`text-sm font-medium ${day.isToday ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"}`}
-                        >
-                          {day.date}
-                        </span>
-                        <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded">
-                          {day.count} {day.count === 1 ? "task" : "tasks"}
-                        </span>
-                      </div>
-
-                      {/* Intensity Bar (Busyness indicator) */}
-                      <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800/80 rounded-full overflow-hidden flex">
-                        <div
-                          className={`h-full rounded-full transition-all duration-700 ease-out ${
-                            day.isToday
-                              ? "bg-neutral-700 dark:bg-neutral-300"
-                              : intensity > 0.6
-                                ? "bg-neutral-500 dark:bg-neutral-400"
-                                : intensity > 0.25
-                                  ? "bg-neutral-400 dark:bg-neutral-500"
-                                  : "bg-neutral-200 dark:bg-neutral-700"
-                          }`}
-                          style={{ width: `${Math.max(intensity * 100, 3)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredDays.length === 0 && (
-                  <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-                    No days found.
+                      {day.date}
+                    </span>
+                    <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded">
+                      {day.count} {day.count === 1 ? "task" : "tasks"}
+                    </span>
                   </div>
-                )}
-              </>
-            ) : (
-              <>
-                {searchResults.map((task, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-100 dark:border-neutral-800 mb-2 flex flex-col gap-1"
-                  >
-                    <div className="flex justify-between items-start gap-2">
-                      <span className={`text-xs ${task.completed ? "text-neutral-400 line-through" : "text-neutral-700 dark:text-neutral-300"} line-clamp-2`}>
-                        {task.text}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-medium">
-                      {task.dateLabel}
-                    </div>
+                  <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800/80 rounded-full overflow-hidden flex">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ease-out ${
+                        day.isToday
+                          ? "bg-neutral-700 dark:bg-neutral-300"
+                          : intensity > 0.6
+                            ? "bg-neutral-500 dark:bg-neutral-400"
+                            : intensity > 0.25
+                              ? "bg-neutral-400 dark:bg-neutral-500"
+                              : "bg-neutral-200 dark:bg-neutral-700"
+                      }`}
+                      style={{ width: `${Math.max(intensity * 100, 3)}%` }}
+                    />
                   </div>
-                ))}
-                {searchResults.length === 0 && (
-                  <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-                    No tasks found.
-                  </div>
-                )}
-              </>
+                </div>
+              );
+            })}
+            {allDays.length === 0 && (
+              <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
+                No days found.
+              </div>
             )}
           </div>
         </div>
         <div className="p-4 shrink-0 flex flex-col gap-1">
-          <button
-            onClick={() => {
-              if (onSearchClick) onSearchClick();
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-            }}
-            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-          >
-            <Search size={18} />
-            <span className="text-sm font-medium">Search</span>
-          </button>
           <button
             onClick={onSettingsClick}
             className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
@@ -216,7 +127,6 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
         </div>
       </div>
 
-      {/* Narrow Content */}
       <div
         className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-16 flex-col bg-white transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
           show
@@ -275,16 +185,6 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
         </div>
         <div className="p-3 shrink-0 flex flex-col items-center gap-2">
           <button
-            onClick={() => {
-              if (onSearchClick) onSearchClick();
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-            }}
-            className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            title="Search"
-          >
-            <Search size={18} />
-          </button>
-          <button
             onClick={onSettingsClick}
             className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
             title="Settings"
@@ -303,5 +203,4 @@ Sidebar.propTypes = {
   tasks: PropTypes.array.isRequired,
   onDayClick: PropTypes.func,
   onSettingsClick: PropTypes.func,
-  onSearchClick: PropTypes.func,
 };
