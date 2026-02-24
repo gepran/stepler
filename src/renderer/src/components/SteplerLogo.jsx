@@ -13,8 +13,8 @@ export default function SteplerLogo({ className = "", size = 24 }) {
     >
       <defs>
         <linearGradient id="steplerRibbonTop" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" />
-          <stop offset="100%" stopColor="#a855f7" />
+          <stop offset="0%" stopColor="#41A1FF" />
+          <stop offset="100%" stopColor="#9B6AFF" />
         </linearGradient>
         <linearGradient
           id="steplerRibbonBottom"
@@ -23,20 +23,20 @@ export default function SteplerLogo({ className = "", size = 24 }) {
           x2="100%"
           y2="0%"
         >
-          <stop offset="0%" stopColor="#f59e0b" />
-          <stop offset="100%" stopColor="#ef4444" />
+          <stop offset="0%" stopColor="#FF9A00" />
+          <stop offset="100%" stopColor="#FF3B30" />
         </linearGradient>
       </defs>
 
-      {/* Top loop */}
+      {/* Top Capsule */}
       <path
-        d="M 65 20 C 85 20, 85 50, 65 50 L 35 50 C 25 50, 15 40, 15 35 C 15 25, 25 20, 35 20 Z"
+        d="M 30 20 H 65 C 80 20 80 50 65 50 H 30 C 15 50 15 20 30 20 Z"
         fill="url(#steplerRibbonTop)"
       />
 
-      {/* Bottom loop */}
+      {/* Bottom Capsule */}
       <path
-        d="M 35 80 C 15 80, 15 50, 35 50 L 65 50 C 75 50, 85 60, 85 65 C 85 75, 75 80, 65 80 Z"
+        d="M 35 50 H 70 C 85 50 85 80 70 80 H 35 C 20 80 20 50 35 50 Z"
         fill="url(#steplerRibbonBottom)"
       />
 

@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
-import { Search, CalendarDays } from "lucide-react";
+import { Search, CalendarDays, Settings } from "lucide-react";
+import SteplerLogo from "./SteplerLogo";
 
-export default function Sidebar({ show, history, tasks }) {
+export default function Sidebar({ show, history, tasks, onDayClick, onSettingsClick, onSearchClick }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef(null);
 
   const allDays = useMemo(() => {
     const todayTasksCount = tasks.length;
@@ -30,6 +32,24 @@ export default function Sidebar({ show, history, tasks }) {
     );
   }, [allDays, searchQuery]);
 
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const lowerQ = searchQuery.toLowerCase();
+    const allTasks = [
+      ...tasks.map(t => ({ ...t, dateLabel: "Today" })),
+      ...history.flatMap(day => day.tasks.map(t => ({ ...t, dateLabel: day.date })))
+    ];
+
+    return allTasks
+      .filter(t => t.text?.toLowerCase().includes(lowerQ))
+      .sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        const idA = parseInt(a.id || 0, 10);
+        const idB = parseInt(b.id || 0, 10);
+        return idB - idA;
+      });
+  }, [tasks, history, searchQuery]);
+
   const maxTasks = useMemo(() => {
     if (allDays.length === 0) return 0;
     return Math.max(...allDays.map((d) => d.count));
@@ -51,25 +71,36 @@ export default function Sidebar({ show, history, tasks }) {
 
   return (
     <div
-      className={`flex flex-col h-full bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 transition-all duration-300 ease-in-out z-50 relative shrink-0 ${
+      className={`flex flex-col h-full dark:border-neutral-800 transition-all duration-300 ease-in-out z-50 relative shrink-0 ${
         show ? "w-64" : "w-16"
       }`}
     >
+      {/* Fake Navbar area, always visible in this column */}
+      <div
+        className="absolute top-0 left-0 w-full h-8 shrink-0 border-b border-neutral-200 bg-neutral-100/80 backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/80 z-20"
+        style={{ WebkitAppRegion: "drag", borderRightWidth: 0 }}
+      />
+
       {/* Expanded Content */}
       <div
-        className={`fixed top-0 left-0 flex h-full w-64 flex-col bg-white overflow-hidden transition-opacity duration-300 dark:bg-neutral-900 ${
+        className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-64 flex-col bg-white overflow-hidden transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
           show
             ? "opacity-100 pointer-events-auto"
             : "opacity-0 pointer-events-none"
         }`}
       >
-        <div
-          className="p-4 shrink-0 flex items-center h-14 mt-6"
-          style={{ WebkitAppRegion: "drag", paddingLeft: "24px" }}
-        >
-          {/* Header area in sidebar aligns with App header height 14 */}
+        <div className="px-4 pb-4 pt-3 shrink-0 flex flex-col">
           <div
-            className="w-full relative mt-[-6px]"
+            className="flex items-center mb-4 text-neutral-800 dark:text-neutral-200"
+            style={{ WebkitAppRegion: "no-drag" }}
+          >
+            <SteplerLogo size={50} className="mr-2.5" />
+            <span className="text-xl font-bold tracking-wide">
+              Stepler
+            </span>
+          </div>
+          <div
+            className="w-full relative"
             style={{ WebkitAppRegion: "no-drag" }}
           >
             <Search
@@ -77,8 +108,9 @@ export default function Sidebar({ show, history, tasks }) {
               size={14}
             />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search..."
+              placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-neutral-100 dark:bg-neutral-800/80 text-sm text-neutral-800 dark:text-neutral-200 rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-300 dark:focus:ring-neutral-600 transition-all placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
@@ -92,65 +124,110 @@ export default function Sidebar({ show, history, tasks }) {
           </div>
 
           <div className="space-y-1.5 pb-6">
-            {filteredDays.map((day, idx) => {
-              const intensity = maxTasks > 0 ? day.count / maxTasks : 0;
-              return (
-                <div
-                  key={idx}
-                  className="group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span
-                      className={`text-sm font-medium ${day.isToday ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"}`}
-                    >
-                      {day.date}
-                    </span>
-                    <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded">
-                      {day.count} {day.count === 1 ? "task" : "tasks"}
-                    </span>
-                  </div>
-
-                  {/* Intensity Bar (Busyness indicator) */}
-                  <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800/80 rounded-full overflow-hidden flex">
+            {!searchQuery.trim() ? (
+              <>
+                {filteredDays.map((day, idx) => {
+                  const intensity = maxTasks > 0 ? day.count / maxTasks : 0;
+                  return (
                     <div
-                      className={`h-full rounded-full transition-all duration-700 ease-out ${
-                        day.isToday
-                          ? "bg-neutral-700 dark:bg-neutral-300"
-                          : intensity > 0.6
-                            ? "bg-neutral-500 dark:bg-neutral-400"
-                            : intensity > 0.25
-                              ? "bg-neutral-400 dark:bg-neutral-500"
-                              : "bg-neutral-200 dark:bg-neutral-700"
-                      }`}
-                      style={{ width: `${Math.max(intensity * 100, 3)}%` }}
-                    />
+                      key={idx}
+                      onClick={() => onDayClick?.(day.date)}
+                      className="group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <span
+                          className={`text-sm font-medium ${day.isToday ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"}`}
+                        >
+                          {day.date}
+                        </span>
+                        <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded">
+                          {day.count} {day.count === 1 ? "task" : "tasks"}
+                        </span>
+                      </div>
+
+                      {/* Intensity Bar (Busyness indicator) */}
+                      <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800/80 rounded-full overflow-hidden flex">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ease-out ${
+                            day.isToday
+                              ? "bg-neutral-700 dark:bg-neutral-300"
+                              : intensity > 0.6
+                                ? "bg-neutral-500 dark:bg-neutral-400"
+                                : intensity > 0.25
+                                  ? "bg-neutral-400 dark:bg-neutral-500"
+                                  : "bg-neutral-200 dark:bg-neutral-700"
+                          }`}
+                          style={{ width: `${Math.max(intensity * 100, 3)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredDays.length === 0 && (
+                  <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
+                    No days found.
                   </div>
-                </div>
-              );
-            })}
-            {filteredDays.length === 0 && (
-              <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-                No days found.
-              </div>
+                )}
+              </>
+            ) : (
+              <>
+                {searchResults.map((task, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-100 dark:border-neutral-800 mb-2 flex flex-col gap-1"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <span className={`text-xs ${task.completed ? "text-neutral-400 line-through" : "text-neutral-700 dark:text-neutral-300"} line-clamp-2`}>
+                        {task.text}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-medium">
+                      {task.dateLabel}
+                    </div>
+                  </div>
+                ))}
+                {searchResults.length === 0 && (
+                  <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
+                    No tasks found.
+                  </div>
+                )}
+              </>
             )}
           </div>
+        </div>
+        <div className="p-4 shrink-0 flex flex-col gap-1">
+          <button
+            onClick={() => {
+              if (onSearchClick) onSearchClick();
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+          >
+            <Search size={18} />
+            <span className="text-sm font-medium">Search</span>
+          </button>
+          <button
+            onClick={onSettingsClick}
+            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+          >
+            <Settings size={18} />
+            <span className="text-sm font-medium">Settings</span>
+          </button>
         </div>
       </div>
 
       {/* Narrow Content */}
       <div
-        className={`fixed top-0 left-0 flex h-full w-16 flex-col bg-white transition-opacity duration-300 dark:bg-neutral-900 ${
+        className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-16 flex-col bg-white transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
           show
             ? "opacity-0 pointer-events-none"
             : "opacity-100 pointer-events-auto"
         }`}
       >
-        {/* Space for drag controls / traffic lights */}
-        <div
-          className="h-12 mt-2 shrink-0 w-full"
-          style={{ WebkitAppRegion: "drag" }}
-        />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center py-4 space-y-3 pb-6">
+        <div className="shrink-0 flex justify-center py-4">
+          <SteplerLogo size={50} />
+        </div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center py-2 space-y-3 pb-6">
           {allDays.map((day, idx) => {
             const { day: dNum, month } = getDayMonth(day.date);
             const intensity = maxTasks > 0 ? day.count / maxTasks : 0;
@@ -176,6 +253,7 @@ export default function Sidebar({ show, history, tasks }) {
             return (
               <div
                 key={idx}
+                onClick={() => onDayClick?.(day.date)}
                 className={`group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors hover:border-neutral-300 dark:hover:border-neutral-600 ${bgColor} ${borderColor} ${textColor}`}
                 title={`${day.date} - ${day.count} tasks`}
               >
@@ -195,6 +273,25 @@ export default function Sidebar({ show, history, tasks }) {
             );
           })}
         </div>
+        <div className="p-3 shrink-0 flex flex-col items-center gap-2">
+          <button
+            onClick={() => {
+              if (onSearchClick) onSearchClick();
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            title="Search"
+          >
+            <Search size={18} />
+          </button>
+          <button
+            onClick={onSettingsClick}
+            className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -204,4 +301,7 @@ Sidebar.propTypes = {
   show: PropTypes.bool.isRequired,
   history: PropTypes.array.isRequired,
   tasks: PropTypes.array.isRequired,
+  onDayClick: PropTypes.func,
+  onSettingsClick: PropTypes.func,
+  onSearchClick: PropTypes.func,
 };

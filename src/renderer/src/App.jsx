@@ -10,8 +10,6 @@ import {
   Plus,
   X,
   FileText,
-  Eye,
-  EyeOff,
   Bell,
   Settings,
   Monitor,
@@ -23,6 +21,7 @@ import {
   ArrowUp,
   Mic,
   PanelLeft,
+  AlertCircle,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -439,8 +438,89 @@ export default function App() {
   // --- Load persisted data from disk on mount ---
   useEffect(() => {
     loadAppData().then((data) => {
-      if (data.tasks?.length) setTasks(data.tasks);
-      if (data.history?.length) setHistory(data.history);
+      const loadedTasks = data.tasks || [];
+      const loadedHistory = data.history || [];
+
+      // Migration Logic: Move tasks from previous days to history
+      const todayStr = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+
+      const groupedByDate = {}; // { dateStr: { timestamp, tasks: [] } }
+      const tasksForToday = [];
+
+      loadedTasks.forEach((task) => {
+        const timestamp = parseInt(task.id, 10);
+        // Fallback for tasks without a valid timestamp ID
+        if (isNaN(timestamp) || timestamp < 10000000000) {
+          tasksForToday.push(task);
+          return;
+        }
+
+        const taskDateStr = new Date(timestamp).toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        });
+
+        if (taskDateStr === todayStr) {
+          tasksForToday.push(task);
+        } else {
+          if (!groupedByDate[taskDateStr]) {
+            groupedByDate[taskDateStr] = {
+              timestamp: new Date(
+                new Date(timestamp).setHours(0, 0, 0, 0),
+              ).getTime(),
+              tasks: [],
+            };
+          }
+          groupedByDate[taskDateStr].tasks.push(task);
+        }
+      });
+
+      const migratedDateStrings = Object.keys(groupedByDate).sort(
+        (a, b) => groupedByDate[a].timestamp - groupedByDate[b].timestamp,
+      );
+
+      if (migratedDateStrings.length > 0) {
+        const updatedHistory = [...loadedHistory];
+        migratedDateStrings.forEach((dateStr) => {
+          const existingIdx = updatedHistory.findIndex(
+            (h) => h.date === dateStr,
+          );
+          if (existingIdx > -1) {
+            const existingTasks = updatedHistory[existingIdx].tasks;
+            const newTasks = groupedByDate[dateStr].tasks.filter(
+              (nt) => !existingTasks.some((et) => et.id === nt.id),
+            );
+            updatedHistory[existingIdx] = {
+              ...updatedHistory[existingIdx],
+              tasks: [...existingTasks, ...newTasks],
+            };
+          } else {
+            updatedHistory.push({
+              date: dateStr,
+              tasks: groupedByDate[dateStr].tasks,
+            });
+          }
+        });
+
+        // Ensure history is sorted by date (using proxy timestamp from tasks)
+        updatedHistory.sort((a, b) => {
+          const getTS = (h) =>
+            h.tasks.length > 0 ? parseInt(h.tasks[0].id, 10) : 0;
+          return getTS(a) - getTS(b);
+        });
+
+        setTasks(tasksForToday);
+        setHistory(updatedHistory);
+      } else {
+        setTasks(loadedTasks);
+        setHistory(loadedHistory);
+      }
+
       if (data.firedReminders?.length)
         firedRef.current = new Set(data.firedReminders);
       setLoaded(true);
@@ -587,7 +667,7 @@ export default function App() {
       setTasks((prev) => [
         ...prev,
         {
-          id: Date.now().toString(),
+          id: (Date.now() - 86400000 * 2).toString(), // SIMULATION: 2 days ago
           text:
             inputValue.trim() ||
             (pendingAttachment && pendingAttachment.type !== "image"
@@ -658,16 +738,66 @@ export default function App() {
     .sort((a, b) => {
       if (a.completed === b.completed) {
         if (a.priority === b.priority) return 0;
-        return a.priority ? -1 : 1;
+        return a.priority ? 1 : -1;
       }
       return a.completed ? -1 : 1;
     });
+
+  const uncompletedPastTasks = history.flatMap((day) =>
+    day.tasks.filter((t) => !t.completed && !t.dismissedTransfer),
+  );
+
+  const transferPastTasks = () => {
+    const transferredTasks = [];
+    const newHistory = history
+      .map((day) => {
+        const remainingTasks = [];
+        let modified = false;
+        day.tasks.forEach((t) => {
+          if (!t.completed && !t.dismissedTransfer) {
+            transferredTasks.push({
+              ...t,
+              id: (Date.now() + transferredTasks.length).toString(),
+            });
+            modified = true;
+          } else {
+            remainingTasks.push(t);
+          }
+        });
+        return modified ? { ...day, tasks: remainingTasks } : day;
+      })
+      .filter((day) => day.tasks.length > 0);
+
+    setHistory(newHistory);
+    setTasks((prev) => [...prev, ...transferredTasks]);
+  };
+
+  const dismissPastTasks = () => {
+    const newHistory = history.map((day) => ({
+      ...day,
+      tasks: day.tasks.map((t) =>
+        !t.completed && !t.dismissedTransfer
+          ? { ...t, dismissedTransfer: true }
+          : t,
+      ),
+    }));
+    setHistory(newHistory);
+  };
+
+  const handleDayClick = (dateStr) => {
+    if (dateStr === "Today") {
+      todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      const el = document.getElementById(`day-${dateStr}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // ========================= RENDER =========================
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-neutral-50 font-sans text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
-      <Sidebar show={showSidebar} history={history} tasks={tasks} />
+      <Sidebar show={showSidebar} history={history} tasks={tasks} onDayClick={handleDayClick} onSettingsClick={() => setShowSettings(true)} onSearchClick={() => setShowSidebar(true)} />
       <div className="flex h-full flex-1 flex-col overflow-hidden relative">
         {/* Header */}
         <div
@@ -678,16 +808,12 @@ export default function App() {
             <div className="flex items-center pl-2 text-neutral-600 dark:text-neutral-300">
               <button
                 onClick={() => setShowSidebar(!showSidebar)}
-                className="mr-3 rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 pointer-events-auto"
+                className="rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 pointer-events-auto"
                 style={{ WebkitAppRegion: "no-drag" }}
                 title="Toggle Sidebar"
               >
                 <PanelLeft size={18} />
               </button>
-              <SteplerLogo size={22} className="mr-2.5" />
-              <span className="text-base font-semibold tracking-wide">
-                Stepler
-              </span>
             </div>
             <div
               style={{ WebkitAppRegion: "no-drag" }}
@@ -695,25 +821,24 @@ export default function App() {
             >
               <button
                 onClick={() => setShowCompleted(!showCompleted)}
-                className="flex items-center text-xs text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+                className="flex items-center gap-2 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
               >
-                {showCompleted ? (
-                  <EyeOff size={14} className="mr-1.5" />
-                ) : (
-                  <Eye size={14} className="mr-1.5" />
-                )}
-                {showCompleted ? "Hide Completed" : "Show Completed"}
+                <span>{showCompleted ? "Hide Completed" : "Show All"}</span>
+                <div
+                  className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out ${
+                    showCompleted ? "bg-blue-500" : "bg-neutral-300 dark:bg-neutral-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out ${
+                      showCompleted ? "translate-x-3.5" : "translate-x-0.5"
+                    }`}
+                  />
+                </div>
               </button>
               <div className="border-l border-neutral-300 pl-3 text-sm font-medium text-neutral-400 dark:border-neutral-700 dark:text-neutral-500">
                 {tasks.filter((t) => t.completed).length} / {tasks.length} Today
               </div>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="ml-1 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-                title={`Settings (${isMac ? "⌘," : "Ctrl+,"})`}
-              >
-                <Settings size={15} />
-              </button>
             </div>
           </div>
         </div>
@@ -727,16 +852,21 @@ export default function App() {
               {[...history].reverse().map((day, idx) => (
                 <div
                   key={idx}
-                  className="group relative mb-10 pl-8 opacity-60 transition-opacity duration-300 hover:opacity-100"
+                  id={`day-${day.date}`}
+                  className="group relative mb-8 opacity-70 transition-opacity duration-300 hover:opacity-100"
                 >
-                  <div className="absolute left-[7px] top-[14px] -bottom-[40px] z-0 w-[2px] bg-neutral-200 dark:bg-neutral-800" />
-                  <div className="absolute left-[4px] top-[6px] z-10 h-2 w-2 rounded-full bg-neutral-400 ring-[5px] ring-neutral-50 transition-colors group-hover:bg-neutral-500 dark:bg-neutral-600 dark:ring-neutral-950" />
-                  <div className="mb-3">
-                    <h3 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
-                      {day.date}
-                    </h3>
+                  <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-950/95">
+                    <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-[5px] ring-white dark:bg-neutral-300 dark:shadow-[0_0_8px_rgba(255,255,255,0.1)] dark:ring-neutral-950" />
+                    <div className="pl-8">
+                      <h2 className="text-lg font-bold leading-none text-neutral-900 dark:text-neutral-100">
+                        {day.date}
+                      </h2>
+                    </div>
                   </div>
-                  <div className="space-y-0.5">
+
+                  <div className="relative space-y-0.5 pl-8">
+                    {/* Vertical line for History */}
+                    <div className="absolute left-[7px] top-0 bottom-[-32px] z-0 w-[2px] bg-neutral-200 dark:bg-neutral-800" />
                     {day.tasks.map((task) => {
                       const dt = formatTaskDateTime(task.id);
                       return (
@@ -745,7 +875,7 @@ export default function App() {
                           className="group/task relative -ml-1.5 flex items-start p-1.5"
                         >
                           {dt && (
-                            <div className="absolute right-full inset-y-0 flex items-center pr-3 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
+                            <div className="absolute right-full inset-y-0 flex items-center pr-8 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
                               <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
@@ -762,9 +892,7 @@ export default function App() {
                             {task.reminder && (
                               <div className="mt-1 flex items-center text-[11px] text-neutral-400 dark:text-neutral-600">
                                 <Bell size={10} className="mr-1" />
-                                <span className="line-through">
-                                  {task.reminder}
-                                </span>
+                                <span className="line-through">{task.reminder}</span>
                               </div>
                             )}
                             {task.attachment && (
@@ -774,9 +902,7 @@ export default function App() {
                                     <img
                                       src={task.attachment.url}
                                       alt=""
-                                      onClick={() =>
-                                        setPreviewImage(task.attachment.url)
-                                      }
+                                      onClick={() => setPreviewImage(task.attachment.url)}
                                       className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
                                     />
                                     <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
@@ -794,10 +920,7 @@ export default function App() {
                                   </div>
                                 ) : (
                                   <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
-                                    <FileText
-                                      size={12}
-                                      className="mr-2 shrink-0"
-                                    />
+                                    <FileText size={12} className="mr-2 shrink-0" />
                                     <span className="max-w-[150px] truncate">
                                       {task.attachment.name}
                                     </span>
@@ -814,7 +937,7 @@ export default function App() {
               ))}
 
               {/* TODAY */}
-              <div ref={todayRef} className="relative pb-[40vh]">
+              <div ref={todayRef} className="relative">
                 <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-950/95">
                   {history.length > 0 && (
                     <div className="absolute left-[7px] top-0 z-0 h-[18px] w-[2px] bg-neutral-200 dark:bg-neutral-800" />
@@ -830,7 +953,10 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="space-y-0.5 pl-8">
+                <div className="relative space-y-0.5 pl-8">
+                  {/* Vertical line for Today section */}
+                  <div className="absolute left-[7px] top-0 bottom-0 z-0 w-[2px] bg-neutral-200 dark:bg-neutral-800" />
+
                   {sortedTasks.length === 0 ? (
                     <p className="py-2 text-sm italic text-neutral-400 dark:text-neutral-600">
                       {tasks.length > 0
@@ -850,7 +976,7 @@ export default function App() {
                           }`}
                         >
                           {dt && (
-                            <div className="absolute right-full inset-y-0 flex items-center pr-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
+                            <div className="absolute right-full inset-y-0 flex items-center pr-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none z-10">
                               <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
                                 {dt.time}
                               </span>
@@ -861,10 +987,7 @@ export default function App() {
                             className="mt-1 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
                           >
                             {task.completed ? (
-                              <CheckCircle2
-                                size={18}
-                                className="text-blue-500"
-                              />
+                              <CheckCircle2 size={18} className="text-blue-500" />
                             ) : (
                               <Circle size={18} />
                             )}
@@ -936,9 +1059,7 @@ export default function App() {
                                   type="time"
                                   autoFocus
                                   value={reminderTime}
-                                  onChange={(e) =>
-                                    setReminderTime(e.target.value)
-                                  }
+                                  onChange={(e) => setReminderTime(e.target.value)}
                                   className="rounded border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs text-neutral-700 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
                                 />
                                 <button
@@ -968,9 +1089,7 @@ export default function App() {
                                     <img
                                       src={task.attachment.url}
                                       alt=""
-                                      onClick={() =>
-                                        setPreviewImage(task.attachment.url)
-                                      }
+                                      onClick={() => setPreviewImage(task.attachment.url)}
                                       className="max-h-32 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
                                     />
                                     <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
@@ -998,10 +1117,7 @@ export default function App() {
                                   </div>
                                 ) : (
                                   <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-                                    <FileText
-                                      size={14}
-                                      className="mr-2 shrink-0"
-                                    />
+                                    <FileText size={14} className="mr-2 shrink-0" />
                                     <span className="max-w-[200px] truncate">
                                       {task.attachment.name}
                                     </span>
@@ -1030,10 +1146,7 @@ export default function App() {
                               }`}
                               title="Toggle Priority"
                             >
-                              <Star
-                                size={14}
-                                fill={task.priority ? "currentColor" : "none"}
-                              />
+                              <Star size={14} fill={task.priority ? "currentColor" : "none"} />
                             </button>
                             <button
                               onClick={() => deleteTask(task.id)}
@@ -1047,14 +1160,17 @@ export default function App() {
                       );
                     })
                   )}
-                  <div ref={tasksEndRef} className="h-1" />
                 </div>
               </div>
-            </div>
+
+              <div className="h-[40vh]" />
+              <div ref={tasksEndRef} className="h-1" />
+
           </div>
         </div>
+      </div>
 
-        {/* Bottom Bar */}
+      {/* Bottom Bar */}
         <div
           className={`z-40 flex shrink-0 justify-center transition-all duration-300 ${
             isExpanded
@@ -1065,11 +1181,38 @@ export default function App() {
           <div
             className={`w-full max-w-3xl flex flex-col ${isExpanded ? "h-full justify-center max-w-4xl mx-auto" : ""}`}
           >
-            <div className="mb-4">
+            <div className="mb-4 flex flex-col gap-3">
               <div className="flex items-center gap-2 text-xl font-medium text-neutral-800 dark:text-neutral-200">
                 <SteplerLogo size={26} />
                 <span>What&apos;s on your mind?</span>
               </div>
+              
+              {uncompletedPastTasks.length > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-900/50 dark:bg-blue-900/20">
+                  <div className="flex items-center gap-2 text-blue-800 dark:text-blue-300">
+                    <AlertCircle size={16} />
+                    <span>
+                      You have {uncompletedPastTasks.length} uncompleted task
+                      {uncompletedPastTasks.length === 1 ? "" : "s"} from previous days.
+                      Transfer to today?
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={transferPastTasks}
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      Transfer
+                    </button>
+                    <button
+                      onClick={dismissPastTasks}
+                      className="rounded-lg px-3 py-1.5 text-blue-600 transition-colors hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-800/50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="relative flex flex-col">
