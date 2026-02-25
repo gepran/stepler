@@ -7,10 +7,12 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  dialog,
 } from "electron";
 import { join } from "path";
 import { readFileSync, writeFileSync } from "fs";
 import { exec } from "child_process";
+import http from "http";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 
@@ -45,6 +47,7 @@ const dataPath = join(app.getPath("userData"), "stepler-data.json");
 const dataDefaults = {
   tasks: [],
   history: [],
+  deletedTasks: [],
   currentDate: null,
   firedReminders: [],
 };
@@ -238,7 +241,139 @@ function setupIPC() {
     n.show();
     return true;
   });
+
+  ipcMain.handle("export-tasks", async (_, data) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "Export Tasks",
+      defaultPath: `stepler-export-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    try {
+      writeFileSync(filePath, JSON.stringify(data, null, 2));
+      return { success: true, filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("import-tasks", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: "Import Tasks",
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
+      properties: ["openFile"],
+    });
+    if (canceled || !filePaths.length) return { success: false };
+    try {
+      const raw = readFileSync(filePaths[0], "utf-8");
+      const data = JSON.parse(raw);
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
+
+// --------------- HTTP API Server (for CLI) ---------------
+
+function startAPIServer() {
+  const PORT = 3000;
+  const server = http.createServer((req, res) => {
+    // CORS
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    const { method, url } = req;
+
+    // GET /api/tasks
+    if (method === "GET" && url === "/api/tasks") {
+      const data = loadAppData();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data.tasks));
+      return;
+    }
+
+    // POST /api/tasks
+    if (method === "POST" && url === "/api/tasks") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+      req.on("end", () => {
+        try {
+          const { title } = JSON.parse(body || "{}");
+          if (!title) {
+            res.writeHead(400);
+            res.end("Title required");
+            return;
+          }
+
+          const data = loadAppData();
+          const newTask = {
+            id: Math.random().toString(36).substring(2, 9),
+            title,
+            done: false,
+            createdAt: new Date().toISOString(),
+          };
+
+          data.tasks.push(newTask);
+          saveAppData(data);
+
+          // Notify renderer to refresh UI
+          mainWindow?.webContents.send("app-data-updated", data);
+
+          res.writeHead(201, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(newTask));
+        } catch {
+          res.writeHead(400);
+          res.end("Invalid JSON");
+        }
+      });
+      return;
+    }
+
+    // DELETE /api/tasks/:id
+    if (method === "DELETE" && url.startsWith("/api/tasks/")) {
+      const id = url.split("/").pop();
+      const data = loadAppData();
+      const originalCount = data.tasks.length;
+      data.tasks = data.tasks.filter((t) => t.id !== id);
+
+      if (data.tasks.length === originalCount) {
+        res.writeHead(404);
+        res.end("Task not found");
+        return;
+      }
+
+      saveAppData(data);
+      // Notify renderer to refresh UI
+      mainWindow?.webContents.send("app-data-updated", data);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not Found");
+  });
+
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`API Server running at http://localhost:${PORT}`);
+  });
+
+  server.on("error", (err) => {
+    console.error("API Server error:", err);
+  });
+}
+
 
 // --------------- App lifecycle ---------------
 
@@ -254,6 +389,7 @@ app.whenReady().then(() => {
 
   buildMenu();
   setupIPC();
+  startAPIServer();
   createWindow();
   registerHotkey(settings.hotkey);
 

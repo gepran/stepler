@@ -12,20 +12,20 @@ const ParticleCanvas = ({ trigger }) => {
   const createParticles = (x, y, width, height) => {
     const count = 1200; // Particle density
     const colors = ["#94a3b8", "#6366f1", "#475569", "#334155"]; // Ash/Dust colors
-    
+
     for (let i = 0; i < count; i++) {
       particles.current.push({
         x: x + Math.random() * width,
         y: y + Math.random() * height,
         // vx: -3 to -1 moves particles Right to Left
-        vx: -(Math.random() * 1.5 + 0.5), 
+        vx: -(Math.random() * 1.5 + 0.5),
         vy: Math.random() * 1.5 - 1.2,
         life: 1.0,
         size: 0.4 + Math.random() * 1.1,
         color: colors[Math.floor(Math.random() * colors.length)],
         opacity: 1,
         turbulence: Math.random() * 0.1,
-        angle: Math.random() * Math.PI * 2
+        angle: Math.random() * Math.PI * 2,
       });
     }
   };
@@ -44,10 +44,10 @@ const ParticleCanvas = ({ trigger }) => {
     particles.current = particles.current.filter((p) => p.life > 0);
 
     particles.current.forEach((p) => {
-      p.angle += p.turbulence * 0.5; 
+      p.angle += p.turbulence * 0.5;
       p.x += p.vx + Math.cos(p.angle) * 0.3;
       p.y += p.vy + Math.sin(p.angle) * 0.3;
-      
+
       p.life -= 0.006; // Controls speed of fade (smaller = slower)
       p.opacity = p.life;
 
@@ -81,14 +81,14 @@ const ParticleCanvas = ({ trigger }) => {
   }, [update]);
 
   return (
-    <canvas 
-      ref={canvasRef} 
+    <canvas
+      ref={canvasRef}
       style={{
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
-        zIndex: 9999
-      }} 
+        zIndex: 9999,
+      }}
     />
   );
 };
@@ -99,8 +99,8 @@ ParticleCanvas.propTypes = {
     y: PropTypes.number.isRequired,
     width: PropTypes.number.isRequired,
     height: PropTypes.number.isRequired,
-    timestamp: PropTypes.number
-  })
+    timestamp: PropTypes.number,
+  }),
 };
 
 export default ParticleCanvas;

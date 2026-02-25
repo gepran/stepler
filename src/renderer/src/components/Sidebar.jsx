@@ -1,9 +1,17 @@
 import { useMemo } from "react";
 import PropTypes from "prop-types";
-import { CalendarDays, Settings } from "lucide-react";
+import { CalendarDays, Settings, Trash2 } from "lucide-react";
 import SteplerLogo from "./SteplerLogo";
 
-export default function Sidebar({ show, history, tasks, onDayClick, onSettingsClick }) {
+export default function Sidebar({
+  show,
+  history,
+  tasks,
+  onDayClick,
+  onSettingsClick,
+  deletedCount,
+  onTrashClick,
+}) {
   const allDays = useMemo(() => {
     const todayTasksCount = tasks.length;
 
@@ -62,9 +70,7 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
             style={{ WebkitAppRegion: "no-drag" }}
           >
             <SteplerLogo size={50} className="mr-2.5" />
-            <span className="text-xl font-bold tracking-wide">
-              Stepler
-            </span>
+            <span className="text-xl font-bold tracking-wide">Stepler</span>
           </div>
         </div>
 
@@ -117,6 +123,18 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
           </div>
         </div>
         <div className="p-4 shrink-0 flex flex-col gap-1">
+          <button
+            onClick={onTrashClick}
+            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors relative"
+          >
+            <Trash2 size={18} />
+            <span className="text-sm font-medium">Trash</span>
+            {deletedCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
+                {deletedCount > 99 ? "99+" : deletedCount}
+              </span>
+            )}
+          </button>
           <button
             onClick={onSettingsClick}
             className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
@@ -185,6 +203,18 @@ export default function Sidebar({ show, history, tasks, onDayClick, onSettingsCl
         </div>
         <div className="p-3 shrink-0 flex flex-col items-center gap-2">
           <button
+            onClick={onTrashClick}
+            className="relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            title="Trash"
+          >
+            <Trash2 size={18} />
+            {deletedCount > 0 && (
+              <div className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900">
+                {deletedCount > 99 ? "99+" : deletedCount}
+              </div>
+            )}
+          </button>
+          <button
             onClick={onSettingsClick}
             className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
             title="Settings"
@@ -203,4 +233,6 @@ Sidebar.propTypes = {
   tasks: PropTypes.array.isRequired,
   onDayClick: PropTypes.func,
   onSettingsClick: PropTypes.func,
+  deletedCount: PropTypes.number,
+  onTrashClick: PropTypes.func,
 };

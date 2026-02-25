@@ -1,41 +1,21 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import PropTypes from "prop-types";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import SteplerLogo from "./components/SteplerLogo";
 import Sidebar from "./components/Sidebar";
 import ParticleCanvas from "./components/ParticleCanvas";
-import {
-  Circle,
-  CheckCircle2,
-  Plus,
-  GripVertical,
-  X,
-  FileText,
-  Bell,
-  Settings,
-  Monitor,
-  Moon,
-  SunMedium,
-  Star,
-  Maximize2,
-  Minimize2,
-  ArrowUp,
-  Mic,
-  PanelLeft,
-  AlertCircle,
-  CornerDownRight,
-  Search,
-  Briefcase,
-  User,
-  Zap,
-  Calendar,
-  Hash,
-  CalendarDays,
-} from "lucide-react";
+import SettingsPanel from "./components/SettingsPanel";
+import FullScreenSearch from "./components/FullScreenSearch";
+import TaskItem from "./components/TaskItem";
+import HistoryTaskItem from "./components/HistoryTaskItem";
+import TaskInput from "./components/TaskInput";
+import ImagePreviewModal from "./components/ImagePreviewModal";
+import DeletedTasksPanel from "./components/DeletedTasksPanel";
+import { PanelLeft, AlertCircle } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
-const isMac = window.electron?.process?.platform === "darwin" || /Mac/.test(navigator.userAgent);
+const isMac =
+  window.electron?.process?.platform === "darwin" ||
+  /Mac/.test(navigator.userAgent);
 
 async function loadAppData() {
   if (ipc) {
@@ -45,183 +25,20 @@ async function loadAppData() {
       /* fall through */
     }
   }
-  return { tasks: [], history: [], currentDate: null, firedReminders: [] };
+  return {
+    tasks: [],
+    history: [],
+    deletedTasks: [],
+    currentDate: null,
+    firedReminders: [],
+  };
 }
 
 function saveAppData(partial) {
   if (ipc) ipc.invoke("save-app-data", partial);
 }
 
-function formatAcceleratorForDisplay(acc) {
-  if (!acc) return "";
-  return acc
-    .replace(/CommandOrControl/g, isMac ? "⌘" : "Ctrl")
-    .replace(/CmdOrCtrl/g, isMac ? "⌘" : "Ctrl")
-    .replace(/Command/g, isMac ? "⌘" : "Win")
-    .replace(/Control/g, isMac ? "⌃" : "Ctrl")
-    .replace(/Shift/g, isMac ? "⇧" : "Shift")
-    .replace(/Alt/g, isMac ? "⌥" : "Alt")
-    .replace(/\+/g, isMac ? "" : " + ")
-    .replace(/Space/, isMac ? "␣" : "Space");
-}
 
-function keyEventToAccelerator(e) {
-  const parts = [];
-  if (e.ctrlKey && !e.metaKey) parts.push("Control");
-  if (e.metaKey) parts.push("CommandOrControl");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-
-  const ignore = ["Meta", "Control", "Alt", "Shift", "Dead"];
-  if (!ignore.includes(e.key)) {
-    let key = e.key;
-    if (key === " ") key = "Space";
-    else if (key.length === 1) key = key.toUpperCase();
-    else if (key === "ArrowUp") key = "Up";
-    else if (key === "ArrowDown") key = "Down";
-    else if (key === "ArrowLeft") key = "Left";
-    else if (key === "ArrowRight") key = "Right";
-    parts.push(key);
-  }
-
-  if (parts.length < 2) return null;
-  return parts.join("+");
-}
-
-// ----------- Settings Panel -----------
-
-function SettingsPanel({ onClose }) {
-  const [settings, setSettings] = useState({ hotkey: "", theme: "dark" });
-  const [recording, setRecording] = useState(false);
-  const [tempKey, setTempKey] = useState(null);
-  const recorderRef = useRef(null);
-
-  useEffect(() => {
-    window.electron?.ipcRenderer.invoke("get-settings").then(setSettings);
-  }, []);
-
-  const updateSetting = useCallback(async (partial) => {
-    const updated = await window.electron?.ipcRenderer.invoke(
-      "update-settings",
-      partial,
-    );
-    if (updated) setSettings(updated);
-  }, []);
-
-  const handleKeyCapture = useCallback(
-    (e) => {
-      if (!recording) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const acc = keyEventToAccelerator(e);
-      if (acc) {
-        setTempKey(acc);
-        setRecording(false);
-        updateSetting({ hotkey: acc });
-      }
-    },
-    [recording, updateSetting],
-  );
-
-  useEffect(() => {
-    if (recording && recorderRef.current) {
-      recorderRef.current.focus();
-    }
-  }, [recording]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl dark:border-neutral-800 dark:bg-neutral-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-            Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* --- Appearance --- */}
-        <div className="mb-6">
-          <label className="mb-2.5 block text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-            Appearance
-          </label>
-          <div className="flex gap-2">
-            {[
-              { value: "light", label: "Light", Icon: SunMedium },
-              { value: "dark", label: "Dark", Icon: Moon },
-              { value: "system", label: "System", Icon: Monitor },
-            ].map(({ value, label, Icon }) => (
-              <button
-                key={value}
-                onClick={() => updateSetting({ theme: value })}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
-                  settings.theme === value
-                    ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
-                    : "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-300"
-                }`}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* --- Shortcut --- */}
-        <div className="mb-2">
-          <label className="mb-2.5 block text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-            Global Shortcut
-          </label>
-          {recording ? (
-            <div
-              ref={recorderRef}
-              tabIndex={0}
-              onKeyDown={handleKeyCapture}
-              onBlur={() => setRecording(false)}
-              className="flex items-center justify-center rounded-xl border-2 border-dashed border-neutral-400 bg-neutral-500/5 px-4 py-3 text-sm text-neutral-500 outline-none dark:border-neutral-500 dark:bg-neutral-500/10"
-            >
-              <span className="animate-pulse">Press new shortcut…</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="flex flex-1 items-center rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 dark:border-neutral-700 dark:bg-neutral-800">
-                <span className="font-mono text-sm tracking-widest text-neutral-700 dark:text-neutral-200">
-                  {formatAcceleratorForDisplay(tempKey || settings.hotkey)}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setRecording(true);
-                  setTempKey(null);
-                }}
-                className="shrink-0 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
-              >
-                Change
-              </button>
-            </div>
-          )}
-          <p className="mt-2 text-xs text-neutral-400 dark:text-neutral-500">
-            Toggle Stepler from anywhere on your {isMac ? "Mac" : "PC"}.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-SettingsPanel.propTypes = {
-  onClose: PropTypes.func.isRequired,
-};
 
 // ----------- Main App -----------
 
@@ -418,138 +235,12 @@ const formatTaskDateTime = (id) => {
 
 // ----------- Full Screen Search Overlay -----------
 
-function FullScreenSearch({ show, onClose, tasks, history }) {
-  const [query, setQuery] = useState("");
-  const inputRef = useRef(null);
 
-  useEffect(() => {
-    if (show) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setTimeout(() => setQuery(""), 300); // delay clear for exit anim
-    }
-  }, [show]);
-
-  const searchResults = useMemo(() => {
-    if (!query.trim()) return [];
-    const lowerQ = query.toLowerCase();
-    const allTasks = [
-      ...tasks.map((t) => ({ ...t, dateLabel: "Today" })),
-      ...history.flatMap((day) => day.tasks.map((t) => ({ ...t, dateLabel: day.date }))),
-    ];
-
-    return allTasks
-      .filter(
-        (t) =>
-          t.text?.toLowerCase().includes(lowerQ) ||
-          t.project?.toLowerCase().includes(lowerQ) ||
-          t.subtasks?.some((st) => st.text?.toLowerCase().includes(lowerQ))
-      )
-      .sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        const idA = parseInt(a.id || 0, 10);
-        const idB = parseInt(b.id || 0, 10);
-        return idB - idA;
-      });
-  }, [tasks, history, query]);
-
-  if (!show) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex flex-col items-center bg-white/80 dark:bg-black/80 backdrop-blur-xl transition-all duration-300 p-8"
-      onClick={onClose}
-    >
-      <div 
-        className="w-full max-w-2xl mt-16"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="relative mb-8">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 w-8 h-8" />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search tasks..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") onClose();
-            }}
-            className="w-full bg-transparent text-4xl font-medium text-neutral-900 dark:text-white rounded-2xl pl-20 pr-6 py-6 border-none focus:outline-none focus:ring-0 placeholder:text-neutral-300 dark:placeholder:text-neutral-700"
-          />
-          <div className="absolute bottom-0 left-6 right-6 h-px bg-neutral-200 dark:bg-neutral-800" />
-        </div>
-
-        <div className="flex-1 overflow-y-auto max-h-[60vh] custom-scrollbar px-6">
-          {query.trim() && searchResults.length === 0 && (
-            <div className="text-center text-neutral-400 text-lg mt-12">No tasks found</div>
-          )}
-          
-          <div className="space-y-3">
-            {searchResults.map((task) => (
-              <div 
-                key={task.id} 
-                className="bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm border border-neutral-100 dark:border-neutral-800 p-5 rounded-2xl flex flex-col gap-2 transition-all hover:bg-neutral-50 dark:hover:bg-neutral-800/80 cursor-pointer"
-              >
-                <div className={`text-lg ${task.completed ? "text-neutral-400 line-through" : "text-neutral-800 dark:text-neutral-200"}`}>
-                  {task.text}
-                </div>
-                {task.subtasks?.length > 0 && (
-                  <div className="pl-4 border-l-2 border-neutral-200 dark:border-neutral-700 space-y-1">
-                    {task.subtasks.map((st) => (
-                      <div key={st.id} className={`text-sm ${st.completed ? "text-neutral-400 line-through" : "text-neutral-600 dark:text-neutral-400"}`}>
-                        • {st.text}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-neutral-400 dark:text-neutral-500 font-medium">
-                    {task.dateLabel}
-                  </div>
-                  {(task.project || task.dueDate) && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {task.project && (
-                        <div className="flex shrink-0 items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-                          <Briefcase size={12} />
-                          <span>{task.project}</span>
-                        </div>
-                      )}
-                      {task.dueDate && (
-                        <div className="flex shrink-0 items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-                          <CalendarDays size={12} />
-                          <span>{task.dueDate}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      <button 
-        onClick={onClose}
-        className="absolute top-8 right-8 p-3 rounded-full hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 text-neutral-500 transition-colors"
-      >
-        <X size={24} />
-      </button>
-    </div>
-  );
-}
-
-FullScreenSearch.propTypes = {
-  show: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  tasks: PropTypes.array.isRequired,
-  history: PropTypes.array.isRequired,
-};
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [history, setHistory] = useState([]);
+  const [deletedTasks, setDeletedTasks] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
@@ -568,6 +259,7 @@ export default function App() {
   const [showCompleted, setShowCompleted] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showDeletedPanel, setShowDeletedPanel] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -577,11 +269,14 @@ export default function App() {
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [editingSubtaskId, setEditingSubtaskId] = useState(null);
   const [editSubtaskText, setEditSubtaskText] = useState("");
+  const [pendingSubtaskAttachment, setPendingSubtaskAttachment] =
+    useState(null);
 
-  const [draftProject, setDraftProject] = useState(null);
+  const [draftProjects, setDraftProjects] = useState([]);
   const [draftDate, setDraftDate] = useState(null);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showDateMenu, setShowDateMenu] = useState(false);
+  const [assigningProjectId, setAssigningProjectId] = useState(null);
 
   const [activeDragHandleId, setActiveDragHandleId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -595,8 +290,12 @@ export default function App() {
   const tasksRef = useRef(tasks);
   const historyRef = useRef(history);
 
-  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
-  useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   // --- Load persisted data from disk on mount ---
   useEffect(() => {
@@ -605,9 +304,16 @@ export default function App() {
       const loadedHistory = (data.history || []).map((h) => {
         if (h.date && h.date.includes(",")) {
           const ts = h.tasks?.length ? parseInt(h.tasks[0].id, 10) : NaN;
-          const dateObj = (!isNaN(ts) && ts > 10000000000) ? new Date(ts) : new Date(h.date);
+          const dateObj =
+            !isNaN(ts) && ts > 10000000000 ? new Date(ts) : new Date(h.date);
           if (!isNaN(dateObj.getTime())) {
-            return { ...h, date: dateObj.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) };
+            return {
+              ...h,
+              date: dateObj.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+              }),
+            };
           }
         }
         return h;
@@ -622,7 +328,8 @@ export default function App() {
           if (!t.completed) uncompletedFromHistory.push(t);
           else remaining.push(t);
         });
-        if (remaining.length > 0) cleanedHistory.push({ ...h, tasks: remaining });
+        if (remaining.length > 0)
+          cleanedHistory.push({ ...h, tasks: remaining });
       });
 
       const todayStr = new Date().toLocaleDateString("en-GB", {
@@ -702,6 +409,7 @@ export default function App() {
         setHistory(loadedHistory);
       }
 
+      setDeletedTasks(data.deletedTasks || []);
       if (data.firedReminders?.length)
         firedRef.current = new Set(data.firedReminders);
       setLoaded(true);
@@ -717,6 +425,10 @@ export default function App() {
     if (!loaded) return;
     saveAppData({ history });
   }, [history, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    saveAppData({ deletedTasks });
+  }, [deletedTasks, loaded]);
 
   // --- Auto-focus input on window focus ---
   useEffect(() => {
@@ -764,8 +476,18 @@ export default function App() {
   useEffect(() => {
     const handler = () => setShowSettings(true);
     window.electron?.ipcRenderer.on("open-settings", handler);
-    return () =>
+
+    const updateHandler = (_, data) => {
+      if (data.tasks) setTasks(data.tasks);
+      if (data.history) setHistory(data.history);
+      if (data.deletedTasks) setDeletedTasks(data.deletedTasks);
+    };
+    window.electron?.ipcRenderer.on("app-data-updated", updateHandler);
+
+    return () => {
       window.electron?.ipcRenderer.removeAllListeners("open-settings");
+      window.electron?.ipcRenderer.removeAllListeners("app-data-updated");
+    };
   }, []);
 
   // --- Reminder notification timer ---
@@ -823,58 +545,71 @@ export default function App() {
   // --- Check for day rollover to trigger migration ---
   useEffect(() => {
     if (!loaded) return;
-    
+
     const checkRollover = () => {
       const todayStr = new Date().toLocaleDateString("en-GB", {
         day: "numeric",
         month: "short",
       });
-      
+
       const prevTasks = tasksRef.current;
       let needsMigration = false;
-      
-      prevTasks.forEach(task => {
+
+      prevTasks.forEach((task) => {
         const ts = parseInt(task.id, 10);
         if (!isNaN(ts) && ts > 10000000000) {
-          if (new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) !== todayStr && task.completed) {
+          if (
+            new Date(ts).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+            }) !== todayStr &&
+            task.completed
+          ) {
             needsMigration = true;
           }
         }
       });
-      
+
       if (needsMigration) {
         const prevHistory = historyRef.current;
         const groupedByDate = {};
         const tasksForToday = [];
-        
+
         prevTasks.forEach((task) => {
           const timestamp = parseInt(task.id, 10);
           if (isNaN(timestamp) || timestamp < 10000000000) {
             tasksForToday.push(task);
             return;
           }
-          const taskDateStr = new Date(timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+          const taskDateStr = new Date(timestamp).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+          });
           if (taskDateStr === todayStr || !task.completed) {
             tasksForToday.push(task);
           } else {
             if (!groupedByDate[taskDateStr]) {
               groupedByDate[taskDateStr] = {
-                timestamp: new Date(new Date(timestamp).setHours(0, 0, 0, 0)).getTime(),
+                timestamp: new Date(
+                  new Date(timestamp).setHours(0, 0, 0, 0),
+                ).getTime(),
                 tasks: [],
               };
             }
             groupedByDate[taskDateStr].tasks.push(task);
           }
         });
-        
+
         const migratedDateStrings = Object.keys(groupedByDate).sort(
           (a, b) => groupedByDate[a].timestamp - groupedByDate[b].timestamp,
         );
-        
+
         if (migratedDateStrings.length > 0) {
           const updatedHistory = [...prevHistory];
           migratedDateStrings.forEach((dateStr) => {
-            const existingIdx = updatedHistory.findIndex((h) => h.date === dateStr);
+            const existingIdx = updatedHistory.findIndex(
+              (h) => h.date === dateStr,
+            );
             if (existingIdx > -1) {
               const existingTasks = updatedHistory[existingIdx].tasks;
               const newTasks = groupedByDate[dateStr].tasks.filter(
@@ -891,18 +626,19 @@ export default function App() {
               });
             }
           });
-          
+
           updatedHistory.sort((a, b) => {
-            const getTS = (h) => (h.tasks.length > 0 ? parseInt(h.tasks[0].id, 10) : 0);
+            const getTS = (h) =>
+              h.tasks.length > 0 ? parseInt(h.tasks[0].id, 10) : 0;
             return getTS(a) - getTS(b);
           });
-          
+
           setHistory(updatedHistory);
           setTasks(tasksForToday);
         }
       }
     };
-    
+
     const interval = setInterval(checkRollover, 60000); // Check every minute
     return () => clearInterval(interval);
   }, [loaded]);
@@ -945,13 +681,21 @@ export default function App() {
     }
   };
 
-  const addTask = (e) => {
+  const addTask = (e, overrideProjects = null) => {
     if (e && e.key === "Enter" && e.shiftKey) return;
     if (
       (!e || e.key === "Enter" || e.type === "click") &&
       (inputValue.trim() !== "" || pendingAttachment)
     ) {
       if (e && e.preventDefault) e.preventDefault();
+
+      const pList =
+        overrideProjects !== null
+          ? overrideProjects
+          : draftProjects.length > 0
+            ? draftProjects
+            : undefined;
+
       setTasks((prev) => [
         ...prev,
         {
@@ -964,13 +708,13 @@ export default function App() {
           completed: false,
           priority: false,
           attachment: pendingAttachment || undefined,
-          project: draftProject,
+          projects: pList?.length > 0 ? pList : undefined,
           dueDate: draftDate,
         },
       ]);
       setInputValue("");
       setPendingAttachment(null);
-      setDraftProject(null);
+      setDraftProjects([]);
       setDraftDate(null);
       if (!isExpanded && inputRef.current)
         inputRef.current.style.height = "auto";
@@ -1022,8 +766,32 @@ export default function App() {
       prev.map((t) => (t.id === id ? { ...t, attachment: undefined } : t)),
     );
 
-  const deleteTask = (id) =>
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+  const deleteTask = (id) => {
+    setTasks((prev) => {
+      const task = prev.find((t) => t.id === id);
+      if (task) {
+        setDeletedTasks((dt) => [{ ...task, deletedAt: Date.now() }, ...dt]);
+      }
+      return prev.filter((t) => t.id !== id);
+    });
+  };
+
+  const restoreTask = (id) => {
+    setDeletedTasks((prev) => {
+      const task = prev.find((t) => t.id === id);
+      if (task) {
+        const restored = { ...task };
+        delete restored.deletedAt;
+        setTasks((t) => [...t, restored]);
+      }
+      return prev.filter((t) => t.id !== id);
+    });
+  };
+
+  const permanentlyDeleteTask = (id) =>
+    setDeletedTasks((prev) => prev.filter((t) => t.id !== id));
+
+  const clearDeletedTasks = () => setDeletedTasks([]);
 
   const triggerDeleteTask = (e, id) => {
     e.stopPropagation();
@@ -1035,7 +803,7 @@ export default function App() {
         y: rect.top,
         width: rect.width,
         height: rect.height,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
       setTimeout(() => deleteTask(id), 50);
     } else {
@@ -1043,9 +811,33 @@ export default function App() {
     }
   };
 
-  const addSubtask = (taskId) => {
-    if (newSubtaskText.trim() === "") {
-      setAddingSubtaskId(null);
+  const handleSubtaskPaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            setPendingSubtaskAttachment({
+              url: event.target.result,
+              name: `pasted-image-${Date.now()}.png`,
+              type: "image",
+            });
+          };
+          reader.readAsDataURL(file);
+        }
+        break;
+      }
+    }
+  };
+
+  const addSubtask = (taskId, keepOpen = false) => {
+    if (newSubtaskText.trim() === "" && !pendingSubtaskAttachment) {
+      if (!keepOpen) {
+        setAddingSubtaskId(null);
+      }
       return;
     }
     setTasks((prev) =>
@@ -1058,8 +850,14 @@ export default function App() {
               ...subtasks,
               {
                 id: Date.now().toString(),
-                text: newSubtaskText.trim(),
+                text:
+                  newSubtaskText.trim() ||
+                  (pendingSubtaskAttachment &&
+                  pendingSubtaskAttachment.type !== "image"
+                    ? pendingSubtaskAttachment.name
+                    : ""),
                 completed: false,
+                attachment: pendingSubtaskAttachment || undefined,
               },
             ],
           };
@@ -1068,7 +866,10 @@ export default function App() {
       }),
     );
     setNewSubtaskText("");
-    setAddingSubtaskId(null);
+    setPendingSubtaskAttachment(null);
+    if (!keepOpen) {
+      setAddingSubtaskId(null);
+    }
   };
 
   const toggleSubtask = (taskId, subtaskId) => {
@@ -1111,11 +912,108 @@ export default function App() {
         y: rect.top,
         width: rect.width,
         height: rect.height,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
       setTimeout(() => deleteSubtask(taskId, subtaskId), 50);
     } else {
       deleteSubtask(taskId, subtaskId);
+    }
+  };
+
+  const handleCopyTask = async (e, task) => {
+    e.stopPropagation();
+    try {
+      let textToCopy = task.text;
+      if (task.subtasks && task.subtasks.length > 0) {
+        textToCopy +=
+          "\n" + task.subtasks.map((st) => `- ${st.text}`).join("\n");
+      }
+
+      if (task.attachment && task.attachment.type === "image") {
+        try {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = task.attachment.url;
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+
+          await new Promise((resolve, reject) => {
+            canvas.toBlob(async (blob) => {
+              if (!blob) {
+                reject(new Error("Canvas to blob failed"));
+                return;
+              }
+              try {
+                const clipboardItems = {
+                  "text/plain": new Blob([textToCopy], { type: "text/plain" }),
+                  "image/png": blob,
+                };
+                await navigator.clipboard.write([
+                  new ClipboardItem(clipboardItems),
+                ]);
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            }, "image/png");
+          });
+          return;
+        } catch (imgErr) {
+          console.error("Failed to copy image to clipboard", imgErr);
+        }
+      }
+
+      await navigator.clipboard.writeText(textToCopy);
+    } catch (err) {
+      console.error("Failed to copy task", err);
+    }
+  };
+
+  const handleCopyImage = async (e, url) => {
+    e.stopPropagation();
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = url;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+
+      await new Promise((resolve, reject) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas to blob failed"));
+            return;
+          }
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                "image/png": blob,
+              }),
+            ]);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        }, "image/png");
+      });
+    } catch (err) {
+      console.error("Failed to copy image", err);
     }
   };
 
@@ -1180,11 +1078,11 @@ export default function App() {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const height = rect.height;
-    
+
     let position = "child";
     if (y < height * 0.25) position = "top";
     else if (y > height * 0.75) position = "bottom";
@@ -1216,10 +1114,15 @@ export default function App() {
     }
   };
 
-  const handleDropAction = (e, targetType, targetId = null, position = "child") => {
+  const handleDropAction = (
+    e,
+    targetType,
+    targetId = null,
+    position = "child",
+  ) => {
     const dataStr = e.dataTransfer.getData("application/json");
     if (!dataStr) return;
-    
+
     setDragOverId(null);
     setDragOverPosition(null);
 
@@ -1263,7 +1166,8 @@ export default function App() {
 
         if (!movedItem) return prev;
 
-        const newId = Date.now().toString() + "-" + Math.floor(Math.random() * 1000);
+        const newId =
+          Date.now().toString() + "-" + Math.floor(Math.random() * 1000);
 
         if (targetType === "task") {
           if (sourceType === "task") {
@@ -1272,12 +1176,21 @@ export default function App() {
               if (position === "child") {
                 newTasks[targetIndex] = {
                   ...newTasks[targetIndex],
-                  subtasks: [...(newTasks[targetIndex].subtasks || []), { ...movedItem, id: newId }],
+                  subtasks: [
+                    ...(newTasks[targetIndex].subtasks || []),
+                    { ...movedItem, id: newId },
+                  ],
                 };
               } else if (position === "top") {
-                newTasks.splice(targetIndex, 0, { ...movedItem, id: movedItem.id });
+                newTasks.splice(targetIndex, 0, {
+                  ...movedItem,
+                  id: movedItem.id,
+                });
               } else if (position === "bottom") {
-                newTasks.splice(targetIndex + 1, 0, { ...movedItem, id: movedItem.id });
+                newTasks.splice(targetIndex + 1, 0, {
+                  ...movedItem,
+                  id: movedItem.id,
+                });
               }
             }
           } else {
@@ -1285,14 +1198,20 @@ export default function App() {
               if (t.id === targetId) {
                 return {
                   ...t,
-                  subtasks: [...(t.subtasks || []), { ...movedItem, id: newId }],
+                  subtasks: [
+                    ...(t.subtasks || []),
+                    { ...movedItem, id: newId },
+                  ],
                 };
               }
               return t;
             });
           }
         } else if (targetType === "timeline") {
-          newTasks.push({ ...movedItem, id: sourceType === "task" ? movedItem.id : newId });
+          newTasks.push({
+            ...movedItem,
+            id: sourceType === "task" ? movedItem.id : newId,
+          });
         }
 
         return newTasks;
@@ -1305,11 +1224,11 @@ export default function App() {
   const handleDropOnTask = (e, targetId) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const height = rect.height;
-    
+
     let position = "child";
     if (y < height * 0.25) position = "top";
     else if (y > height * 0.75) position = "bottom";
@@ -1322,23 +1241,124 @@ export default function App() {
     handleDropAction(e, "timeline");
   };
 
+  const handleJumpToTask = (taskId, dateLabel) => {
+    setShowSearch(false);
+    setTimeout(() => {
+      const el = document.getElementById(`task-${taskId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-blue-400/50");
+        setTimeout(
+          () => el.classList.remove("ring-2", "ring-blue-400/50"),
+          2000,
+        );
+      } else if (dateLabel === "Today") {
+        todayRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      } else {
+        const dayEl = document.getElementById(`day-${dateLabel}`);
+        if (dayEl) dayEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 350);
+  };
+
+  const handleJumpToTaskSubtask = (taskId) => {
+    setShowSearch(false);
+    setTimeout(() => {
+      const el = document.getElementById(`task-${taskId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-blue-400/50");
+        setTimeout(
+          () => el.classList.remove("ring-2", "ring-blue-400/50"),
+          2000,
+        );
+      }
+      setAddingSubtaskId(taskId);
+      setNewSubtaskText("");
+    }, 350);
+  };
+
+  const handleExportTasks = async () => {
+    const payload = { tasks, history, deletedTasks };
+    const result = await ipc?.invoke("export-tasks", payload);
+    if (result?.success) {
+      console.log("Exported to", result.filePath);
+    }
+  };
+
+  const handleImportTasks = async () => {
+    const result = await ipc?.invoke("import-tasks");
+    if (!result?.success || !result.data) return;
+    const imported = result.data;
+
+    // Merge tasks (deduplicate by id)
+    if (Array.isArray(imported.tasks)) {
+      setTasks((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const newTasks = imported.tasks.filter((t) => !existingIds.has(t.id));
+        return [...prev, ...newTasks];
+      });
+    }
+
+    // Merge history (merge per date, deduplicate tasks within each date)
+    if (Array.isArray(imported.history)) {
+      setHistory((prev) => {
+        const merged = [...prev];
+        imported.history.forEach((importedDay) => {
+          const existingIdx = merged.findIndex((h) => h.date === importedDay.date);
+          if (existingIdx > -1) {
+            const existingIds = new Set(merged[existingIdx].tasks.map((t) => t.id));
+            const newTasks = (importedDay.tasks || []).filter((t) => !existingIds.has(t.id));
+            merged[existingIdx] = {
+              ...merged[existingIdx],
+              tasks: [...merged[existingIdx].tasks, ...newTasks],
+            };
+          } else {
+            merged.push(importedDay);
+          }
+        });
+        return merged;
+      });
+    }
+
+    // Merge deleted tasks (deduplicate by id)
+    if (Array.isArray(imported.deletedTasks)) {
+      setDeletedTasks((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const newTasks = imported.deletedTasks.filter((t) => !existingIds.has(t.id));
+        return [...prev, ...newTasks];
+      });
+    }
+  };
+
   // ========================= RENDER =========================
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-neutral-50 font-sans text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
       <ParticleCanvas trigger={deleteTrigger} />
-      <FullScreenSearch 
-        show={showSearch} 
-        onClose={() => setShowSearch(false)} 
-        tasks={tasks} 
-        history={history} 
+      <FullScreenSearch
+        show={showSearch}
+        onClose={() => setShowSearch(false)}
+        tasks={tasks}
+        history={history}
+        onJumpToTask={handleJumpToTask}
+        onToggleTask={toggleTask}
+        onTogglePriority={togglePriority}
+        onCopyTask={handleCopyTask}
+        onDeleteTask={triggerDeleteTask}
+        onAddSubtask={handleJumpToTaskSubtask}
       />
-      <Sidebar 
-        show={showSidebar} 
-        history={history} 
-        tasks={tasks} 
-        onDayClick={handleDayClick} 
-        onSettingsClick={() => setShowSettings(true)} 
+      <Sidebar
+        show={showSidebar}
+        history={history}
+        tasks={tasks}
+        onDayClick={handleDayClick}
+        onSettingsClick={() => setShowSettings(true)}
+        deletedCount={deletedTasks.length}
+        onTrashClick={() => setShowDeletedPanel(true)}
       />
       <div className="flex h-full flex-1 flex-col overflow-hidden relative">
         {/* Header */}
@@ -1368,7 +1388,9 @@ export default function App() {
                 <span>{showCompleted ? "Hide Completed" : "Show All"}</span>
                 <div
                   className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out ${
-                    showCompleted ? "bg-blue-500" : "bg-neutral-300 dark:bg-neutral-700"
+                    showCompleted
+                      ? "bg-blue-500"
+                      : "bg-neutral-300 dark:bg-neutral-700"
                   }`}
                 >
                   <span
@@ -1409,117 +1431,27 @@ export default function App() {
                   <div className="relative space-y-0.5 pl-8">
                     {/* Vertical line for History */}
                     <div className="absolute left-[7px] top-0 bottom-[-32px] z-0 w-[2px] bg-neutral-200 dark:bg-neutral-800" />
-                    {day.tasks.map((task) => {
-                      const dt = formatTaskDateTime(task.id);
-                      return (
-                        <div
-                          key={task.id}
-                          className="group/task relative -ml-1.5 flex items-start p-1.5"
-                        >
-                          {dt && (
-                            <div className="absolute right-full inset-y-0 flex items-center pr-8 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
-                              <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
-                                {dt.time}
-                              </span>
-                            </div>
-                          )}
-                          <CheckCircle2
-                            size={15}
-                            className="mt-0.5 mr-3 shrink-0 text-neutral-300 dark:text-neutral-600"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <span className="block w-full whitespace-pre-wrap pt-px text-sm leading-relaxed text-neutral-400 line-through dark:text-neutral-500">
-                              {formatTaskText(task.text)}
-                            </span>
-                            {(task.project || task.dueDate) && (
-                              <div className="mt-1.5 flex items-center gap-2 opacity-50">
-                                {task.project && (
-                                  <div className="flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-500 dark:bg-neutral-800/60 dark:text-neutral-400">
-                                    <Hash size={10} />
-                                    <span>{task.project}</span>
-                                  </div>
-                                )}
-                                {task.dueDate && (
-                                  <div className="flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                                    <Calendar size={10} />
-                                    <span>{task.dueDate}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {task.reminder && (
-                              <div className="mt-1 flex items-center text-[11px] text-neutral-400 dark:text-neutral-600">
-                                <Bell size={10} className="mr-1" />
-                                <span className="line-through">{task.reminder}</span>
-                              </div>
-                            )}
-                            {task.attachment && (
-                              <div className="mt-2 mb-1 opacity-70">
-                                {task.attachment.type === "image" ? (
-                                  <div className="relative group/attachment inline-block">
-                                    <img
-                                      src={task.attachment.url}
-                                      alt=""
-                                      onClick={() => setPreviewImage(task.attachment.url)}
-                                      className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
-                                    />
-                                    <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPreviewImage(task.attachment.url);
-                                        }}
-                                        className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-                                        title="Preview"
-                                      >
-                                        <Maximize2 size={12} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
-                                    <FileText size={12} className="mr-2 shrink-0" />
-                                    <span className="max-w-[150px] truncate">
-                                      {task.attachment.name}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {/* --- Subtasks Rendering for History --- */}
-                            {task.subtasks && task.subtasks.length > 0 && (
-                              <div className="mt-2 space-y-1 pl-1">
-                                {task.subtasks.map((st) => (
-                                  <div
-                                    key={st.id}
-                                    className="flex items-start rounded p-1"
-                                  >
-                                    <CheckCircle2
-                                      size={13}
-                                      className="mt-0.5 mr-2 shrink-0 text-neutral-300 dark:text-neutral-600"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                      <span className="block w-full whitespace-pre-wrap text-[13px] leading-relaxed text-neutral-400 line-through dark:text-neutral-500">
-                                        {formatTaskText(st.text)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {day.tasks.map((task) => (
+                      <HistoryTaskItem
+                        key={task.id}
+                        task={task}
+                        formatTaskText={formatTaskText}
+                        formatTaskDateTime={formatTaskDateTime}
+                        handleCopyImage={handleCopyImage}
+                        setPreviewImage={setPreviewImage}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}
 
               {/* TODAY */}
-              <div 
-                ref={todayRef} 
+              <div
+                ref={todayRef}
                 className={`relative pb-10 transition-colors ${
-                  dragOverId === "timeline" ? "bg-blue-50/50 dark:bg-blue-900/10 rounded-xl" : ""
+                  dragOverId === "timeline"
+                    ? "bg-blue-50/50 dark:bg-blue-900/10 rounded-xl"
+                    : ""
                 }`}
                 onDragOver={handleDragOverTimeline}
                 onDragLeave={handleDragLeaveTimeline}
@@ -1551,735 +1483,121 @@ export default function App() {
                         : "No tasks yet. Start typing below."}
                     </p>
                   ) : (
-                    sortedTasks.map((task) => {
-                      const dt = formatTaskDateTime(task.id);
-                      return (
-                        <div
-                          key={task.id}
-                          className={`group/task relative flex items-start rounded-xl p-2 transition-all duration-300 ease-out will-change-transform ${
-                            task.completed
-                              ? "opacity-40 hover:opacity-70"
-                              : "hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40"
-                          } ${
-                            dragOverId === task.id && dragOverPosition === "child"
-                              ? "scale-[1.02] -translate-y-[2px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white dark:bg-neutral-900 z-20 border border-blue-200 dark:border-blue-800/50 ring-4 ring-blue-500/20"
-                              : "border border-transparent z-10"
-                          }`}
-                          draggable={activeDragHandleId === task.id}
-                          onDragStart={(e) => handleDragStart(e, "task", task.id)}
-                          onDragEnd={handleDragEnd}
-                          onDragOver={(e) => handleDragOverTask(e, task.id)}
-                          onDragLeave={(e) => handleDragLeaveTask(e, task.id)}
-                          onDrop={(e) => handleDropOnTask(e, task.id)}
-                        >
-                          {dt && (
-                            <div className="absolute right-full inset-y-0 flex items-center pr-8 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100 pointer-events-none z-10">
-                              <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-wide text-neutral-400 dark:text-neutral-500">
-                                {dt.time}
-                              </span>
-                            </div>
-                          )}
-                          {dragOverId === task.id && dragOverPosition === "top" && (
-                            <div className="absolute -top-0.5 left-0 right-0 h-[3px] rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] z-30 pointer-events-none" />
-                          )}
-                          {dragOverId === task.id && dragOverPosition === "bottom" && (
-                            <div className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] z-30 pointer-events-none" />
-                          )}
-                          <div 
-                            className="mt-1 ml-1 flex shrink-0 items-center justify-center w-4 mr-1 opacity-0 transition-opacity group-hover/task:opacity-100 cursor-grab active:cursor-grabbing text-neutral-400 dark:text-neutral-500"
-                            onMouseEnter={() => setActiveDragHandleId(task.id)}
-                            onMouseLeave={() => setActiveDragHandleId(null)}
-                          >
-                            <GripVertical size={14} />
-                          </div>
-                          <button
-                            onClick={() => toggleTask(task.id)}
-                            className="mt-1 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
-                          >
-                            {task.completed ? (
-                              <CheckCircle2 size={18} className="text-blue-500" />
-                            ) : (
-                              <Circle size={18} />
-                            )}
-                          </button>
-                          <div className="min-w-0 flex-1">
-                            {editingId === task.id ? (
-                              <textarea
-                                autoFocus
-                                ref={(el) => {
-                                  if (el && !el.dataset.initialized) {
-                                    el.dataset.initialized = "true";
-                                    el.style.height = "auto";
-                                    el.style.height = Math.min(el.scrollHeight, 300) + "px";
-                                    if (editCaretPositionRef.current !== null) {
-                                      el.setSelectionRange(
-                                        editCaretPositionRef.current,
-                                        editCaretPositionRef.current
-                                      );
-                                      editCaretPositionRef.current = null;
-                                    }
-                                  }
-                                }}
-                                value={editText}
-                                onChange={(e) => setEditText(e.target.value)}
-                                onBlur={() => saveEdit(task.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    if (!e.shiftKey) {
-                                      e.preventDefault();
-                                      saveEdit(task.id);
-                                    }
-                                  } else if (e.key === "Escape") {
-                                    setEditingId(null);
-                                  }
-                                }}
-                                onInput={(e) => {
-                                  e.target.style.height = "auto";
-                                  e.target.style.height =
-                                    Math.min(e.target.scrollHeight, 300) + "px";
-                                }}
-                                className="w-full resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-[15px] leading-relaxed text-neutral-800 shadow-sm focus:border-neutral-400 focus:outline-none dark:border-neutral-700 dark:focus:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 min-h-[60px]"
-                              />
-                            ) : (
-                              <span
-                                onClick={(e) => {
-                                  if (e.target.tagName !== "A") {
-                                    let offset = task.text.length;
-                                    const selection = window.getSelection();
-                                    if (selection.rangeCount > 0) {
-                                      const range = selection.getRangeAt(0);
-                                      const preCaretRange = range.cloneRange();
-                                      preCaretRange.selectNodeContents(e.currentTarget);
-                                      preCaretRange.setEnd(range.startContainer, range.startOffset);
-                                      offset = preCaretRange.toString().length;
-                                    }
-                                    editCaretPositionRef.current = offset;
-                                    setEditingId(task.id);
-                                    setEditText(task.text);
-                                  }
-                                }}
-                                className={`block w-full cursor-text whitespace-pre-wrap text-[15px] leading-relaxed ${
-                                  task.completed
-                                    ? "text-neutral-400 line-through dark:text-neutral-500"
-                                    : "text-neutral-800 dark:text-neutral-200"
-                                }`}
-                              >
-                                {task.priority && !task.completed && (
-                                  <Star
-                                    size={14}
-                                    className="mb-0.5 mr-1.5 inline text-amber-500 dark:text-amber-400"
-                                    fill="currentColor"
-                                  />
-                                )}
-                                {formatTaskText(task.text)}
-                              </span>
-                            )}
-                            {(task.project || task.dueDate) && (
-                              <div className="mt-1.5 flex items-center gap-2">
-                                {task.project && (
-                                  <div className="flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-500 dark:bg-neutral-800/60 dark:text-neutral-400">
-                                    <Hash size={10} />
-                                    <span>{task.project}</span>
-                                  </div>
-                                )}
-                                {task.dueDate && (
-                                  <div className="flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                                    <Calendar size={10} />
-                                    <span>{task.dueDate}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {task.reminder && settingReminderId !== task.id && (
-                              <div className="mt-1.5 flex items-center text-xs text-blue-500 opacity-80 dark:text-blue-400">
-                                <Bell size={12} className="mr-1" />
-                                <span>{task.reminder}</span>
-                              </div>
-                            )}
-                            {settingReminderId === task.id && (
-                              <div className="mt-2 flex items-center space-x-2">
-                                <input
-                                  type="time"
-                                  autoFocus
-                                  value={reminderTime}
-                                  onChange={(e) => setReminderTime(e.target.value)}
-                                  className="rounded border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs text-neutral-700 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
-                                />
-                                <button
-                                  onClick={() => saveReminder(task.id)}
-                                  className="rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => saveReminder(task.id, true)}
-                                  className="rounded bg-neutral-200 px-2 py-1 text-xs text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
-                                >
-                                  Clear
-                                </button>
-                                <button
-                                  onClick={() => setSettingReminderId(null)}
-                                  className="rounded px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            )}
-                            {task.attachment && (
-                              <div className="mt-2 mb-1">
-                                {task.attachment.type === "image" ? (
-                                  <div className="relative group/attachment inline-block">
-                                    <img
-                                      src={task.attachment.url}
-                                      alt=""
-                                      onClick={() => setPreviewImage(task.attachment.url)}
-                                      className="max-h-32 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
-                                    />
-                                    <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPreviewImage(task.attachment.url);
-                                        }}
-                                        className="rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-                                        title="Preview"
-                                      >
-                                        <Maximize2 size={14} />
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          removeAttachment(task.id);
-                                        }}
-                                        className="rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-red-500/90 hover:text-white dark:bg-black/80 dark:hover:bg-red-600/90"
-                                        title="Delete Attachment"
-                                      >
-                                        <X size={14} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-                                    <FileText size={14} className="mr-2 shrink-0" />
-                                    <span className="max-w-[200px] truncate">
-                                      {task.attachment.name}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {/* --- Subtasks Rendering --- */}
-                            {task.subtasks && task.subtasks.length > 0 && (
-                              <div className="mt-2 space-y-1 pl-1">
-                                {task.subtasks.map((st) => (
-                                  <div
-                                    key={st.id}
-                                    className={`group/subtask relative flex items-start rounded p-1 transition-all hover:bg-neutral-200/50 dark:hover:bg-neutral-800/60 ${
-                                      dragOverId === st.id
-                                        ? "ring-1 ring-blue-300 bg-blue-50/50 dark:ring-blue-500/50 dark:bg-blue-900/10"
-                                        : ""
-                                    }`}
-                                    draggable={activeDragHandleId === st.id}
-                                    onDragStart={(e) => handleDragStart(e, "subtask", st.id, task.id)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => handleDragOverTask(e, st.id)}
-                                    onDragLeave={(e) => handleDragLeaveTask(e, st.id)}
-                                    // For simplicity, subtasks are dropped onto their parent task's id to become siblings
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleDropAction(e, "task", task.id);
-                                    }}
-                                  >
-                                    <div 
-                                      className="mt-0.5 flex shrink-0 items-center justify-center w-3 -ml-3 mr-0 opacity-0 transition-opacity group-hover/subtask:opacity-100 cursor-grab active:cursor-grabbing text-neutral-400 dark:text-neutral-500"
-                                      onMouseEnter={() => setActiveDragHandleId(st.id)}
-                                      onMouseLeave={() => setActiveDragHandleId(null)}
-                                    >
-                                      <GripVertical size={12} />
-                                    </div>
-                                    <button
-                                      onClick={() => toggleSubtask(task.id, st.id)}
-                                      className="mt-0.5 mr-2 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
-                                    >
-                                      {st.completed ? (
-                                        <CheckCircle2 size={14} className="text-blue-500" />
-                                      ) : (
-                                        <Circle size={14} />
-                                      )}
-                                    </button>
-                                    <div className="min-w-0 flex-1">
-                                      {editingSubtaskId === st.id ? (
-                                        <input
-                                          autoFocus
-                                          ref={(el) => {
-                                            if (el && !el.dataset.initialized) {
-                                              el.dataset.initialized = "true";
-                                              if (editCaretPositionRef.current !== null) {
-                                                el.setSelectionRange(
-                                                  editCaretPositionRef.current,
-                                                  editCaretPositionRef.current
-                                                );
-                                                editCaretPositionRef.current = null;
-                                              }
-                                            }
-                                          }}
-                                          value={editSubtaskText}
-                                          onChange={(e) => setEditSubtaskText(e.target.value)}
-                                          onBlur={() => saveSubtaskEdit(task.id, st.id)}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") saveSubtaskEdit(task.id, st.id);
-                                            else if (e.key === "Escape") setEditingSubtaskId(null);
-                                          }}
-                                          className="w-full rounded border border-neutral-300 bg-white px-2 py-0.5 text-[14px] leading-relaxed text-neutral-800 shadow-sm focus:border-neutral-400 focus:outline-none dark:border-neutral-700 dark:focus:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200"
-                                        />
-                                      ) : (
-                                        <span
-                                          onClick={(e) => {
-                                            if (e.target.tagName !== "A") {
-                                              let offset = st.text.length;
-                                              const selection = window.getSelection();
-                                              if (selection.rangeCount > 0) {
-                                                const range = selection.getRangeAt(0);
-                                                const preCaretRange = range.cloneRange();
-                                                preCaretRange.selectNodeContents(e.currentTarget);
-                                                preCaretRange.setEnd(range.startContainer, range.startOffset);
-                                                offset = preCaretRange.toString().length;
-                                              }
-                                              editCaretPositionRef.current = offset;
-                                              setEditingSubtaskId(st.id);
-                                              setEditSubtaskText(st.text);
-                                            }
-                                          }}
-                                          className={`block w-full cursor-text whitespace-pre-wrap text-[14px] leading-relaxed ${
-                                            st.completed
-                                              ? "text-neutral-400 line-through dark:text-neutral-500"
-                                              : "text-neutral-600 dark:text-neutral-300"
-                                          }`}
-                                        >
-                                          {formatTaskText(st.text)}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="ml-2 flex shrink-0 items-center opacity-0 transition-opacity group-hover/subtask:opacity-100">
-                                      <button
-                                        onClick={(e) => triggerDeleteSubtask(e, task.id, st.id)}
-                                        className="rounded p-0.5 text-neutral-400 transition-colors hover:text-red-500 focus:outline-none dark:text-neutral-500 dark:hover:text-red-400"
-                                        title="Delete Subtask"
-                                      >
-                                        <X size={12} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {addingSubtaskId === task.id && (
-                              <div className="mt-2 flex items-center pl-1">
-                                <CornerDownRight size={14} className="mr-2 text-neutral-400 dark:text-neutral-600" />
-                                <input
-                                  autoFocus
-                                  value={newSubtaskText}
-                                  onChange={(e) => setNewSubtaskText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") addSubtask(task.id);
-                                    else if (e.key === "Escape") {
-                                      setAddingSubtaskId(null);
-                                      setNewSubtaskText("");
-                                    }
-                                  }}
-                                  onBlur={() => addSubtask(task.id)}
-                                  placeholder="New subtask..."
-                                  className="w-full rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-[14px] text-neutral-800 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:text-neutral-200 dark:focus:border-blue-500"
-                                />
-                              </div>
-                            )}
-
-                            {/* Task Action Buttons (visible on hover) */}
-                            <div className="mt-2 flex flex-wrap gap-1.5 opacity-0 transition-opacity duration-200 group-hover/task:opacity-100">
-                              <button
-                                onClick={() => togglePriority(task.id)}
-                                className={`group/btn relative flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
-                                  task.priority
-                                    ? "border-amber-200/60 bg-amber-100 text-amber-600 dark:border-amber-900/50 dark:bg-amber-900/30 dark:text-amber-400"
-                                    : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
-                                }`}
-                              >
-                                <Star size={13} fill={task.priority ? "currentColor" : "none"} />
-                                <span className="text-[11px] font-medium leading-none">
-                                  Priority
-                                </span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSettingReminderId(task.id);
-                                  setReminderTime(task.reminder || "");
-                                }}
-                                className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
-                              >
-                                <Bell size={13} />
-                                <span className="text-[11px] font-medium leading-none">
-                                  Remind
-                                </span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setAddingSubtaskId(task.id);
-                                  setNewSubtaskText("");
-                                }}
-                                className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
-                              >
-                                <CornerDownRight size={13} />
-                                <span className="text-[11px] font-medium leading-none">
-                                  Subtask
-                                </span>
-                              </button>
-                              <button
-                                onClick={(e) => triggerDeleteTask(e, task.id)}
-                                className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                              >
-                                <X size={13} />
-                                <span className="text-[11px] font-medium leading-none">
-                                  Delete
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                    sortedTasks.map((task) => (
+                      <TaskItem
+                        key={task.id}
+                        task={task}
+                        formatTaskText={formatTaskText}
+                        formatTaskDateTime={formatTaskDateTime}
+                        editingId={editingId}
+                        setEditingId={setEditingId}
+                        editText={editText}
+                        setEditText={setEditText}
+                        editCaretPositionRef={editCaretPositionRef}
+                        saveEdit={saveEdit}
+                        editingSubtaskId={editingSubtaskId}
+                        setEditingSubtaskId={setEditingSubtaskId}
+                        editSubtaskText={editSubtaskText}
+                        setEditSubtaskText={setEditSubtaskText}
+                        saveSubtaskEdit={saveSubtaskEdit}
+                        addingSubtaskId={addingSubtaskId}
+                        setAddingSubtaskId={setAddingSubtaskId}
+                        newSubtaskText={newSubtaskText}
+                        setNewSubtaskText={setNewSubtaskText}
+                        addSubtask={addSubtask}
+                        handleSubtaskPaste={handleSubtaskPaste}
+                        pendingSubtaskAttachment={pendingSubtaskAttachment}
+                        setPendingSubtaskAttachment={setPendingSubtaskAttachment}
+                        assigningProjectId={assigningProjectId}
+                        setAssigningProjectId={setAssigningProjectId}
+                        setTasks={setTasks}
+                        settingReminderId={settingReminderId}
+                        setSettingReminderId={setSettingReminderId}
+                        reminderTime={reminderTime}
+                        setReminderTime={setReminderTime}
+                        saveReminder={saveReminder}
+                        toggleTask={toggleTask}
+                        togglePriority={togglePriority}
+                        toggleSubtask={toggleSubtask}
+                        removeAttachment={removeAttachment}
+                        triggerDeleteTask={triggerDeleteTask}
+                        triggerDeleteSubtask={triggerDeleteSubtask}
+                        handleCopyTask={handleCopyTask}
+                        handleCopyImage={handleCopyImage}
+                        setPreviewImage={setPreviewImage}
+                        dragOverId={dragOverId}
+                        dragOverPosition={dragOverPosition}
+                        activeDragHandleId={activeDragHandleId}
+                        setActiveDragHandleId={setActiveDragHandleId}
+                        handleDragStart={handleDragStart}
+                        handleDragEnd={handleDragEnd}
+                        handleDragOverTask={handleDragOverTask}
+                        handleDragLeaveTask={handleDragLeaveTask}
+                        handleDropOnTask={handleDropOnTask}
+                        handleDropAction={handleDropAction}
+                      />
+                    ))
                   )}
                 </div>
               </div>
 
               <div className="h-[40vh]" />
               <div ref={tasksEndRef} className="h-1" />
-
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Bar */}
-        <div
-          className={`z-40 flex shrink-0 justify-center transition-all duration-300 ${
-            isExpanded
-              ? "fixed inset-0 bg-neutral-950 p-6 md:p-12 z-[100]"
-              : "p-4 md:p-6"
-          }`}
-        >
-          <div
-            className={`w-full max-w-3xl flex flex-col ${isExpanded ? "h-full justify-center max-w-4xl mx-auto" : ""}`}
-          >
-            <div className="mb-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-xl font-medium text-neutral-800 dark:text-neutral-200">
-                <SteplerLogo size={26} />
-                <span>What&apos;s on your mind?</span>
-              </div>
-            </div>
-
-            <div className="relative flex flex-col">
-              {pendingAttachment && (
-                <div
-                  className={`absolute bottom-full left-0 mb-3 flex items-center shadow-lg ${pendingAttachment.type === "image" ? "rounded-lg" : "rounded-lg border border-neutral-300 bg-neutral-100 p-1.5 pr-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"}`}
-                >
-                  {pendingAttachment.type === "image" ? (
-                    <div className="relative group/pending inline-block">
-                      <img
-                        src={pendingAttachment.url}
-                        alt=""
-                        className="h-16 w-16 shrink-0 rounded-lg object-cover border border-neutral-200 dark:border-neutral-800"
-                      />
-                      <button
-                        onClick={() => setPendingAttachment(null)}
-                        className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-neutral-800 hover:text-white dark:bg-black/80 dark:hover:bg-neutral-700 opacity-0 group-hover/pending:opacity-100"
-                        title="Remove Attachment"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <FileText size={16} className="mr-2 ml-1 shrink-0" />
-                      <span className="mr-3 max-w-[200px] truncate">
-                        {pendingAttachment.name}
-                      </span>
-                      <button
-                        onClick={() => setPendingAttachment(null)}
-                        className="shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-900 dark:hover:text-neutral-200"
-                      >
-                        <X size={14} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div
-                className={`relative flex flex-col rounded-[24px] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] border ${
-                  draftProject || draftDate ? "border-indigo-500/50" : "border-neutral-200 dark:border-neutral-800/80"
-                } transition-all duration-300 dark:bg-[#1a1a1a] ${
-                  isExpanded
-                    ? "h-[60vh] md:h-[70vh]"
-                    : "min-h-[48px]"
-                }`}
-              >
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className={`absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
-                    isExpanded ? "top-4" : "top-3.5"
-                  }`}
-                >
-                  {isExpanded ? (
-                    <Minimize2 size={18} />
-                  ) : (
-                    <Maximize2 size={18} />
-                  )}
-                </button>
-
-                {(!isExpanded || isExpanded) && (draftProject || draftDate) && (
-                  <div className="flex flex-col px-5 pt-4 pb-0 gap-3">
-                    <div className="flex items-center gap-2">
-                      {draftProject && (
-                        <div className="flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-[#222] border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 text-xs font-medium text-green-600 dark:text-green-500">
-                          <User size={14} />
-                          {draftProject}
-                          <button onClick={() => setDraftProject(null)} className="ml-1 text-green-600/50 hover:text-green-600 dark:text-green-500/50 dark:hover:text-green-500"><X size={14} /></button>
-                        </div>
-                      )}
-                      {draftDate && (
-                        <div className="flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-[#1f1e2e] border border-indigo-200 dark:border-indigo-500/20 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400">
-                          <CalendarDays size={14} />
-                          {draftDate}
-                          <button onClick={() => setDraftDate(null)} className="ml-1 text-indigo-600/50 hover:text-indigo-600 dark:text-indigo-400/50 dark:hover:text-indigo-400"><X size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <textarea
-                  ref={inputRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={addTask}
-                  onPaste={handlePaste}
-                  rows={isExpanded ? undefined : 1}
-                  onInput={(e) => {
-                    if (!isExpanded) {
-                      e.target.style.height = "auto";
-                      e.target.style.height =
-                        Math.min(e.target.scrollHeight, 160) + "px";
-                    }
-                  }}
-                  placeholder="What's on your mind?"
-                  className={`flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 ${
-                    isExpanded
-                      ? "w-full px-5 pr-12 mt-4 py-6 h-full"
-                      : "w-full pl-5 pr-12 py-3"
-                  }`}
-                  style={isExpanded ? { height: "100%" } : {}}
-                />
-
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-
-                {/* Bottom tools row */}
-                <div
-                  className={`flex items-center ${
-                    isExpanded
-                      ? "justify-between mt-auto p-3 w-full border-t border-transparent"
-                      : "justify-between px-5 pb-4 mt-2"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Add draft buttons */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowDateMenu(!showDateMenu)}
-                        className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                          draftDate 
-                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400" 
-                            : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                        }`}
-                      >
-                        <Calendar size={16} />
-                        <span>{draftDate || "Date"}</span>
-                      </button>
-                      
-                      {/* Date Menu Popup */}
-                      {showDateMenu && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setShowDateMenu(false)} />
-                          <div className="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-[#1a1a1a]">
-                            <div className="mb-2 px-2 pt-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:text-neutral-500">
-                              DUE DATE
-                            </div>
-                            {[
-                              { label: 'Today', icon: Zap, color: 'text-amber-500' },
-                              { label: 'Tomorrow', icon: Calendar, color: 'text-blue-500' },
-                              { label: 'Next Week', icon: CalendarDays, color: 'text-indigo-500' }
-                            ].map((item) => (
-                              <button
-                                key={item.label}
-                                onClick={() => { setDraftDate(item.label); setShowDateMenu(false); }}
-                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                              >
-                                <item.icon size={16} className={item.color} />
-                                <span>{item.label}</span>
-                              </button>
-                            ))}
-                            <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
-                            <button
-                              onClick={() => { setDraftDate(null); setShowDateMenu(false); }}
-                              className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            >
-                              Clear Date
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowProjectMenu(!showProjectMenu)}
-                        className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                          draftProject 
-                            ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100" 
-                            : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                        }`}
-                      >
-                        <Hash size={16} />
-                        <span>{draftProject || "Project"}</span>
-                      </button>
-
-                      {/* Project Menu Popup */}
-                      {showProjectMenu && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setShowProjectMenu(false)} />
-                          <div className="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-[#1a1a1a]">
-                            <div className="mb-2 px-2 pt-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:text-neutral-500">
-                              ASSIGN PROJECT
-                            </div>
-                            <div className="px-2 pb-2">
-                              <input 
-                                type="text"
-                                placeholder="+ New project..."
-                                className="w-full bg-neutral-100 dark:bg-neutral-800 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-neutral-300 dark:focus:ring-neutral-700 text-neutral-800 dark:text-neutral-200"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && e.target.value.trim()) {
-                                    setDraftProject(e.target.value.trim());
-                                    setShowProjectMenu(false);
-                                  }
-                                }}
-                              />
-                            </div>
-                            {[
-                              { label: 'Work', icon: Briefcase, color: 'text-blue-500' },
-                              { label: 'Personal', icon: User, color: 'text-green-500' },
-                              { label: 'Health', icon: Zap, color: 'text-orange-500' }
-                            ].map((item) => (
-                              <button
-                                key={item.label}
-                                onClick={() => { setDraftProject(item.label); setShowProjectMenu(false); }}
-                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                              >
-                                <item.icon size={16} className={item.color} />
-                                <span>{item.label}</span>
-                              </button>
-                            ))}
-                            <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
-                            <button
-                              onClick={() => { setDraftProject(null); setShowProjectMenu(false); }}
-                              className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            >
-                              Clear Project
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1 hidden sm:block" />
-
-                    <div className="flex items-center gap-0.5 ml-auto sm:ml-0">
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                        title="Attach image or file"
-                      >
-                        <Plus size={20} />
-                      </button>
-                      <button
-                        onClick={() => setShowSettings(true)}
-                        className={`flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-                          isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
-                        }`}
-                        title="Tools"
-                      >
-                        <Settings size={16} />
-                        {isExpanded && <span>Tools</span>}
-                      </button>
-                      <button
-                        onClick={() =>
-                          window.electron?.ipcRenderer.invoke("start-dictation")
-                        }
-                        className={`flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-                          isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
-                        }`}
-                        title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
-                      >
-                        <Mic size={16} />
-                        {isExpanded && <span>Dictate</span>}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center ml-2">
-                    <button
-                      onClick={addTask}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                    >
-                      <ArrowUp size={16} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
+
+        {/* Bottom Bar */}
+        <TaskInput
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          inputRef={inputRef}
+          addTask={addTask}
+          handlePaste={handlePaste}
+          handleFileChange={handleFileChange}
+          handleCopyImage={handleCopyImage}
+          isExpanded={isExpanded}
+          setIsExpanded={setIsExpanded}
+          pendingAttachment={pendingAttachment}
+          setPendingAttachment={setPendingAttachment}
+          draftProjects={draftProjects}
+          setDraftProjects={setDraftProjects}
+          draftDate={draftDate}
+          setDraftDate={setDraftDate}
+          showDateMenu={showDateMenu}
+          setShowDateMenu={setShowDateMenu}
+          showProjectMenu={showProjectMenu}
+          setShowProjectMenu={setShowProjectMenu}
+          setShowSettings={setShowSettings}
+        />
 
         {/* Settings modal */}
         {showSettings && (
-          <SettingsPanel onClose={() => setShowSettings(false)} />
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            onExport={handleExportTasks}
+            onImport={handleImportTasks}
+          />
+        )}
+
+        {/* Deleted Tasks Panel */}
+        {showDeletedPanel && (
+          <DeletedTasksPanel
+            deletedTasks={deletedTasks}
+            onClose={() => setShowDeletedPanel(false)}
+            onRestore={restoreTask}
+            onPermanentDelete={permanentlyDeleteTask}
+            onClearAll={clearDeletedTasks}
+            formatTaskText={formatTaskText}
+          />
         )}
 
         {/* Image Preview Modal */}
-        {previewImage && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
-            onClick={() => setPreviewImage(null)}
-          >
-            <div className="relative max-h-full max-w-full">
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute right-4 top-4 rounded-md bg-black/50 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-              >
-                <X size={20} />
-              </button>
-              <img
-                src={previewImage}
-                alt="Preview"
-                className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          </div>
-        )}
+        <ImagePreviewModal
+          previewImage={previewImage}
+          setPreviewImage={setPreviewImage}
+          handleCopyImage={handleCopyImage}
+        />
       </div>
     </div>
   );
