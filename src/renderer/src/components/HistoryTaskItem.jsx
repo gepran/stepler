@@ -37,7 +37,7 @@ export default function HistoryTaskItem({
       />
       <div className="min-w-0 flex-1">
         <span className="block w-full whitespace-pre-wrap pt-px text-sm leading-relaxed text-neutral-400 line-through dark:text-neutral-500">
-          {formatTaskText(task.text)}
+          {formatTaskText(task.text || task.title || "")}
         </span>
         {(task.project ||
           (task.projects && task.projects.length > 0) ||

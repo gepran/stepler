@@ -166,7 +166,8 @@ export default function TaskItem({
           <span
             onClick={(e) => {
               if (e.target.tagName !== "A") {
-                let offset = task.text.length;
+                const currentText = task.text || task.title || "";
+                let offset = currentText.length;
                 const selection = window.getSelection();
                 if (selection.rangeCount > 0) {
                   const range = selection.getRangeAt(0);
@@ -193,7 +194,7 @@ export default function TaskItem({
                 fill="currentColor"
               />
             )}
-            {formatTaskText(task.text)}
+            {formatTaskText(task.text || task.title || "")}
           </span>
         )}
 

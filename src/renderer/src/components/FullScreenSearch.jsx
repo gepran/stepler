@@ -55,9 +55,11 @@ export default function FullScreenSearch({
     return allTasks
       .filter(
         (t) =>
-          t.text?.toLowerCase().includes(lowerQ) ||
+          (t.text || t.title || "").toLowerCase().includes(lowerQ) ||
           t.project?.toLowerCase().includes(lowerQ) ||
-          t.subtasks?.some((st) => st.text?.toLowerCase().includes(lowerQ)),
+          t.subtasks?.some((st) =>
+            (st.text || "").toLowerCase().includes(lowerQ),
+          ),
       )
       .sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -176,7 +178,7 @@ export default function FullScreenSearch({
                   <div
                     className={`flex-1 text-lg ${task.completed ? "text-neutral-400 line-through" : "text-neutral-800 dark:text-neutral-200"}`}
                   >
-                    {task.text}
+                    {task.text || task.title || ""}
                   </div>
                 </div>
 
