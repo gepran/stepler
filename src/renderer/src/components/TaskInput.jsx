@@ -104,9 +104,9 @@ export default function TaskInput({
                   </span>
                   <button
                     onClick={() => setPendingAttachment(null)}
-                    className="shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-900 dark:hover:text-neutral-200"
+                    className="btn-tactile shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-900 dark:hover:text-neutral-200"
                   >
-                    <X size={14} />
+                    <X size={14} className="icon-rubbery" />
                   </button>
                 </>
               )}
@@ -124,11 +124,15 @@ export default function TaskInput({
           >
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className={`absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
+              className={`btn-tactile absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
                 isExpanded ? "top-4" : "top-3.5"
               }`}
             >
-              {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              {isExpanded ? (
+                <Minimize2 size={18} className="icon-rubbery" />
+              ) : (
+                <Maximize2 size={18} className="icon-rubbery" />
+              )}
             </button>
 
             {(!isExpanded || isExpanded) &&
@@ -214,13 +218,13 @@ export default function TaskInput({
                 <div className="relative">
                   <button
                     onClick={() => setShowDateMenu(!showDateMenu)}
-                    className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                    className={`btn-tactile flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
                       draftDate
                         ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
                         : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
                     }`}
                   >
-                    <Calendar size={16} />
+                    <Calendar size={16} className="icon-rubbery" />
                     <span>{draftDate || "Date"}</span>
                   </button>
 
@@ -286,13 +290,13 @@ export default function TaskInput({
                       setShowProjectMenu(!showProjectMenu);
                       if (!showProjectMenu) inputRef.current?.blur();
                     }}
-                    className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                    className={`btn-tactile flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
                       draftProjects.length > 0
                         ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
                         : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
                     }`}
                   >
-                    <Hash size={16} />
+                    <Hash size={16} className="icon-rubbery" />
                     <span>
                       {draftProjects.length > 0
                         ? `${draftProjects.length} Project${draftProjects.length > 1 ? "s" : ""}`
@@ -421,31 +425,31 @@ export default function TaskInput({
                 <div className="flex items-center gap-0.5 ml-auto sm:ml-0">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                    className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     title="Attach image or file"
                   >
-                    <Plus size={20} />
+                    <Plus size={20} className="icon-rubbery" />
                   </button>
                   <button
                     onClick={() => setShowSettings(true)}
-                    className={`flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                    className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                       isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                     }`}
                     title="Tools"
                   >
-                    <Settings size={16} />
+                    <Settings size={16} className="icon-rubbery" />
                     {isExpanded && <span>Tools</span>}
                   </button>
                   <button
                     onClick={() =>
                       window.electron?.ipcRenderer.invoke("start-dictation")
                     }
-                    className={`flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                    className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                       isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                     }`}
                     title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
                   >
-                    <Mic size={16} />
+                    <Mic size={16} className="icon-rubbery" />
                     {isExpanded && <span>Dictate</span>}
                   </button>
                 </div>
@@ -454,9 +458,9 @@ export default function TaskInput({
               <div className="flex items-center ml-2">
                 <button
                   onClick={addTask}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                  className="btn-tactile flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
                 >
-                  <ArrowUp size={16} strokeWidth={2.5} />
+                  <ArrowUp size={16} className="icon-rubbery" strokeWidth={2.5} />
                 </button>
               </div>
             </div>

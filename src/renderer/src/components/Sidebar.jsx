@@ -86,7 +86,7 @@ export default function Sidebar({
                 <div
                   key={idx}
                   onClick={() => onDayClick?.(day.date)}
-                  className="group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
+                  className="btn-tactile group flex flex-col p-2.5 rounded-xl hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer border border-transparent hover:border-neutral-200/50 dark:hover:border-neutral-700/50"
                 >
                   <div className="flex justify-between items-center mb-2">
                     <span
@@ -125,9 +125,9 @@ export default function Sidebar({
         <div className="p-4 shrink-0 flex flex-col gap-1">
           <button
             onClick={onTrashClick}
-            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors relative"
+            className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors relative"
           >
-            <Trash2 size={18} />
+            <Trash2 size={18} className="icon-rubbery" />
             <span className="text-sm font-medium">Trash</span>
             {deletedCount > 0 && (
               <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
@@ -137,9 +137,9 @@ export default function Sidebar({
           </button>
           <button
             onClick={onSettingsClick}
-            className="flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
           >
-            <Settings size={18} />
+            <Settings size={18} className="icon-rubbery" />
             <span className="text-sm font-medium">Settings</span>
           </button>
         </div>
@@ -182,7 +182,7 @@ export default function Sidebar({
               <div
                 key={idx}
                 onClick={() => onDayClick?.(day.date)}
-                className={`group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors hover:border-neutral-300 dark:hover:border-neutral-600 ${bgColor} ${borderColor} ${textColor}`}
+                className={`btn-tactile group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors hover:border-neutral-300 dark:hover:border-neutral-600 ${bgColor} ${borderColor} ${textColor}`}
                 title={`${day.date} - ${day.count} tasks`}
               >
                 <span className="text-[13px] font-bold leading-none">
@@ -204,10 +204,10 @@ export default function Sidebar({
         <div className="p-3 shrink-0 flex flex-col items-center gap-2">
           <button
             onClick={onTrashClick}
-            className="relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            className="btn-tactile relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
             title="Trash"
           >
-            <Trash2 size={18} />
+            <Trash2 size={18} className="icon-rubbery" />
             {deletedCount > 0 && (
               <div className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900">
                 {deletedCount > 99 ? "99+" : deletedCount}
@@ -216,10 +216,10 @@ export default function Sidebar({
           </button>
           <button
             onClick={onSettingsClick}
-            className="p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            className="btn-tactile p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
             title="Settings"
           >
-            <Settings size={18} />
+            <Settings size={18} className="icon-rubbery" />
           </button>
         </div>
       </div>

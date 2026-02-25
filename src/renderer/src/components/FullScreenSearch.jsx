@@ -167,12 +167,12 @@ export default function FullScreenSearch({
                       e.stopPropagation();
                       onToggleTask(task.id);
                     }}
-                    className="mt-0.5 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
+                    className="btn-tactile mt-0.5 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
                   >
                     {task.completed ? (
-                      <CheckCircle2 size={18} className="text-blue-500" />
+                      <CheckCircle2 size={18} className="icon-rubbery text-blue-500" />
                     ) : (
-                      <Circle size={18} />
+                      <Circle size={18} className="icon-rubbery" />
                     )}
                   </button>
                   <div
@@ -233,9 +233,9 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         onAddSubtask(task.id, task.dateLabel);
                       }}
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                      className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
-                      <CornerDownRight size={12} />
+                      <CornerDownRight size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Subtask</span>
                     </button>
                     <button
@@ -243,13 +243,13 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         onTogglePriority(task.id);
                       }}
-                      className={`flex items-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
+                      className={`btn-tactile flex items-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
                         task.priority
                           ? "border-amber-200/60 bg-amber-100 text-amber-600 dark:border-amber-900/50 dark:bg-amber-900/30 dark:text-amber-400"
                           : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                       }`}
                     >
-                      <Star size={12} fill={task.priority ? "currentColor" : "none"} />
+                      <Star size={12} fill={task.priority ? "currentColor" : "none"} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Priority</span>
                     </button>
                     <button
@@ -257,9 +257,9 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         handleJump(task);
                       }}
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                      className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
-                      <Hash size={12} />
+                      <Hash size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Project</span>
                     </button>
                     <button
@@ -267,9 +267,9 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         handleJump(task);
                       }}
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                      className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
-                      <Bell size={12} />
+                      <Bell size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Remind</span>
                     </button>
                     <button
@@ -277,9 +277,9 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         onCopyTask(e, task);
                       }}
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                      className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
-                      <Copy size={12} />
+                      <Copy size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Copy</span>
                     </button>
                     <button
@@ -287,9 +287,9 @@ export default function FullScreenSearch({
                         e.stopPropagation();
                         onDeleteTask(e, task.id);
                       }}
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                      className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
                     >
-                      <X size={12} />
+                      <X size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">Delete</span>
                     </button>
                   </div>
@@ -302,9 +302,9 @@ export default function FullScreenSearch({
 
       <button
         onClick={onClose}
-        className="absolute top-8 right-8 p-3 rounded-full hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 text-neutral-500 transition-colors"
+        className="btn-tactile absolute top-8 right-8 p-3 rounded-full hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 text-neutral-500 transition-colors"
       >
-        <X size={24} />
+        <X size={24} className="icon-rubbery" />
       </button>
     </div>
   );

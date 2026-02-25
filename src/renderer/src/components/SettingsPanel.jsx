@@ -104,9 +104,9 @@ export default function SettingsPanel({ onClose, onExport, onImport }) {
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+            className="btn-tactile rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
           >
-            <X size={18} />
+            <X size={18} className="icon-rubbery" />
           </button>
         </div>
 
@@ -124,13 +124,13 @@ export default function SettingsPanel({ onClose, onExport, onImport }) {
               <button
                 key={value}
                 onClick={() => updateSetting({ theme: value })}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
+                className={`btn-tactile flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
                   settings.theme === value
                     ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
                     : "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-300"
                 }`}
               >
-                <Icon size={16} />
+                <Icon size={16} className="icon-rubbery" />
                 {label}
               </button>
             ))}
@@ -164,7 +164,7 @@ export default function SettingsPanel({ onClose, onExport, onImport }) {
                   setRecording(true);
                   setTempKey(null);
                 }}
-                className="shrink-0 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                className="btn-tactile shrink-0 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
               >
                 Change
               </button>
@@ -183,16 +183,16 @@ export default function SettingsPanel({ onClose, onExport, onImport }) {
           <div className="flex gap-2">
             <button
               onClick={onExport}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-neutral-600 transition-all hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="btn-tactile flex flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-neutral-600 transition-all hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
-              <Download size={16} />
+              <Download size={16} className="icon-rubbery" />
               Export
             </button>
             <button
               onClick={onImport}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-neutral-600 transition-all hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="btn-tactile flex flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-neutral-600 transition-all hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
-              <Upload size={16} />
+              <Upload size={16} className="icon-rubbery" />
               Import
             </button>
           </div>

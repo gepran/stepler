@@ -15,6 +15,7 @@ import { exec } from "child_process";
 import http from "http";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
+import { autoUpdater } from "electron-updater";
 
 let mainWindow = null;
 
@@ -392,6 +393,26 @@ app.whenReady().then(() => {
   startAPIServer();
   createWindow();
   registerHotkey(settings.hotkey);
+
+  if (!is.dev) {
+    autoUpdater.checkForUpdatesAndNotify();
+
+    autoUpdater.on("update-downloaded", () => {
+      dialog
+        .showMessageBox({
+          type: "info",
+          title: "Update Available",
+          message:
+            "A new version of Stepler has been downloaded. Restart the application to apply the updates.",
+          buttons: ["Restart", "Later"],
+        })
+        .then((returnValue) => {
+          if (returnValue.response === 0) {
+            autoUpdater.quitAndInstall();
+          }
+        });
+    });
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

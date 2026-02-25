@@ -14,6 +14,9 @@ import {
   Copy,
 } from "lucide-react";
 
+const MODULE_LOAD_TIME = Date.now();
+
+
 export default function TaskItem({
   task,
   formatTaskText,
@@ -116,12 +119,12 @@ export default function TaskItem({
       </div>
       <button
         onClick={() => toggleTask(task.id)}
-        className="mt-1 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
+        className="btn-tactile mt-1 mr-3 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
       >
         {task.completed ? (
-          <CheckCircle2 size={18} className="text-blue-500" />
+          <CheckCircle2 size={18} className="icon-rubbery text-blue-500" />
         ) : (
-          <Circle size={18} />
+          <Circle size={18} className="icon-rubbery" />
         )}
       </button>
       <div className="min-w-0 flex-1">
@@ -231,10 +234,10 @@ export default function TaskItem({
                         }),
                       );
                     }}
-                    className="ml-0.5 opacity-0 group-hover/proj:opacity-100 hover:text-red-500 transition-opacity"
+                    className="btn-tactile ml-0.5 opacity-0 group-hover/proj:opacity-100 hover:text-red-500 transition-opacity"
                     title="Remove Project"
                   >
-                    <X size={10} />
+                    <X size={10} className="icon-rubbery" />
                   </button>
                 </div>
               ),
@@ -268,19 +271,19 @@ export default function TaskItem({
             />
             <button
               onClick={() => saveReminder(task.id)}
-              className="rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
+              className="btn-tactile rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
             >
               Save
             </button>
             <button
               onClick={() => saveReminder(task.id, true)}
-              className="rounded bg-neutral-200 px-2 py-1 text-xs text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
+              className="btn-tactile rounded bg-neutral-200 px-2 py-1 text-xs text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
             >
               Clear
             </button>
             <button
               onClick={() => setSettingReminderId(null)}
-              className="rounded px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+              className="btn-tactile rounded px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
             >
               Cancel
             </button>
@@ -303,30 +306,30 @@ export default function TaskItem({
                     onClick={(e) =>
                       handleCopyImage(e, task.attachment.url)
                     }
-                    className="rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
+                    className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                     title="Copy Image"
                   >
-                    <Copy size={14} />
+                    <Copy size={14} className="icon-rubbery" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setPreviewImage(task.attachment.url);
                     }}
-                    className="rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
+                    className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                     title="Preview"
                   >
-                    <Maximize2 size={14} />
+                    <Maximize2 size={14} className="icon-rubbery" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       removeAttachment(task.id);
                     }}
-                    className="rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-red-500/90 hover:text-white dark:bg-black/80 dark:hover:bg-red-600/90"
+                    className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-red-500/90 hover:text-white dark:bg-black/80 dark:hover:bg-red-600/90"
                     title="Delete Attachment"
                   >
-                    <X size={14} />
+                    <X size={14} className="icon-rubbery" />
                   </button>
                 </div>
               </div>
@@ -355,6 +358,8 @@ export default function TaskItem({
                     dragOverId === st.id
                       ? "ring-1 ring-blue-300 bg-blue-50/50 dark:ring-blue-500/50 dark:bg-blue-900/10"
                       : ""
+                  } ${
+                    parseInt(st.id, 10) > MODULE_LOAD_TIME ? "animate-jelly-fall" : ""
                   }`}
                   draggable={activeDragHandleId === st.id}
                   onDragStart={(e) =>
@@ -378,12 +383,12 @@ export default function TaskItem({
                   </div>
                   <button
                     onClick={() => toggleSubtask(task.id, st.id)}
-                    className="mt-0.5 mr-2 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
+                    className="btn-tactile mt-0.5 mr-2 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
                   >
                     {st.completed ? (
-                      <CheckCircle2 size={14} className="text-blue-500" />
+                      <CheckCircle2 size={14} className="icon-rubbery text-blue-500" />
                     ) : (
-                      <Circle size={14} />
+                      <Circle size={14} className="icon-rubbery" />
                     )}
                   </button>
                   <div className="min-w-0 flex-1">
@@ -459,20 +464,20 @@ export default function TaskItem({
                             onClick={(e) =>
                               handleCopyImage(e, st.attachment.url)
                             }
-                            className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
+                            className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                             title="Copy Image"
                           >
-                            <Copy size={10} />
+                            <Copy size={10} className="icon-rubbery" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setPreviewImage(st.attachment.url);
                             }}
-                            className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
+                            className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                             title="Preview"
                           >
-                            <Maximize2 size={10} />
+                            <Maximize2 size={10} className="icon-rubbery" />
                           </button>
                         </div>
                       </div>
@@ -483,10 +488,10 @@ export default function TaskItem({
                       onClick={(e) =>
                         triggerDeleteSubtask(e, task.id, st.id)
                       }
-                      className="rounded p-0.5 text-neutral-400 transition-colors hover:text-red-500 focus:outline-none dark:text-neutral-500 dark:hover:text-red-400"
+                      className="btn-tactile rounded p-0.5 text-neutral-400 transition-colors hover:text-red-500 focus:outline-none dark:text-neutral-500 dark:hover:text-red-400"
                       title="Delete Subtask"
                     >
-                      <X size={12} />
+                      <X size={12} className="icon-rubbery" />
                     </button>
                   </div>
                 </div>
@@ -540,10 +545,10 @@ export default function TaskItem({
                       e.stopPropagation();
                       setPendingSubtaskAttachment(null);
                     }}
-                    className="absolute -right-2 -top-2 rounded-full border border-neutral-200 bg-white p-0.5 text-neutral-500 shadow hover:bg-neutral-100 hover:text-red-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-red-400"
+                    className="btn-tactile absolute -right-2 -top-2 rounded-full border border-neutral-200 bg-white p-0.5 text-neutral-500 shadow hover:bg-neutral-100 hover:text-red-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-red-400"
                     title="Remove attachment"
                   >
-                    <X size={12} />
+                    <X size={12} className="icon-rubbery" />
                   </button>
                 </div>
               )}
@@ -620,16 +625,16 @@ export default function TaskItem({
                 setAddingSubtaskId(task.id);
                 setNewSubtaskText("");
               }}
-              className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+              className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
             >
-              <CornerDownRight size={13} />
+              <CornerDownRight size={13} className="icon-rubbery" />
               <span className="text-[11px] font-medium leading-none">
                 Subtask
               </span>
             </button>
             <button
               onClick={() => togglePriority(task.id)}
-              className={`group/btn relative flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
+              className={`btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
                 task.priority
                   ? "border-amber-200/60 bg-amber-100 text-amber-600 dark:border-amber-900/50 dark:bg-amber-900/30 dark:text-amber-400"
                   : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
@@ -638,6 +643,7 @@ export default function TaskItem({
               <Star
                 size={13}
                 fill={task.priority ? "currentColor" : "none"}
+                className="icon-rubbery"
               />
               <span className="text-[11px] font-medium leading-none">
                 Priority
@@ -645,9 +651,9 @@ export default function TaskItem({
             </button>
             <button
               onClick={() => setAssigningProjectId(task.id)}
-              className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+              className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
             >
-              <Hash size={13} />
+              <Hash size={13} className="icon-rubbery" />
               <span className="text-[11px] font-medium leading-none">
                 Project
               </span>
@@ -657,18 +663,18 @@ export default function TaskItem({
                 setSettingReminderId(task.id);
                 setReminderTime(task.reminder || "");
               }}
-              className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+              className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
             >
-              <Bell size={13} />
+              <Bell size={13} className="icon-rubbery" />
               <span className="text-[11px] font-medium leading-none">
                 Remind
               </span>
             </button>
             <button
               onClick={(e) => handleCopyTask(e, task)}
-              className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+              className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
             >
-              <Copy size={13} />
+              <Copy size={13} className="icon-rubbery" />
               <span className="text-[11px] font-medium leading-none">
                 Copy
               </span>
@@ -676,9 +682,9 @@ export default function TaskItem({
           </div>
           <button
             onClick={(e) => triggerDeleteTask(e, task.id)}
-            className="group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+            className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
           >
-            <X size={13} />
+            <X size={13} className="icon-rubbery" />
             <span className="text-[11px] font-medium leading-none">
               Delete
             </span>
