@@ -14,7 +14,7 @@ import { createInterface } from 'node:readline'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
-const BASE_URL = process.env.STEPLER_URL || 'http://localhost:3000'
+const BASE_URL = process.env.STEPLER_URL || 'http://127.0.0.1:3000'
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 
