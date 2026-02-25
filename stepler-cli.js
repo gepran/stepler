@@ -83,13 +83,13 @@ async function listTasks() {
     }
 
     console.log()
-    console.log(`${c.bold}${c.cyan}  ID${' '.repeat(20)}Title${c.reset}`)
+    console.log(`${c.bold}${c.cyan}  ID${' '.repeat(20)}Task${c.reset}`)
     console.log(`${c.dim}  ${'─'.repeat(50)}${c.reset}`)
 
     for (const t of tasks) {
         const id = String(t.id || t._id || '???')
-        const title = t.title || t.text || '(untitled)'
-        const done = t.done || t.completed ? `${c.green}✔${c.reset}` : `${c.dim}○${c.reset}`
+        const title = t.text || t.title || '(untitled)'
+        const done = t.completed || t.done ? `${c.green}✔${c.reset}` : `${c.dim}○${c.reset}`
         console.log(`  ${done} ${c.yellow}${id.padEnd(22)}${c.reset}${title}`)
     }
     console.log()

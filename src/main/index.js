@@ -317,9 +317,9 @@ function startAPIServer() {
 
           const data = loadAppData();
           const newTask = {
-            id: Math.random().toString(36).substring(2, 9),
-            title,
-            done: false,
+            id: Date.now().toString(),
+            text: title,
+            completed: false,
             createdAt: new Date().toISOString(),
           };
 
