@@ -1,104 +1,604 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stepler - Minimal Daily Tasks</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Stepler - Move Forward</title>
     <style>
+        :root {
+            --bg: #fdfdfd;
+            --text: #1d1d1f;
+            --accent: #9B6AFF;
+            --accent-secondary: #41A1FF;
+            --mouse-x: 50vw;
+            --mouse-y: 50vh;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
-            background-color: #0f172a;
-            color: #f8fafc;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
         }
-        .gradient-text {
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-image: linear-gradient(to right, #3b82f6, #8b5cf6);
+
+        /* Mouse Follow Glow */
+        .mouse-glow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: -1;
+            background: radial-gradient(circle 600px at var(--mouse-x) var(--mouse-y),
+                    rgba(155, 106, 255, 0.08),
+                    transparent 70%);
+            transition: background 0s;
         }
-        .hero-section {
-            flex-grow: 1;
+
+        /* Animated Background */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -4;
+            background: linear-gradient(120deg, #fdfdfd, rgba(65, 161, 255, 0.05), rgba(155, 106, 255, 0.05), #fdfdfd);
+            background-size: 300% 300%;
+            animation: gradientBackground 20s ease infinite;
+        }
+
+        @keyframes gradientBackground {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        main {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            align-items: center;
             justify-content: center;
-            text-align: center;
-            padding: 2rem;
-        }
-        .download-btn {
-            display: inline-flex;
             align-items: center;
-            gap: 0.75rem;
-            background: linear-gradient(to right, #2563eb, #4f46e5);
-            color: white;
-            padding: 1rem 2.5rem;
-            font-size: 1.25rem;
+            padding: 2rem;
+            text-align: center;
+            margin-top: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: clamp(3.5rem, 8vw, 6.5rem);
             font-weight: 600;
-            text-decoration: none;
+            letter-spacing: -0.04em;
+            margin: 0 0 1rem 0;
+            line-height: 1.1;
+        }
+
+        p {
+            font-size: 1.25rem;
+            color: #86868b;
+            max-width: 550px;
+            margin: 0 0 3rem 0;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        .actions {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 4rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-secondary), var(--accent));
+            color: #ffffff;
+            padding: 1rem 2rem;
             border-radius: 9999px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 14px 0 rgba(155, 106, 255, 0.3);
+            border: none;
         }
-        .download-btn:hover {
-            transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+
+        .btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(155, 106, 255, 0.4);
         }
-        .feature-card {
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid rgba(51, 65, 85, 0.5);
-            border-radius: 1rem;
-            padding: 1.5rem;
-            backdrop-filter: blur(10px);
+
+        .btn-outline {
+            background-color: transparent;
+            color: var(--text);
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            box-shadow: none;
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+            box-shadow: none;
+        }
+
+        nav {
+            padding: 1.5rem 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(245, 245, 247, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: -0.02em;
+            text-decoration: none;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .links a {
+            color: var(--text);
+            text-decoration: none;
+            margin-left: 2rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .links a:hover {
+            opacity: 1;
+        }
+
+        /* Video / Animation Simulation */
+        .simulation-wrapper {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto 4rem auto;
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        .app-simulation {
+            width: 100%;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* Interactive parallax tilt based on mouse */
+            transform-origin: center;
+            transform:
+                rotateX(calc((50vh - var(--mouse-y)) * 0.02deg)) rotateY(calc((var(--mouse-x) - 50vw) * 0.02deg));
+            transition: transform 0.1s ease-out;
+            animation: floatApp 6s ease-in-out infinite;
+        }
+
+        @keyframes floatApp {
+            0% {
+                transform: translateY(0px) rotateX(calc((50vh - var(--mouse-y)) * 0.02deg)) rotateY(calc((var(--mouse-x) - 50vw) * 0.02deg));
+            }
+
+            50% {
+                transform: translateY(-15px) rotateX(calc((50vh - var(--mouse-y)) * 0.02deg)) rotateY(calc((var(--mouse-x) - 50vw) * 0.02deg));
+            }
+
+            100% {
+                transform: translateY(0px) rotateX(calc((50vh - var(--mouse-y)) * 0.02deg)) rotateY(calc((var(--mouse-x) - 50vw) * 0.02deg));
+            }
+        }
+
+        .sim-browser-bar {
+            height: 48px;
+            background: rgba(245, 245, 247, 0.9);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            gap: 8px;
+        }
+
+        .mac-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mac-dot.red {
+            background: #ff5f56;
+        }
+
+        .mac-dot.yellow {
+            background: #ffbd2e;
+        }
+
+        .mac-dot.green {
+            background: #27c93f;
+        }
+
+        .sim-content {
+            flex: 1;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            background: linear-gradient(180deg, #f9f9fb 0%, #ffffff 100%);
+        }
+
+        .sim-task {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .sim-task:nth-child(1) {
+            animation-delay: 0.5s;
+        }
+
+        .sim-task:nth-child(2) {
+            animation-delay: 1.5s;
+        }
+
+        .sim-task:nth-child(3) {
+            animation-delay: 2.5s;
+        }
+
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .sim-checkbox {
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .sim-task.animate-check .sim-checkbox {
+            animation: checkPop 0.4s ease forwards;
+            animation-delay: 4s;
+        }
+
+        .sim-task.animate-check:nth-child(2) .sim-checkbox {
+            animation-delay: 5s;
+        }
+
+        @keyframes checkPop {
+            0% {
+                transform: scale(1);
+                background: transparent;
+                border-color: #e0e0e0;
+            }
+
+            50% {
+                transform: scale(1.15);
+            }
+
+            100% {
+                transform: scale(1);
+                background: var(--accent);
+                border-color: var(--accent);
+            }
+        }
+
+        .sim-checkbox::after {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 4px;
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg) scale(0);
+            opacity: 0;
+            transition: all 0.2s;
+        }
+
+        .sim-task.animate-check .sim-checkbox::after {
+            animation: checkMarkShow 0.2s ease forwards;
+            animation-delay: 4.2s;
+        }
+
+        .sim-task.animate-check:nth-child(2) .sim-checkbox::after {
+            animation-delay: 5.2s;
+        }
+
+        @keyframes checkMarkShow {
+            to {
+                transform: rotate(45deg) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .sim-text-line {
+            height: 14px;
+            background: #e8e8ed;
+            border-radius: 6px;
+            width: 70%;
+            transition: opacity 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Shimmer effect for simulation text */
+        .sim-text-line::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            100% {
+                left: 100%;
+            }
+        }
+
+        .sim-text-line.short {
+            width: 45%;
+        }
+
+        .sim-text-line.long {
+            width: 85%;
+        }
+
+        .sim-task.animate-check .sim-text-line {
+            animation: fadeText 0.3s ease forwards;
+            animation-delay: 4s;
+        }
+
+        .sim-task.animate-check:nth-child(2) .sim-text-line {
+            animation-delay: 5s;
+        }
+
+        @keyframes fadeText {
+            to {
+                opacity: 0.4;
+            }
         }
     </style>
 </head>
-<body>
-    <main class="hero-section">
-        <div class="max-w-4xl mx-auto w-full">
-            <!-- Header -->
-            <h1 class="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-                Meet <span class="gradient-text">Stepler</span>
-            </h1>
-            <p class="text-xl md:text-2xl text-slate-400 mb-12 max-w-2xl mx-auto">
-                A minimal daily task timeline for macOS. Keep your focus sharp and your day organized.
-            </p>
-            
-            <!-- Download Button -->
-            <!-- IMPORTANT: Replace REPLACE_ME_WITH_YOUR_RELEASE_LINK with your actual GitHub release link -->
-            <a href="https://github.com/gariepranos/stepler/releases/download/v1.0.0/stepler-1.0.0.dmg" class="download-btn mb-16">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                Download for Mac (.dmg)
-            </a>
 
-            <!-- Features -->
-            <div class="grid md:grid-cols-3 gap-6 text-left mt-12">
-                <div class="feature-card">
-                    <h3 class="text-lg font-semibold text-white mb-2">Minimalist Design</h3>
-                    <p class="text-slate-400 text-sm">Stay focused with a clean, distraction-free interface built for productivity.</p>
+<body>
+    <nav>
+        <a href="index.html" class="logo">
+            <img src="icon.png" alt="Stepler Logo">
+            stepler.
+        </a>
+        <div class="links">
+            <a href="https://github.com/gepran/stepler" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/gepran" target="_blank" rel="noopener noreferrer">@gepran</a>
+        </div>
+    </nav>
+    <main>
+        <h1>A minimal daily task timeline.</h1>
+        <p>A beautifully simple workspace designed to help you focus on what actually matters without the clutter. Built
+            natively for macOS & Windows.</p>
+        <div class="actions">
+            <a href="https://github.com/gepran/stepler/releases/download/v1.0.0/stepler-1.0.0.dmg" class="btn">Download
+                for Mac</a>
+            <a href="https://github.com/gepran/stepler/releases" class="btn btn-outline" target="_blank">Download for
+                Windows</a>
+        </div>
+
+        <div class="simulation-wrapper">
+            <div class="app-simulation">
+                <div class="sim-browser-bar">
+                    <div class="mac-dot red"></div>
+                    <div class="mac-dot yellow"></div>
+                    <div class="mac-dot green"></div>
                 </div>
-                <div class="feature-card">
-                    <h3 class="text-lg font-semibold text-white mb-2">Timeline View</h3>
-                    <p class="text-slate-400 text-sm">Visualize your day clearly with an intuitive timeline layout for all your tasks.</p>
-                </div>
-                <div class="feature-card">
-                    <h3 class="text-lg font-semibold text-white mb-2">Native Experience</h3>
-                    <p class="text-slate-400 text-sm">Built specifically for macOS, feeling right at home on your Mac.</p>
+                <div class="sim-content">
+                    <div class="sim-task animate-check">
+                        <div class="sim-checkbox"></div>
+                        <div class="sim-text-line long"></div>
+                    </div>
+                    <div class="sim-task animate-check">
+                        <div class="sim-checkbox"></div>
+                        <div class="sim-text-line"></div>
+                    </div>
+                    <div class="sim-task">
+                        <div class="sim-checkbox"></div>
+                        <div class="sim-text-line short"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <footer class="py-8 text-center text-slate-500 text-sm">
-        <p>&copy; 2026 Stepler. Built by gariepranos.</p>
-    </footer>
+    <script>
+        // Interactive mouse movement tracker
+        let mouseX = 0;
+        let mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+
+            // Re-map coordinates to update CSS variables for glow and parallax effects
+            document.documentElement.style.setProperty('--mouse-x', `${mouseX}px`);
+            document.documentElement.style.setProperty('--mouse-y', `${mouseY}px`);
+        });
+
+        // Background Neuron Animation
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        canvas.style.zIndex = '-3';
+        canvas.style.pointerEvents = 'none';
+        document.body.insertBefore(canvas, document.body.firstChild);
+
+        let width, height;
+        let particles = [];
+        const connectionDistance = 150;
+        const interactionDistance = 250;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+
+            // Adjust particle count roughly based on screen size
+            const count = Math.floor((width * height) / 18000);
+            particles = [];
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.baseX = this.x;
+                this.baseY = this.y;
+                // Move slowly
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 2 + 1;
+            }
+
+            update() {
+                this.baseX += this.vx;
+                this.baseY += this.vy;
+
+                if (this.baseX < 0 || this.baseX > width) this.vx *= -1;
+                if (this.baseY < 0 || this.baseY > height) this.vy *= -1;
+
+                this.x = this.baseX;
+                this.y = this.baseY;
+
+                // Mouse interaction - repel slightly
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < interactionDistance) {
+                    const forceDirectionX = dx / distance;
+                    const forceDirectionY = dy / distance;
+                    const force = (interactionDistance - distance) / interactionDistance;
+
+                    this.x -= forceDirectionX * force * 15;
+                    this.y -= forceDirectionY * force * 15;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(155, 106, 255, 0.6)';
+                ctx.fill();
+            }
+        }
+
+        resize();
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            particles.forEach(p => p.update());
+
+            // Draw connections
+            for (let i = 0; i < particles.length; i++) {
+                // Connect particles to each other
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < connectionDistance) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        const opacity = 1 - (distance / connectionDistance);
+                        ctx.strokeStyle = `rgba(155, 106, 255, ${opacity * 0.25})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+
+                // Connect particles to mouse
+                const dxm = particles[i].x - mouseX;
+                const dym = particles[i].y - mouseY;
+                const distancem = Math.sqrt(dxm * dxm + dym * dym);
+                if (distancem < interactionDistance * 0.8) {
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(mouseX, mouseY);
+                    const opacity = 1 - (distancem / (interactionDistance * 0.8));
+                    ctx.strokeStyle = `rgba(65, 161, 255, ${opacity * 0.45})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+            }
+
+            particles.forEach(p => p.draw());
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
 </body>
+
 </html>
