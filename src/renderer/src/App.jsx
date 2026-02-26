@@ -10,6 +10,7 @@ import HistoryTaskItem from "./components/HistoryTaskItem";
 import TaskInput from "./components/TaskInput";
 import ImagePreviewModal from "./components/ImagePreviewModal";
 import DeletedTasksPanel from "./components/DeletedTasksPanel";
+import LoginPage from "./components/LoginPage";
 import { PanelLeft, AlertCircle } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -242,6 +243,12 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem("stepler-logged-in") === "true");
+
+  const handleLogin = () => {
+    localStorage.setItem("stepler-logged-in", "true");
+    setIsLoggedIn(true);
+  };
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -1335,6 +1342,10 @@ export default function App() {
   };
 
   // ========================= RENDER =========================
+
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-neutral-50 font-sans text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
