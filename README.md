@@ -70,6 +70,7 @@ Stepler includes a built-in CLI utility (`stepler-cli.js`) to interact with your
 You can use the CLI in either **one-shot mode** or **interactive REPL mode**.
 
 #### One-Shot Mode
+
 Execute single commands directly from your shell.
 
 ```bash
@@ -84,19 +85,22 @@ node stepler-cli.js remove <task_id>
 ```
 
 #### Interactive REPL Mode
+
 Start an interactive session keeping the CLI open for repeated commands:
 
 ```bash
 node stepler-cli.js
 ```
+
 Inside the interactive prompt, you can use the following commands:
+
 - `list` (or `ls`): List all tasks
 - `add <title>` (or `create`): Create a new task
 - `remove <id>` (or `rm`, `delete`, `del`): Remove a task by its ID
 - `help` (or `?`): Show usage help
 - `exit` (or `quit`, `q`): Exit the CLI
 
-*(Note: By default, the CLI connects to `http://localhost:3000`. You can override this by providing the `STEPLER_URL` environment variable. The code comments also mention using a `STEPLER_TOKEN` if you ever set up basic auth on the backend).*
+_(Note: By default, the CLI connects to `http://localhost:3000`. You can override this by providing the `STEPLER_URL` environment variable. The code comments also mention using a `STEPLER_TOKEN` if you ever set up basic auth on the backend)._
 
 ## 🤝 Code Quality
 

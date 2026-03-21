@@ -11,12 +11,14 @@ import {
 } from "electron";
 import { join } from "path";
 import { readFileSync, writeFileSync } from "fs";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import http from "http";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 import { autoUpdater } from "electron-updater";
 
+import { google } from "googleapis";
+import dotenv from "dotenv";
 let mainWindow = null;
 
 // --------------- Settings persistence ---------------
@@ -26,6 +28,8 @@ const isMac = process.platform === "darwin";
 const defaults = {
   hotkey: isMac ? "Shift+Command+Space" : "Ctrl+Shift+Space",
   theme: "dark",
+  appleReminders: isMac,
+  projects: ["Work", "Personal", "Health"],
 };
 
 function loadSettings() {
@@ -199,6 +203,80 @@ function createWindow() {
   }
 }
 
+// --------------- Google Calendar Integration ---------------
+
+const GCAL_TOKEN_PATH = join(app.getPath("userData"), "step-gcal-token.json");
+
+let oAuth2Client = null;
+
+function initGoogleAuth() {
+  // Load .env from the app root (works in both dev and production)
+  const appRoot = app.getAppPath();
+  const envPath = join(appRoot, ".env");
+  console.log("Google Calendar: loading .env from", envPath);
+  dotenv.config({ path: envPath });
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  console.log(
+    "Google Calendar: GOOGLE_CLIENT_ID",
+    clientId ? `set (${clientId.slice(0, 10)}…)` : "MISSING",
+  );
+  if (!clientId || !clientSecret) {
+    console.warn(
+      "Google Calendar: Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET in environment.",
+    );
+    return;
+  }
+
+  oAuth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    "http://127.0.0.1:3000/oauth2callback",
+  );
+
+  // Persist refreshed tokens automatically
+  oAuth2Client.on("tokens", (tokens) => {
+    console.log("Google Calendar: token refreshed, persisting...");
+    const existing = oAuth2Client.credentials;
+    const merged = { ...existing, ...tokens };
+    oAuth2Client.setCredentials(merged);
+    saveGoogleToken(merged);
+  });
+
+  try {
+    const raw = readFileSync(GCAL_TOKEN_PATH, "utf-8");
+    if (raw && raw.trim()) {
+      const token = JSON.parse(raw);
+      if (token && token.access_token) {
+        oAuth2Client.setCredentials(token);
+        console.log("Google Calendar: loaded saved token");
+      }
+    }
+  } catch {
+    console.log(
+      "Google Calendar: no saved token found — user needs to connect",
+    );
+  }
+}
+// initGoogleAuth() is called inside app.whenReady() below
+
+function saveGoogleToken(token) {
+  writeFileSync(GCAL_TOKEN_PATH, JSON.stringify(token));
+}
+
+function authUrl() {
+  if (!oAuth2Client) return null;
+  return oAuth2Client.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ],
+  });
+}
+
 // --------------- IPC handlers ---------------
 
 function setupIPC() {
@@ -273,17 +351,318 @@ function setupIPC() {
       return { success: false, error: err.message };
     }
   });
+
+  ipcMain.handle("google-calendar-status", async () => {
+    if (!oAuth2Client) return { configured: false, connected: false };
+    const connected = !!oAuth2Client.credentials?.access_token;
+    let email = null;
+
+    if (connected) {
+      try {
+        const info = await oAuth2Client.getTokenInfo(oAuth2Client.credentials.access_token);
+        email = info.email;
+      } catch (err) {
+        console.error("Failed to fetch Google account email:", err.message);
+      }
+    }
+
+    return {
+      configured: true,
+      connected,
+      email,
+    };
+  });
+
+  ipcMain.handle("google-calendar-auth", async () => {
+    if (!oAuth2Client)
+      return {
+        success: false,
+        error: "Not configured. Missing .env variables.",
+      };
+    const url = authUrl();
+    if (url) shell.openExternal(url);
+    return { success: true };
+  });
+
+  ipcMain.handle("google-calendar-disconnect", () => {
+    if (oAuth2Client) {
+      oAuth2Client.setCredentials({});
+      try {
+        writeFileSync(GCAL_TOKEN_PATH, ""); // Clear file
+      } catch {
+        // ignore
+      }
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle(
+    "google-calendar-create-event",
+    async (_, { text, dateString }) => {
+      console.log("GCal create-event called with:", { text, dateString });
+      console.log(
+        "GCal oAuth2Client exists:",
+        !!oAuth2Client,
+        "has access_token:",
+        !!oAuth2Client?.credentials?.access_token,
+      );
+
+      if (!oAuth2Client || !oAuth2Client.credentials?.access_token) {
+        console.warn("GCal: Not connected — skipping event creation");
+        return { success: false, error: "Not connected to Google Calendar." };
+      }
+
+      const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+
+      let eventDate = new Date();
+      if (dateString === "Tomorrow") {
+        eventDate.setDate(eventDate.getDate() + 1);
+      } else if (dateString === "Next Week") {
+        eventDate.setDate(eventDate.getDate() + 7);
+      }
+
+      let start, end;
+      if (dateString) {
+        const ymd = eventDate.toISOString().split("T")[0];
+        start = { date: ymd };
+
+        const nextDay = new Date(eventDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        end = { date: nextDay.toISOString().split("T")[0] };
+      } else {
+        start = { dateTime: eventDate.toISOString() };
+        const nextHour = new Date(eventDate.getTime() + 60 * 60 * 1000);
+        end = { dateTime: nextHour.toISOString() };
+      }
+
+      const eventParams = {
+        summary: text,
+        start,
+        end,
+      };
+
+      console.log("GCal inserting event:", JSON.stringify(eventParams));
+
+      try {
+        const res = await calendar.events.insert({
+          calendarId: "primary",
+          resource: eventParams,
+        });
+        console.log("GCal event created:", res.data.htmlLink);
+        return { success: true, link: res.data.htmlLink, eventId: res.data.id };
+      } catch (error) {
+        console.error("GCal event creation error:", error.message);
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "google-calendar-update-event",
+    async (_, { eventId, text, dateString, reminderTime }) => {
+      console.log("GCal update-event called with:", { eventId, text, dateString, reminderTime });
+      if (!oAuth2Client || !oAuth2Client.credentials?.access_token) {
+        return { success: false, error: "Not connected to Google Calendar." };
+      }
+
+      const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+
+      let eventDate = new Date();
+      if (dateString === "Tomorrow") {
+        eventDate.setDate(eventDate.getDate() + 1);
+      } else if (dateString === "Next Week") {
+        eventDate.setDate(eventDate.getDate() + 7);
+      } else if (dateString) {
+        const parsed = new Date(dateString);
+        if (!isNaN(parsed.getTime())) eventDate = parsed;
+      }
+
+      if (reminderTime) {
+        const [hours, minutes] = reminderTime.split(":");
+        eventDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+      } else {
+        eventDate.setHours(12, 0, 0, 0);
+      }
+
+      let start, end;
+      if (dateString && !reminderTime) {
+        const ymd = eventDate.toISOString().split("T")[0];
+        start = { date: ymd };
+
+        const nextDay = new Date(eventDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        end = { date: nextDay.toISOString().split("T")[0] };
+      } else {
+        start = { dateTime: eventDate.toISOString() };
+        const nextHour = new Date(eventDate.getTime() + 60 * 60 * 1000);
+        end = { dateTime: nextHour.toISOString() };
+      }
+
+      const eventParams = {
+        summary: text,
+        start,
+        end,
+      };
+
+      try {
+        const res = await calendar.events.patch({
+          calendarId: "primary",
+          eventId,
+          resource: eventParams,
+        });
+        console.log("GCal event updated:", res.data.htmlLink);
+        return { success: true, link: res.data.htmlLink };
+      } catch (error) {
+        console.error("GCal event update error:", error.message);
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "apple-reminders-create-event",
+    async (_, { text, dateString, reminderTime }) => {
+      console.log("Apple Reminders create-event called with:", { text, dateString, reminderTime });
+
+      const settings = loadSettings();
+      if (!settings.appleReminders) return { success: false, error: "Apple Reminders disabled in settings" };
+
+      let eventDate = new Date();
+      if (dateString === "Tomorrow") {
+        eventDate.setDate(eventDate.getDate() + 1);
+      } else if (dateString === "Next Week") {
+        eventDate.setDate(eventDate.getDate() + 7);
+      } else if (dateString) {
+        const parsed = new Date(dateString);
+        if (!isNaN(parsed.getTime())) {
+          eventDate = parsed;
+        }
+      }
+
+      if (reminderTime) {
+        const [hours, minutes] = reminderTime.split(":");
+        eventDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+      } else {
+        eventDate.setHours(12, 0, 0, 0);
+      }
+
+      const escapedText = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const script = `
+set targetDate to (current date)
+set year of targetDate to ${eventDate.getFullYear()}
+set month of targetDate to ${eventDate.getMonth() + 1}
+set day of targetDate to ${eventDate.getDate()}
+set hours of targetDate to ${eventDate.getHours()}
+set minutes of targetDate to ${eventDate.getMinutes()}
+tell application "Reminders"
+set newRem to make new reminder with properties {name:"${escapedText}", remind me date:targetDate}
+return id of newRem
+end tell
+`;
+
+      return new Promise((resolve) => {
+        execFile("osascript", ["-e", script], (error, stdout) => {
+          if (error) {
+            console.error("Apple Reminders error:", error);
+            resolve({ success: false, error: error.message });
+          } else {
+            const remId = stdout.trim();
+            console.log("Apple Reminders event created, id:", remId);
+            resolve({ success: true, appleReminderId: remId });
+          }
+        });
+      });
+    }
+  );
+
+  ipcMain.handle(
+    "apple-reminders-update-event",
+    async (_, { reminderId, text, dateString, reminderTime }) => {
+      console.log("Apple Reminders update-event called with:", { reminderId, text, dateString, reminderTime });
+
+      const settings = loadSettings();
+      if (!settings.appleReminders) return { success: false, error: "Apple Reminders disabled in settings" };
+
+      if (!reminderId) return { success: false, error: "No reminder ID provided" };
+
+      let eventDate = new Date();
+      let hasDate = false;
+
+      if (dateString === "Tomorrow") {
+        eventDate.setDate(eventDate.getDate() + 1);
+        hasDate = true;
+      } else if (dateString === "Next Week") {
+        eventDate.setDate(eventDate.getDate() + 7);
+        hasDate = true;
+      } else if (dateString) {
+        const parsed = new Date(dateString);
+        if (!isNaN(parsed.getTime())) {
+          eventDate = parsed;
+          hasDate = true;
+        }
+      }
+
+      if (reminderTime) {
+        const [hours, minutes] = reminderTime.split(":");
+        eventDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        hasDate = true;
+      } else if (hasDate) {
+        eventDate.setHours(12, 0, 0, 0);
+      }
+
+      let dateScript = "";
+      if (hasDate) {
+        dateScript = `
+set targetDate to (current date)
+set year of targetDate to ${eventDate.getFullYear()}
+set month of targetDate to ${eventDate.getMonth() + 1}
+set day of targetDate to ${eventDate.getDate()}
+set hours of targetDate to ${eventDate.getHours()}
+set minutes of targetDate to ${eventDate.getMinutes()}
+set remind me date of theReminder to targetDate
+`;
+      }
+
+      const escapedText = text ? text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') : "";
+      const script = `
+tell application "Reminders"
+try
+set theReminder to reminder id "${reminderId}"
+${text ? `set name of theReminder to "${escapedText}"` : ""}
+${dateScript}
+on error
+return "error: not found"
+end try
+end tell
+`;
+
+      return new Promise((resolve) => {
+        execFile("osascript", ["-e", script], (error, stdout) => {
+          if (error || stdout.includes("error: not found")) {
+            console.error("Apple Reminders update error:", error || "Not found");
+            resolve({ success: false, error: error ? error.message : "Not found" });
+          } else {
+            console.log("Apple Reminders event updated");
+            resolve({ success: true });
+          }
+        });
+      });
+    }
+  );
 }
 
 // --------------- HTTP API Server (for CLI) ---------------
 
 function startAPIServer() {
   const PORT = 3000;
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     // CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization",
+    );
 
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -298,6 +677,33 @@ function startAPIServer() {
       const data = loadAppData();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(data.tasks));
+      return;
+    }
+
+    // GET /oauth2callback
+    if (method === "GET" && url.startsWith("/oauth2callback")) {
+      const urlObj = new URL(url, "http://localhost:3000");
+      const code = urlObj.searchParams.get("code");
+      if (code && oAuth2Client) {
+        try {
+          const { tokens } = await oAuth2Client.getToken(code);
+          oAuth2Client.setCredentials(tokens);
+          saveGoogleToken(tokens);
+          if (mainWindow) {
+            mainWindow.webContents.send("google-calendar-connected", true);
+          }
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(
+            "<h1>Authentication successful!</h1><p>You can close this tab and return to Stepler.</p><script>window.setTimeout(()=>window.close(), 2000)</script>",
+          );
+        } catch {
+          res.writeHead(500);
+          res.end("Auth Error");
+        }
+      } else {
+        res.writeHead(400);
+        res.end("No code provided");
+      }
       return;
     }
 
@@ -366,7 +772,7 @@ function startAPIServer() {
     res.end("Not Found");
   });
 
-  server.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "127.0.0.1", () => {
     console.log(`API Server running at http://localhost:${PORT}`);
   });
 
@@ -374,7 +780,6 @@ function startAPIServer() {
     console.error("API Server error:", err);
   });
 }
-
 
 // --------------- App lifecycle ---------------
 
@@ -384,6 +789,9 @@ app.whenReady().then(() => {
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+
+  // Initialize Google Auth now that app is ready (needs app.getAppPath())
+  initGoogleAuth();
 
   const settings = loadSettings();
   applyTheme(settings.theme);

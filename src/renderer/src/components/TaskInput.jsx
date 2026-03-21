@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import PropTypes from "prop-types";
 import SteplerLogo from "./SteplerLogo";
 import {
@@ -11,11 +11,8 @@ import {
   ArrowUp,
   Mic,
   User,
-  Zap,
   Calendar,
   Hash,
-  CalendarDays,
-  Briefcase,
   Copy,
 } from "lucide-react";
 
@@ -39,13 +36,38 @@ export default function TaskInput({
   setDraftProjects,
   draftDate,
   setDraftDate,
-  showDateMenu,
-  setShowDateMenu,
-  showProjectMenu,
-  setShowProjectMenu,
   setShowSettings,
+  availableProjects,
 }) {
   const fileInputRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const dateScrollContainerRef = useRef(null);
+
+  const weekDays = useMemo(() => {
+    const days = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+      const dayNum = d.getDate();
+      const monthName = d.toLocaleDateString("en-US", { month: "short" });
+      
+      let label = `${dayName} ${dayNum}`;
+      if (i === 0) label = "Today";
+      else if (i === 1) label = "Tomorrow";
+      
+      days.push({
+        full: label,
+        displayDay: dayName,
+        displayNum: dayNum,
+        displayMonth: monthName,
+        isToday: i === 0,
+        isTomorrow: i === 1
+      });
+    }
+    return days;
+  }, []);
 
   return (
     <div
@@ -79,9 +101,7 @@ export default function TaskInput({
                   />
                   <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover/pending:opacity-100">
                     <button
-                      onClick={(e) =>
-                        handleCopyImage(e, pendingAttachment.url)
-                      }
+                      onClick={(e) => handleCopyImage(e, pendingAttachment.url)}
                       className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-neutral-800 dark:bg-black/80 dark:hover:bg-neutral-700"
                       title="Copy Image"
                     >
@@ -161,7 +181,7 @@ export default function TaskInput({
                       ))}
                     {draftDate && (
                       <div className="flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-[#1f1e2e] border border-indigo-200 dark:border-indigo-500/20 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400">
-                        <CalendarDays size={14} />
+                        <Calendar size={14} />
                         {draftDate}
                         <button
                           onClick={() => setDraftDate(null)}
@@ -206,223 +226,110 @@ export default function TaskInput({
             />
 
             {/* Bottom tools row */}
+            {/* Bottom Controls Area */}
             <div
-              className={`flex items-center ${
+              className={`flex flex-col gap-3 ${
                 isExpanded
-                  ? "justify-between mt-auto p-3 w-full border-t border-transparent"
-                  : "justify-between px-5 pb-4 mt-2"
+                  ? "mt-auto p-5 w-full border-t border-neutral-100 dark:border-neutral-800/50"
+                  : "px-5 pb-4 mt-2"
               }`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Date button */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowDateMenu(!showDateMenu)}
-                    className={`btn-tactile flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                      draftDate
-                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                        : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                    }`}
-                  >
-                    <Calendar size={16} className="icon-rubbery" />
-                    <span>{draftDate || "Date"}</span>
-                  </button>
-
-                  {/* Date Menu Popup */}
-                  {showDateMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowDateMenu(false)}
-                      />
-                      <div className="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-[#1a1a1a]">
-                        <div className="mb-2 px-2 pt-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:text-neutral-500">
-                          DUE DATE
-                        </div>
-                        {[
-                          {
-                            label: "Today",
-                            icon: Zap,
-                            color: "text-amber-500",
-                          },
-                          {
-                            label: "Tomorrow",
-                            icon: Calendar,
-                            color: "text-blue-500",
-                          },
-                          {
-                            label: "Next Week",
-                            icon: CalendarDays,
-                            color: "text-indigo-500",
-                          },
-                        ].map((item) => (
-                          <button
-                            key={item.label}
-                            onClick={() => {
-                              setDraftDate(item.label);
-                              setShowDateMenu(false);
-                            }}
-                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                          >
-                            <item.icon size={16} className={item.color} />
-                            <span>{item.label}</span>
-                          </button>
-                        ))}
-                        <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
-                        <button
-                          onClick={() => {
-                            setDraftDate(null);
-                            setShowDateMenu(false);
-                          }}
-                          className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                        >
-                          Clear Date
-                        </button>
-                      </div>
-                    </>
-                  )}
+              {/* Row 1: Projects */}
+              <div
+                ref={scrollContainerRef}
+                className="custom-scrollbar-hide flex items-center gap-2 overflow-x-auto pb-0.5"
+                onWheel={(e) => {
+                  if (e.deltaY !== 0) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+              >
+                <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2 py-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:bg-neutral-800/30 dark:text-neutral-500">
+                  <Hash size={12} />
+                  PROJECTS
                 </div>
-
-                {/* Project button */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setShowProjectMenu(!showProjectMenu);
-                      if (!showProjectMenu) inputRef.current?.blur();
+                {availableProjects.map((project) => {
+                  const isSelected = draftProjects.includes(project);
+                  return (
+                    <button
+                      key={project}
+                      onClick={() => {
+                        if (isSelected) {
+                          setDraftProjects((prev) =>
+                            prev.filter((p) => p !== project),
+                          );
+                        } else {
+                          setDraftProjects((prev) => [...prev, project]);
+                        }
+                      }}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                        isSelected
+                          ? "border-green-500/30 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-500"
+                          : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
+                      }`}
+                    >
+                      {project}
+                    </button>
+                  );
+                })}
+                <div className="flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800 ml-1">
+                  <input
+                    type="text"
+                    placeholder="New..."
+                    className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const val = e.target.value.trim();
+                        if (val && !draftProjects.includes(val)) {
+                          setDraftProjects((prev) => [...prev, val]);
+                          e.target.value = "";
+                        }
+                      }
                     }}
-                    className={`btn-tactile flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                      draftProjects.length > 0
-                        ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-                        : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                    }`}
-                  >
-                    <Hash size={16} className="icon-rubbery" />
-                    <span>
-                      {draftProjects.length > 0
-                        ? `${draftProjects.length} Project${draftProjects.length > 1 ? "s" : ""}`
-                        : "Project"}
-                    </span>
-                  </button>
+                  />
+                </div>
+              </div>
 
-                  {/* Project Menu Popup */}
-                  {showProjectMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowProjectMenu(false)}
-                      />
-                      <div className="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-[#1a1a1a]">
-                        <div className="mb-2 px-2 pt-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:text-neutral-500">
-                          ASSIGN PROJECT
-                        </div>
-                        <div className="px-2 pb-2">
-                          <input
-                            type="text"
-                            autoFocus
-                            placeholder="+ New project..."
-                            className="w-full bg-neutral-100 dark:bg-neutral-800 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-neutral-300 dark:focus:ring-neutral-700 text-neutral-800 dark:text-neutral-200"
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                e.preventDefault();
-                                setShowProjectMenu(false);
-                                inputRef.current?.focus();
-                                return;
-                              }
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                const val = e.target.value.trim();
-                                if (val) {
-                                  const newProjects =
-                                    draftProjects.includes(val)
-                                      ? draftProjects
-                                      : [...draftProjects, val];
-                                  setDraftProjects(newProjects);
-                                  e.target.value = "";
-                                  if (!e.shiftKey) {
-                                    setShowProjectMenu(false);
-                                    inputRef.current?.focus();
-                                    addTask(
-                                      {
-                                        key: "Enter",
-                                        preventDefault: () => {},
-                                      },
-                                      newProjects,
-                                    );
-                                  }
-                                } else {
-                                  setShowProjectMenu(false);
-                                  if (!e.shiftKey) {
-                                    addTask();
-                                  } else {
-                                    inputRef.current?.focus();
-                                  }
-                                }
-                              }
-                            }}
-                          />
-                        </div>
-                        {[
-                          {
-                            label: "Work",
-                            icon: Briefcase,
-                            color: "text-blue-500",
-                          },
-                          {
-                            label: "Personal",
-                            icon: User,
-                            color: "text-green-500",
-                          },
-                          {
-                            label: "Health",
-                            icon: Zap,
-                            color: "text-orange-500",
-                          },
-                        ].map((item) => (
-                          <button
-                            key={item.label}
-                            onClick={(e) => {
-                              const newProjects = draftProjects.includes(
-                                item.label,
-                              )
-                                ? draftProjects
-                                : [...draftProjects, item.label];
-                              setDraftProjects(newProjects);
-                              if (!e.shiftKey) {
-                                setShowProjectMenu(false);
-                                inputRef.current?.focus();
-                                addTask(
-                                  {
-                                    key: "Enter",
-                                    preventDefault: () => {},
-                                  },
-                                  newProjects,
-                                );
-                              }
-                            }}
-                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                          >
-                            <item.icon size={16} className={item.color} />
-                            <span>{item.label}</span>
-                          </button>
-                        ))}
-                        <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
-                        <button
-                          onClick={() => {
-                            setDraftProjects([]);
-                            setShowProjectMenu(false);
-                          }}
-                          className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                        >
-                          Clear Projects
-                        </button>
-                      </div>
-                    </>
-                  )}
+              {/* Row 2: Dates and Actions */}
+              <div className="flex items-center gap-3">
+                <div
+                  ref={dateScrollContainerRef}
+                  className="custom-scrollbar-hide flex flex-1 items-center gap-2 overflow-x-auto pb-0.5"
+                  onWheel={(e) => {
+                    if (e.deltaY !== 0) {
+                      e.currentTarget.scrollLeft += e.deltaY;
+                    }
+                  }}
+                >
+                  <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2 py-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:bg-neutral-800/30 dark:text-neutral-500">
+                    <Calendar size={12} />
+                    DATES
+                  </div>
+                  {weekDays.map((day) => {
+                    const isSelected = draftDate === day.full || (!draftDate && day.isToday);
+                    return (
+                      <button
+                        key={day.full}
+                        onClick={() => {
+                          setDraftDate(day.full);
+                        }}
+                        className={`flex shrink-0 flex-col items-center justify-center rounded-xl border px-3 py-1.5 transition-all ${
+                          isSelected
+                            ? "border-indigo-500/30 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 shadow-sm"
+                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
+                        }`}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">
+                          {day.displayDay}
+                        </span>
+                        <span className="text-sm font-bold">{day.displayNum}</span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1 hidden sm:block" />
-
-                <div className="flex items-center gap-0.5 ml-auto sm:ml-0">
+                <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-3">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
@@ -452,16 +359,17 @@ export default function TaskInput({
                     <Mic size={16} className="icon-rubbery" />
                     {isExpanded && <span>Dictate</span>}
                   </button>
+                  <button
+                    onClick={addTask}
+                    className="btn-tactile ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                  >
+                    <ArrowUp
+                      size={20}
+                      className="icon-rubbery"
+                      strokeWidth={2.5}
+                    />
+                  </button>
                 </div>
-              </div>
-
-              <div className="flex items-center ml-2">
-                <button
-                  onClick={addTask}
-                  className="btn-tactile flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                >
-                  <ArrowUp size={16} className="icon-rubbery" strokeWidth={2.5} />
-                </button>
               </div>
             </div>
           </div>
@@ -487,9 +395,6 @@ TaskInput.propTypes = {
   setDraftProjects: PropTypes.func.isRequired,
   draftDate: PropTypes.string,
   setDraftDate: PropTypes.func.isRequired,
-  showDateMenu: PropTypes.bool.isRequired,
-  setShowDateMenu: PropTypes.func.isRequired,
-  showProjectMenu: PropTypes.bool.isRequired,
-  setShowProjectMenu: PropTypes.func.isRequired,
   setShowSettings: PropTypes.func.isRequired,
+  availableProjects: PropTypes.array.isRequired,
 };

@@ -170,7 +170,10 @@ export default function FullScreenSearch({
                     className="btn-tactile mt-0.5 shrink-0 text-neutral-400 transition-colors hover:text-blue-500 focus:outline-none dark:text-neutral-500 dark:hover:text-blue-400"
                   >
                     {task.completed ? (
-                      <CheckCircle2 size={18} className="icon-rubbery text-blue-500" />
+                      <CheckCircle2
+                        size={18}
+                        className="icon-rubbery text-blue-500"
+                      />
                     ) : (
                       <Circle size={18} className="icon-rubbery" />
                     )}
@@ -186,11 +189,7 @@ export default function FullScreenSearch({
                   <div className="pl-9 border-l-2 border-neutral-200 dark:border-neutral-700 space-y-1">
                     {[...task.subtasks]
                       .sort((a, b) =>
-                        b.completed === a.completed
-                          ? 0
-                          : a.completed
-                            ? -1
-                            : 1,
+                        b.completed === a.completed ? 0 : a.completed ? -1 : 1,
                       )
                       .map((st) => (
                         <div
@@ -236,7 +235,9 @@ export default function FullScreenSearch({
                       className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
                       <CornerDownRight size={12} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Subtask</span>
+                      <span className="text-[11px] font-medium leading-none">
+                        Subtask
+                      </span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -249,8 +250,14 @@ export default function FullScreenSearch({
                           : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                       }`}
                     >
-                      <Star size={12} fill={task.priority ? "currentColor" : "none"} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Priority</span>
+                      <Star
+                        size={12}
+                        fill={task.priority ? "currentColor" : "none"}
+                        className="icon-rubbery"
+                      />
+                      <span className="text-[11px] font-medium leading-none">
+                        Priority
+                      </span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -260,7 +267,9 @@ export default function FullScreenSearch({
                       className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
                       <Hash size={12} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Project</span>
+                      <span className="text-[11px] font-medium leading-none">
+                        Project
+                      </span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -270,7 +279,9 @@ export default function FullScreenSearch({
                       className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
                       <Bell size={12} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Remind</span>
+                      <span className="text-[11px] font-medium leading-none">
+                        Remind
+                      </span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -280,7 +291,9 @@ export default function FullScreenSearch({
                       className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
                     >
                       <Copy size={12} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Copy</span>
+                      <span className="text-[11px] font-medium leading-none">
+                        Copy
+                      </span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -290,7 +303,9 @@ export default function FullScreenSearch({
                       className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
                     >
                       <X size={12} className="icon-rubbery" />
-                      <span className="text-[11px] font-medium leading-none">Delete</span>
+                      <span className="text-[11px] font-medium leading-none">
+                        Delete
+                      </span>
                     </button>
                   </div>
                 </div>

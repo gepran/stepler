@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import Sidebar from "./components/Sidebar";
@@ -11,12 +11,9 @@ import TaskInput from "./components/TaskInput";
 import ImagePreviewModal from "./components/ImagePreviewModal";
 import DeletedTasksPanel from "./components/DeletedTasksPanel";
 import LoginPage from "./components/LoginPage";
-import { PanelLeft, AlertCircle } from "lucide-react";
+import { PanelLeft } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
-const isMac =
-  window.electron?.process?.platform === "darwin" ||
-  /Mac/.test(navigator.userAgent);
 
 async function loadAppData() {
   if (ipc) {
@@ -38,8 +35,6 @@ async function loadAppData() {
 function saveAppData(partial) {
   if (ipc) ipc.invoke("save-app-data", partial);
 }
-
-
 
 // ----------- Main App -----------
 
@@ -176,7 +171,7 @@ const formatTaskText = (text) => {
               href={urlPart}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-neutral-500 underline decoration-neutral-300 underline-offset-4 hover:text-neutral-900 hover:decoration-neutral-900 dark:text-neutral-400 dark:decoration-neutral-700 dark:hover:text-neutral-200 dark:hover:decoration-neutral-200"
+              className="text-yellow-500 underline decoration-yellow-500/30 underline-offset-4 hover:text-yellow-600 hover:decoration-yellow-600/50 dark:text-yellow-400 dark:decoration-yellow-400/30 dark:hover:text-yellow-300 dark:hover:decoration-yellow-300/50"
               onClick={(e) => {
                 e.stopPropagation();
               }}
@@ -236,14 +231,14 @@ const formatTaskDateTime = (id) => {
 
 // ----------- Full Screen Search Overlay -----------
 
-
-
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [history, setHistory] = useState([]);
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem("stepler-logged-in") === "true");
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    () => localStorage.getItem("stepler-logged-in") === "true",
+  );
 
   const handleLogin = () => {
     localStorage.setItem("stepler-logged-in", "true");
@@ -256,6 +251,11 @@ export default function App() {
     day: "numeric",
   });
 
+  const [settings, setSettings] = useState({
+    hotkey: "",
+    theme: "dark",
+    appleReminders: true,
+  });
   const [inputValue, setInputValue] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
@@ -281,8 +281,6 @@ export default function App() {
 
   const [draftProjects, setDraftProjects] = useState([]);
   const [draftDate, setDraftDate] = useState(null);
-  const [showProjectMenu, setShowProjectMenu] = useState(false);
-  const [showDateMenu, setShowDateMenu] = useState(false);
   const [assigningProjectId, setAssigningProjectId] = useState(null);
 
   const [activeDragHandleId, setActiveDragHandleId] = useState(null);
@@ -290,7 +288,30 @@ export default function App() {
   const [dragOverPosition, setDragOverPosition] = useState(null);
 
   const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const availableProjects = useMemo(() => {
+    const pSet = new Set();
+    // Use projects from settings
+    if (settings.projects) {
+      settings.projects.forEach((p) => pSet.add(p));
+    } else {
+      // Fallback/Default system projects
+      ["Work", "Personal", "Health"].forEach((p) => pSet.add(p));
+    }
+
+    // Also include projects from current tasks and history to ensure nothing is missed
+    tasks.forEach((t) => {
+      if (t.projects) t.projects.forEach((p) => pSet.add(p));
+    });
+
+    history.forEach((day) => {
+      day.tasks.forEach((t) => {
+        if (t.projects) t.projects.forEach((p) => pSet.add(p));
+      });
+    });
+
+    return Array.from(pSet).sort();
+  }, [tasks, history, settings.projects]);
+
   const todayRef = useRef(null);
   const tasksEndRef = useRef(null);
   const firedRef = useRef(new Set());
@@ -304,8 +325,11 @@ export default function App() {
     historyRef.current = history;
   }, [history]);
 
-  // --- Load persisted data from disk on mount ---
+  // --- Load persisted data and settings from disk on mount ---
   useEffect(() => {
+    if (ipc) {
+      ipc.invoke("get-settings").then(setSettings);
+    }
     loadAppData().then((data) => {
       const loadedTasks = data.tasks || [];
       const loadedHistory = (data.history || []).map((h) => {
@@ -703,15 +727,18 @@ export default function App() {
             ? draftProjects
             : undefined;
 
+      const taskText =
+        inputValue.trim() ||
+        (pendingAttachment && pendingAttachment.type !== "image"
+          ? pendingAttachment.name
+          : "");
+
+      const taskId = Date.now().toString();
       setTasks((prev) => [
         ...prev,
         {
-          id: (Date.now() - 86400000 * 2).toString(), // SIMULATION: 2 days ago
-          text:
-            inputValue.trim() ||
-            (pendingAttachment && pendingAttachment.type !== "image"
-              ? pendingAttachment.name
-              : ""),
+          id: taskId,
+          text: taskText,
           completed: false,
           priority: false,
           attachment: pendingAttachment || undefined,
@@ -719,6 +746,46 @@ export default function App() {
           dueDate: draftDate,
         },
       ]);
+
+      if (taskText && window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer
+          .invoke("google-calendar-create-event", {
+            text: taskText,
+            dateString: draftDate,
+          })
+          .then((result) => {
+            if (result?.success) {
+              console.log("GCal event created:", result.link);
+              setTasks((prev) =>
+                prev.map((t) =>
+                  t.id === taskId ? { ...t, gcalLink: result.link, gcalEventId: result.eventId } : t,
+                ),
+              );
+            } else {
+              console.warn("GCal event not created:", result?.error);
+            }
+          })
+          .catch((err) => console.error("GCal Event IPC Error:", err));
+
+        if (draftDate && settings.appleReminders) {
+          window.electron.ipcRenderer
+            .invoke("apple-reminders-create-event", {
+              text: taskText,
+              dateString: draftDate,
+            })
+            .then((result) => {
+              if (result?.success && result.appleReminderId) {
+                setTasks((prev) =>
+                  prev.map((t) =>
+                    t.id === taskId ? { ...t, appleReminderId: result.appleReminderId } : t,
+                  ),
+                );
+              }
+            })
+            .catch((err) => console.error("Apple Reminders IPC Error:", err));
+        }
+      }
+
       setInputValue("");
       setPendingAttachment(null);
       setDraftProjects([]);
@@ -739,22 +806,134 @@ export default function App() {
 
   const saveEdit = useCallback(
     (id) => {
-      if (editText.trim() !== "") {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, text: editText.trim() } : t)),
-        );
+      const newText = editText.trim();
+      if (newText !== "") {
+        const existing = tasksRef.current.find((t) => t.id === id);
+        if (existing && existing.text !== newText) {
+          // Update Google Calendar
+          if (existing.gcalEventId && window.electron?.ipcRenderer) {
+            window.electron.ipcRenderer
+              .invoke("google-calendar-update-event", {
+                eventId: existing.gcalEventId,
+                text: newText,
+                dateString: existing.dueDate,
+                reminderTime: existing.reminder,
+              })
+              .catch((e) => console.error("GCal patch error:", e));
+          }
+
+          // Update Apple Reminders
+          if (window.electron?.ipcRenderer && settings.appleReminders) {
+            if (existing.appleReminderId) {
+              window.electron.ipcRenderer
+                .invoke("apple-reminders-update-event", {
+                  reminderId: existing.appleReminderId,
+                  text: newText,
+                  dateString: existing.dueDate,
+                  reminderTime: existing.reminder,
+                })
+                .catch((e) => console.error("Apple Reminders patch error:", e));
+            } else if (existing.dueDate || existing.reminder) {
+              // Create it if it doesn't exist but has a date/time
+              window.electron.ipcRenderer
+                .invoke("apple-reminders-create-event", {
+                  text: newText,
+                  dateString: existing.dueDate,
+                  reminderTime: existing.reminder,
+                })
+                .then((result) => {
+                  if (result?.success && result.appleReminderId) {
+                    setTasks((prev) =>
+                      prev.map((t) =>
+                        t.id === id
+                          ? { ...t, appleReminderId: result.appleReminderId }
+                          : t,
+                      ),
+                    );
+                  }
+                })
+                .catch((e) => console.error("Apple Reminders create error:", e));
+            }
+          }
+
+          setTasks((prev) =>
+            prev.map((t) => (t.id === id ? { ...t, text: newText } : t)),
+          );
+        }
       }
       setEditingId(null);
     },
-    [editText],
+    [editText, settings.appleReminders],
   );
 
   const saveReminder = (id, clear = false) => {
+    const existing = tasksRef.current.find((t) => t.id === id);
+    if (!existing) return;
+
+    const updatedReminder = clear ? undefined : reminderTime;
+
+    // Update tasks state first for immediate UI response
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, reminder: clear ? undefined : reminderTime } : t,
-      ),
+      prev.map((t) => (t.id === id ? { ...t, reminder: updatedReminder } : t)),
     );
+
+    if (!clear && reminderTime && window.electron?.ipcRenderer && settings.appleReminders) {
+      if (!existing.appleReminderId) {
+        window.electron.ipcRenderer
+          .invoke("apple-reminders-create-event", {
+            text: existing.text,
+            dateString: existing.dueDate,
+            reminderTime: reminderTime,
+          })
+          .then((result) => {
+            if (result?.success && result.appleReminderId) {
+              setTasks((prev) =>
+                prev.map((t) =>
+                  t.id === id
+                    ? { ...t, appleReminderId: result.appleReminderId }
+                    : t,
+                ),
+              );
+            }
+          })
+          .catch((err) => console.error("Apple Reminders IPC Error:", err));
+      } else {
+        window.electron.ipcRenderer
+          .invoke("apple-reminders-update-event", {
+            reminderId: existing.appleReminderId,
+            text: existing.text,
+            dateString: existing.dueDate,
+            reminderTime: updatedReminder,
+          })
+          .catch((err) => console.error("Apple Reminders Update Error:", err));
+      }
+    } else if (
+      clear &&
+      existing.appleReminderId &&
+      window.electron?.ipcRenderer &&
+      settings.appleReminders
+    ) {
+      window.electron.ipcRenderer
+        .invoke("apple-reminders-update-event", {
+          reminderId: existing.appleReminderId,
+          text: existing.text,
+          dateString: existing.dueDate,
+          reminderTime: undefined,
+        })
+        .catch((err) => console.error("Apple Reminders Update Error:", err));
+    }
+
+    if (existing.gcalEventId && window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer
+        .invoke("google-calendar-update-event", {
+          eventId: existing.gcalEventId,
+          text: existing.text,
+          dateString: existing.dueDate,
+          reminderTime: updatedReminder,
+        })
+        .catch((err) => console.error("GCal IPC Error:", err));
+    }
+
     setSettingReminderId(null);
   };
 
@@ -1076,7 +1255,7 @@ export default function App() {
     setDragOverPosition(null);
   };
 
-  const handleDragEnd = (e) => {
+  const handleDragEnd = () => {
     setDragOverId(null);
     setDragOverPosition(null);
   };
@@ -1108,7 +1287,7 @@ export default function App() {
     }
   };
 
-  const handleDragLeaveTimeline = (e) => {
+  const handleDragLeaveTimeline = () => {
     if (dragOverId === "timeline") {
       setDragOverId(null);
     }
@@ -1315,10 +1494,16 @@ export default function App() {
       setHistory((prev) => {
         const merged = [...prev];
         imported.history.forEach((importedDay) => {
-          const existingIdx = merged.findIndex((h) => h.date === importedDay.date);
+          const existingIdx = merged.findIndex(
+            (h) => h.date === importedDay.date,
+          );
           if (existingIdx > -1) {
-            const existingIds = new Set(merged[existingIdx].tasks.map((t) => t.id));
-            const newTasks = (importedDay.tasks || []).filter((t) => !existingIds.has(t.id));
+            const existingIds = new Set(
+              merged[existingIdx].tasks.map((t) => t.id),
+            );
+            const newTasks = (importedDay.tasks || []).filter(
+              (t) => !existingIds.has(t.id),
+            );
             merged[existingIdx] = {
               ...merged[existingIdx],
               tasks: [...merged[existingIdx].tasks, ...newTasks],
@@ -1335,7 +1520,9 @@ export default function App() {
     if (Array.isArray(imported.deletedTasks)) {
       setDeletedTasks((prev) => {
         const existingIds = new Set(prev.map((t) => t.id));
-        const newTasks = imported.deletedTasks.filter((t) => !existingIds.has(t.id));
+        const newTasks = imported.deletedTasks.filter(
+          (t) => !existingIds.has(t.id),
+        );
         return [...prev, ...newTasks];
       });
     }
@@ -1348,7 +1535,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-neutral-50 font-sans text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
+    <div className="flex h-screen w-full overflow-hidden bg-white font-sans text-neutral-800 dark:bg-neutral-900 dark:text-neutral-200">
       <ParticleCanvas trigger={deleteTrigger} />
       <FullScreenSearch
         show={showSearch}
@@ -1430,8 +1617,8 @@ export default function App() {
                   id={`day-${day.date}`}
                   className="group relative mb-8 opacity-70 transition-opacity duration-300 hover:opacity-100"
                 >
-                  <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-950/95">
-                    <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-[5px] ring-white dark:bg-neutral-300 dark:shadow-[0_0_8px_rgba(255,255,255,0.1)] dark:ring-neutral-950" />
+                  <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-900/95">
+                    <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-[5px] ring-white dark:bg-neutral-300 dark:shadow-[0_0_8px_rgba(255,255,255,0.1)] dark:ring-neutral-900" />
                     <div className="pl-8">
                       <h2 className="text-lg font-bold leading-none text-neutral-900 dark:text-neutral-100">
                         {day.date}
@@ -1468,11 +1655,11 @@ export default function App() {
                 onDragLeave={handleDragLeaveTimeline}
                 onDrop={handleDropOnTimeline}
               >
-                <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-950/95">
+                <div className="sticky top-0 z-30 bg-white/95 pt-3 pb-4 backdrop-blur-md dark:bg-neutral-900/95">
                   {history.length > 0 && (
                     <div className="absolute left-[7px] top-0 z-0 h-[18px] w-[2px] bg-neutral-200 dark:bg-neutral-800" />
                   )}
-                  <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-[5px] ring-white dark:bg-neutral-300 dark:shadow-[0_0_8px_rgba(255,255,255,0.1)] dark:ring-neutral-950" />
+                  <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-[5px] ring-white dark:bg-neutral-300 dark:shadow-[0_0_8px_rgba(255,255,255,0.1)] dark:ring-neutral-900" />
                   <div className="pl-8">
                     <h2 className="text-lg font-bold leading-none text-neutral-900 dark:text-neutral-100">
                       Today
@@ -1518,7 +1705,9 @@ export default function App() {
                         addSubtask={addSubtask}
                         handleSubtaskPaste={handleSubtaskPaste}
                         pendingSubtaskAttachment={pendingSubtaskAttachment}
-                        setPendingSubtaskAttachment={setPendingSubtaskAttachment}
+                        setPendingSubtaskAttachment={
+                          setPendingSubtaskAttachment
+                        }
                         assigningProjectId={assigningProjectId}
                         setAssigningProjectId={setAssigningProjectId}
                         setTasks={setTasks}
@@ -1575,11 +1764,8 @@ export default function App() {
           setDraftProjects={setDraftProjects}
           draftDate={draftDate}
           setDraftDate={setDraftDate}
-          showDateMenu={showDateMenu}
-          setShowDateMenu={setShowDateMenu}
-          showProjectMenu={showProjectMenu}
-          setShowProjectMenu={setShowProjectMenu}
           setShowSettings={setShowSettings}
+          availableProjects={availableProjects}
         />
 
         {/* Settings modal */}
@@ -1588,6 +1774,7 @@ export default function App() {
             onClose={() => setShowSettings(false)}
             onExport={handleExportTasks}
             onImport={handleImportTasks}
+            onSettingsUpdate={(updated) => setSettings(updated)}
           />
         )}
 

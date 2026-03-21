@@ -90,7 +90,8 @@ export default function DeletedTasksPanel({
                       )}
                       {task.subtasks && task.subtasks.length > 0 && (
                         <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
-                          · {task.subtasks.length} {task.subtasks.length === 1 ? "subtask" : "subtasks"}
+                          · {task.subtasks.length}{" "}
+                          {task.subtasks.length === 1 ? "subtask" : "subtasks"}
                         </span>
                       )}
                     </div>

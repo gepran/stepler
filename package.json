@@ -24,8 +24,11 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "dotenv": "^17.3.1",
     "electron-updater": "^6.8.3",
+    "googleapis": "^171.4.0",
     "lucide-react": "^0.575.0",
+    "open": "^11.0.0",
     "react-syntax-highlighter": "^16.1.0"
   },
   "devDependencies": {

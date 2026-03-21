@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 
 export default function LoginPage({ onLogin }) {
   return (
-    <div className="animate-fade-in flex h-screen w-full flex-col items-center justify-center bg-neutral-950 text-white">
+    <div className="animate-fade-in flex h-screen w-full flex-col items-center justify-center bg-neutral-900 text-white">
       {/* Neuron background animation */}
       <NeuronCanvas />
       {/* Drag region for Electron window */}
@@ -60,12 +60,7 @@ export default function LoginPage({ onLogin }) {
             onClick={onLogin}
             className="btn-tactile flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-neutral-700 bg-transparent px-6 py-3.5 text-[15px] font-medium text-neutral-300 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.62-2.2.44-3.06-.4C3.79 16.17 4.36 9.53 8.8 9.28c1.27.07 2.15.72 2.88.76.99-.2 1.94-.78 3-.84 1.52-.08 2.66.54 3.37 1.62-3.19 1.89-2.43 6.1.5 7.28-.6 1.49-1.38 2.96-2.5 4.18zM12.03 9.2c-.14-2.57 1.94-4.74 4.42-4.95.34 2.89-2.65 5.08-4.42 4.95z" />
             </svg>
             Continue with Apple
