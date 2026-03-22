@@ -1,9 +1,9 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import SteplerLogo from "./SteplerLogo";
+import FileTypeIcon from "./FileTypeIcon";
 import {
   X,
-  FileText,
   Plus,
   Settings,
   Maximize2,
@@ -38,10 +38,17 @@ export default function TaskInput({
   setDraftDate,
   setShowSettings,
   availableProjects,
+  jiraStatus,
+  jiraProjects,
+  selectedJiraProject,
+  setSelectedJiraProject,
 }) {
   const fileInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
-  const dateScrollContainerRef = useRef(null);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const showControls = isFocused || inputValue || draftProjects.length > 0 || draftDate || pendingAttachment;
+
 
   const weekDays = useMemo(() => {
     const days = [];
@@ -76,6 +83,13 @@ export default function TaskInput({
           ? "fixed inset-0 bg-neutral-950 p-6 md:p-12 z-[100]"
           : "p-4 md:p-6"
       }`}
+      onFocus={() => setIsFocused(true)}
+      onBlur={(e) => {
+        // Only set unfocused if the new focus target is outside this container
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setIsFocused(false);
+        }
+      }}
     >
       <div
         className={`w-full max-w-3xl flex flex-col ${isExpanded ? "h-full justify-center max-w-4xl mx-auto" : ""}`}
@@ -118,8 +132,8 @@ export default function TaskInput({
                 </div>
               ) : (
                 <>
-                  <FileText size={16} className="mr-2 ml-1 shrink-0" />
-                  <span className="mr-3 max-w-[200px] truncate">
+                  <FileTypeIcon fileName={pendingAttachment.name} size={28} />
+                  <span className="mr-3 ml-1 max-w-[200px] truncate">
                     {pendingAttachment.name}
                   </span>
                   <button
@@ -136,11 +150,11 @@ export default function TaskInput({
           <div
             className={`relative flex flex-col rounded-[24px] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] border ${
               draftProjects.length > 0 || draftDate
-                ? "border-indigo-500/50"
+                ? "border-[#9B6AFF]/50"
                 : "border-neutral-200 dark:border-neutral-800/80"
             } transition-all duration-300 dark:bg-[#1a1a1a] ${
-              isExpanded ? "h-[60vh] md:h-[70vh]" : "min-h-[48px]"
-            }`}
+              isExpanded ? "h-[60vh] md:h-[70vh]" : showControls ? "min-h-[140px]" : "min-h-[56px]"
+            } ${!isExpanded && showControls ? "pb-2" : ""}`}
           >
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -163,7 +177,7 @@ export default function TaskInput({
                       draftProjects.map((p, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-[#222] border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 text-xs font-medium text-green-600 dark:text-green-500"
+                          className="flex items-center gap-1.5 rounded-full bg-[#9B6AFF]/10 border border-[#9B6AFF]/20 px-3 py-1.5 text-xs font-medium text-[#9B6AFF]"
                         >
                           <User size={14} />
                           {p}
@@ -173,23 +187,25 @@ export default function TaskInput({
                                 prev.filter((x) => x !== p),
                               )
                             }
-                            className="ml-1 text-green-600/50 hover:text-green-600 dark:text-green-500/50 dark:hover:text-green-500"
+                            className="ml-1 text-[#9B6AFF]/50 hover:text-[#9B6AFF]"
                           >
                             <X size={14} />
                           </button>
                         </div>
+
                       ))}
                     {draftDate && (
-                      <div className="flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-[#1f1e2e] border border-indigo-200 dark:border-indigo-500/20 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400">
+                      <div className="flex items-center gap-1.5 rounded-full bg-[#FF9A00]/10 border border-[#FF9A00]/20 px-3 py-1.5 text-xs font-medium text-[#FF9A00]">
                         <Calendar size={14} />
                         {draftDate}
                         <button
                           onClick={() => setDraftDate(null)}
-                          className="ml-1 text-indigo-600/50 hover:text-indigo-600 dark:text-indigo-400/50 dark:hover:text-indigo-400"
+                          className="ml-1 text-[#FF9A00]/50 hover:text-[#FF9A00]"
                         >
                           <X size={14} />
                         </button>
                       </div>
+
                     )}
                   </div>
                 </div>
@@ -201,6 +217,7 @@ export default function TaskInput({
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={addTask}
               onPaste={handlePaste}
+              onFocus={() => setIsFocused(true)}
               rows={isExpanded ? undefined : 1}
               onInput={(e) => {
                 if (!isExpanded) {
@@ -210,13 +227,14 @@ export default function TaskInput({
                 }
               }}
               placeholder="What's on your mind?"
-              className={`flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 ${
+              className={`flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 px-5 pr-12 ${
                 isExpanded
-                  ? "w-full px-5 pr-12 mt-4 py-6 h-full"
-                  : "w-full pl-5 pr-12 py-3"
+                  ? "mt-4 py-6 h-full"
+                  : "pt-4 pb-2"
               }`}
               style={isExpanded ? { height: "100%" } : {}}
             />
+
 
             <input
               type="file"
@@ -227,151 +245,169 @@ export default function TaskInput({
 
             {/* Bottom tools row */}
             {/* Bottom Controls Area */}
-            <div
-              className={`flex flex-col gap-3 ${
-                isExpanded
-                  ? "mt-auto p-5 w-full border-t border-neutral-100 dark:border-neutral-800/50"
-                  : "px-5 pb-4 mt-2"
-              }`}
-            >
-              {/* Row 1: Projects */}
+            {showControls && (
               <div
-                ref={scrollContainerRef}
-                className="custom-scrollbar-hide flex items-center gap-2 overflow-x-auto pb-0.5"
-                onWheel={(e) => {
-                  if (e.deltaY !== 0) {
-                    e.currentTarget.scrollLeft += e.deltaY;
-                  }
-                }}
-              >
-                <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2 py-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:bg-neutral-800/30 dark:text-neutral-500">
-                  <Hash size={12} />
-                  PROJECTS
-                </div>
-                {availableProjects.map((project) => {
-                  const isSelected = draftProjects.includes(project);
-                  return (
-                    <button
-                      key={project}
-                      onClick={() => {
-                        if (isSelected) {
-                          setDraftProjects((prev) =>
-                            prev.filter((p) => p !== project),
-                          );
-                        } else {
-                          setDraftProjects((prev) => [...prev, project]);
-                        }
-                      }}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                        isSelected
-                          ? "border-green-500/30 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-500"
-                          : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
-                      }`}
-                    >
-                      {project}
-                    </button>
-                  );
-                })}
-                <div className="flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800 ml-1">
-                  <input
-                    type="text"
-                    placeholder="New..."
-                    className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const val = e.target.value.trim();
-                        if (val && !draftProjects.includes(val)) {
-                          setDraftProjects((prev) => [...prev, val]);
-                          e.target.value = "";
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
+                className={`flex flex-col gap-1.5 ${
+                  isExpanded
+                    ? "mt-auto p-5 w-full border-t border-neutral-100 dark:border-neutral-800/50"
+                    : "px-5 pb-4 mt-1"
+                } duration-200`}
 
-              {/* Row 2: Dates and Actions */}
-              <div className="flex items-center gap-3">
+              >
+                {/* Row 1: Projects */}
                 <div
-                  ref={dateScrollContainerRef}
-                  className="custom-scrollbar-hide flex flex-1 items-center gap-2 overflow-x-auto pb-0.5"
+                  ref={scrollContainerRef}
+                  className="custom-scrollbar-hide flex items-center gap-2 overflow-x-auto pb-0.5"
                   onWheel={(e) => {
                     if (e.deltaY !== 0) {
                       e.currentTarget.scrollLeft += e.deltaY;
                     }
                   }}
                 >
-                  <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2 py-1 text-[10px] font-bold tracking-widest text-neutral-400 dark:bg-neutral-800/30 dark:text-neutral-500">
-                    <Calendar size={12} />
-                    DATES
+                  <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[10px] font-bold tracking-widest text-[#9B6AFF] border border-[#9B6AFF]/10 dark:bg-[#9B6AFF]/5 dark:text-[#9B6AFF]">
+                    <Hash size={12} />
+                    PROJECTS
                   </div>
-                  {weekDays.map((day) => {
-                    const isSelected = draftDate === day.full || (!draftDate && day.isToday);
+                  {availableProjects.map((project) => {
+                    const projectName = typeof project === "string" ? project : project.name;
+                    const isSelected = draftProjects.includes(projectName);
                     return (
                       <button
-                        key={day.full}
+                        key={projectName}
                         onClick={() => {
-                          setDraftDate(day.full);
+                          if (isSelected) {
+                            setDraftProjects((prev) =>
+                              prev.filter((p) => p !== projectName),
+                            );
+                          } else {
+                            setDraftProjects((prev) => [...prev, projectName]);
+                          }
                         }}
-                        className={`flex shrink-0 flex-col items-center justify-center rounded-xl border px-3 py-1.5 transition-all ${
+                        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                           isSelected
-                            ? "border-indigo-500/30 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 shadow-sm"
-                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
+                            ? "border-[#9B6AFF]/30 bg-[#9B6AFF]/10 text-[#9B6AFF] shadow-sm active:scale-95"
+                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200 active:scale-95"
                         }`}
                       >
-                        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">
-                          {day.displayDay}
-                        </span>
-                        <span className="text-sm font-bold">{day.displayNum}</span>
+                        {projectName}
                       </button>
                     );
                   })}
-                </div>
-
-                <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-3">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    title="Attach image or file"
-                  >
-                    <Plus size={20} className="icon-rubbery" />
-                  </button>
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-                      isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
-                    }`}
-                    title="Tools"
-                  >
-                    <Settings size={16} className="icon-rubbery" />
-                    {isExpanded && <span>Tools</span>}
-                  </button>
-                  <button
-                    onClick={() =>
-                      window.electron?.ipcRenderer.invoke("start-dictation")
-                    }
-                    className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-                      isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
-                    }`}
-                    title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
-                  >
-                    <Mic size={16} className="icon-rubbery" />
-                    {isExpanded && <span>Dictate</span>}
-                  </button>
-                  <button
-                    onClick={addTask}
-                    className="btn-tactile ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                  >
-                    <ArrowUp
-                      size={20}
-                      className="icon-rubbery"
-                      strokeWidth={2.5}
+                  <div className="flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800 ml-1">
+                    <input
+                      type="text"
+                      placeholder="New..."
+                      className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = e.target.value.trim();
+                          if (val && !draftProjects.includes(val)) {
+                            setDraftProjects((prev) => [...prev, val]);
+                            e.target.value = "";
+                          }
+                        }
+                      }}
                     />
-                  </button>
+                  </div>
+                </div>
+                {/* Row 2: Dates and Actions */}
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-1 items-center gap-1.5 overflow-x-auto custom-scrollbar-hide">
+                    {weekDays.map((day) => {
+                      const isSelected = draftDate === day.full || (!draftDate && day.isToday);
+                      return (
+                        <button
+                          key={day.full}
+                          onClick={() => {
+                            setDraftDate(day.full);
+                          }}
+                          className={`flex shrink-0 items-baseline gap-1 rounded-full border px-2.5 py-1 transition-all ${
+                            isSelected
+                              ? "border-[#FF9A00]/40 bg-[#FF9A00]/10 text-[#FF9A00] shadow-sm active:scale-95"
+                              : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200 active:scale-95"
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">
+                            {day.displayDay}
+                          </span>
+                          <span className="text-xs font-bold">{day.displayNum}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {jiraStatus.connected && jiraProjects.length > 0 && (
+                    <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-2">
+                      <select
+                        value={selectedJiraProject}
+                        onChange={(e) => setSelectedJiraProject(e.target.value)}
+                        className="bg-transparent text-xs font-medium text-neutral-600 outline-none hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200 cursor-pointer"
+                      >
+                        <option value="" className="dark:bg-[#1a1a1a]">Jira Project</option>
+                        {jiraProjects.map((p) => (
+                          <option key={p.id} value={p.key} className="dark:bg-[#1a1a1a]">
+                            {p.key}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedJiraProject && (
+                        <button
+                          onClick={() => setSelectedJiraProject("")}
+                          className="text-neutral-400 hover:text-red-500 transition-colors"
+                          title="Clear Jira Project"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-2">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                      title="Attach image or file"
+                    >
+                      <Plus size={20} className="icon-rubbery" />
+                    </button>
+                    <button
+                      onClick={() => setShowSettings(true)}
+                      className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                        isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
+                      }`}
+                      title="Tools"
+                    >
+                      <Settings size={16} className="icon-rubbery" />
+                      {isExpanded && <span>Tools</span>}
+                    </button>
+                    <button
+                      onClick={() =>
+                        window.electron?.ipcRenderer.invoke("start-dictation")
+                      }
+                      className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                        isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
+                      }`}
+                      title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
+                    >
+                      <Mic size={16} className="icon-rubbery" />
+                      {isExpanded && <span>Dictate</span>}
+                    </button>
+                    <button
+                      onClick={addTask}
+                      className="btn-tactile flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 ml-1"
+                    >
+                      <ArrowUp
+                        size={20}
+                        className="icon-rubbery"
+                        strokeWidth={2.5}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -397,4 +433,8 @@ TaskInput.propTypes = {
   setDraftDate: PropTypes.func.isRequired,
   setShowSettings: PropTypes.func.isRequired,
   availableProjects: PropTypes.array.isRequired,
+  jiraStatus: PropTypes.object.isRequired,
+  jiraProjects: PropTypes.array.isRequired,
+  selectedJiraProject: PropTypes.string.isRequired,
+  setSelectedJiraProject: PropTypes.func.isRequired,
 };

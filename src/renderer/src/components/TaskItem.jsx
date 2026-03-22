@@ -1,10 +1,10 @@
 import PropTypes from "prop-types";
+import FileTypeIcon from "./FileTypeIcon";
 import {
   Circle,
   CheckCircle2,
   GripVertical,
   X,
-  FileText,
   Bell,
   Star,
   Maximize2,
@@ -12,7 +12,10 @@ import {
   Hash,
   Calendar,
   Copy,
+  Download,
+  ExternalLink,
 } from "lucide-react";
+import AppleTimePicker from "./AppleTimePicker";
 
 const MODULE_LOAD_TIME = Date.now();
 
@@ -45,6 +48,7 @@ export default function TaskItem({
   // Project assigning
   assigningProjectId,
   setAssigningProjectId,
+  availableProjects,
   setTasks,
   // Reminder
   settingReminderId,
@@ -61,7 +65,8 @@ export default function TaskItem({
   triggerDeleteSubtask,
   handleCopyTask,
   handleCopyImage,
-  setPreviewImage,
+  handleCopyFile,
+  setPreviewFile,
   // Drag & Drop
   dragOverId,
   dragOverPosition,
@@ -73,6 +78,8 @@ export default function TaskItem({
   handleDragLeaveTask,
   handleDropOnTask,
   handleDropAction,
+  handleDownloadAttachment,
+  handleOpenAttachment,
 }) {
   const dt = formatTaskDateTime(task.id);
 
@@ -85,8 +92,8 @@ export default function TaskItem({
           ? "opacity-40 hover:opacity-70"
           : "hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40"
       } ${
-        dragOverId === task.id && dragOverPosition === "child"
-          ? "scale-[1.02] -translate-y-[2px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white dark:bg-neutral-900 z-20 border border-blue-200 dark:border-blue-800/50 ring-4 ring-blue-500/20"
+        (dragOverId === task.id && dragOverPosition === "child") || assigningProjectId === task.id || settingReminderId === task.id
+          ? "scale-[1.02] -translate-y-[2px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white dark:bg-neutral-900 z-30 border border-blue-200 dark:border-blue-800/50 ring-4 ring-blue-500/20"
           : "border border-transparent z-10"
       }`}
       draggable={activeDragHandleId === task.id}
@@ -261,12 +268,9 @@ export default function TaskItem({
         {/* Reminder setting */}
         {settingReminderId === task.id && (
           <div className="mt-2 flex items-center space-x-2">
-            <input
-              type="time"
-              autoFocus
+            <AppleTimePicker
               value={reminderTime}
-              onChange={(e) => setReminderTime(e.target.value)}
-              className="rounded border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs text-neutral-700 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+              onChange={(newTime) => setReminderTime(newTime)}
             />
             <button
               onClick={() => saveReminder(task.id)}
@@ -297,7 +301,7 @@ export default function TaskItem({
                 <img
                   src={task.attachment.url}
                   alt=""
-                  onClick={() => setPreviewImage(task.attachment.url)}
+                  onClick={() => setPreviewFile(task.attachment)}
                   className="max-h-32 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
                 />
                 <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
@@ -311,7 +315,7 @@ export default function TaskItem({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPreviewImage(task.attachment.url);
+                      setPreviewFile(task.attachment);
                     }}
                     className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                     title="Preview"
@@ -331,11 +335,47 @@ export default function TaskItem({
                 </div>
               </div>
             ) : (
-              <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-                <FileText size={14} className="mr-2 shrink-0" />
+              <div 
+                className="group/file_attachment flex w-fit items-center gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/80 dark:text-neutral-400 relative cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors"
+                onClick={() => setPreviewFile(task.attachment)}
+              >
+                <FileTypeIcon fileName={task.attachment.name} size={28} />
                 <span className="max-w-[200px] truncate">
                   {task.attachment.name}
                 </span>
+                <div className="ml-2 flex gap-1 opacity-0 transition-opacity group-hover/file_attachment:opacity-100">
+                  <button
+                    onClick={(e) => handleOpenAttachment(e, task.attachment)}
+                    className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                    title="Open"
+                  >
+                    <ExternalLink size={12} className="icon-rubbery" />
+                  </button>
+                  <button
+                    onClick={(e) => handleCopyFile(e, task.attachment)}
+                    className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                    title="Copy File"
+                  >
+                    <Copy size={12} className="icon-rubbery" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDownloadAttachment(e, task.attachment)}
+                    className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                    title="Download"
+                  >
+                    <Download size={12} className="icon-rubbery" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeAttachment(task.id);
+                    }}
+                    className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-red-100 hover:text-red-500 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                    title="Delete Attachment"
+                  >
+                    <X size={12} className="icon-rubbery" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -457,7 +497,7 @@ export default function TaskItem({
                           alt=""
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPreviewImage(st.attachment.url);
+                            setPreviewFile(st.attachment);
                           }}
                           className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/st_attachment:opacity-80 dark:border-neutral-800"
                         />
@@ -474,7 +514,7 @@ export default function TaskItem({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPreviewImage(st.attachment.url);
+                              setPreviewFile(st.attachment);
                             }}
                             className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                             title="Preview"
@@ -555,68 +595,6 @@ export default function TaskItem({
           </div>
         )}
 
-        {/* Assign project input */}
-        {assigningProjectId === task.id && (
-          <div className="mt-2 flex items-center pl-1 font-sans">
-            <Hash
-              size={14}
-              className="mr-2 text-neutral-400 dark:text-neutral-600"
-            />
-            <input
-              autoFocus
-              placeholder="Add project (enter to save)..."
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.target.value.trim()) {
-                  const val = e.target.value.trim();
-                  setTasks((prev) =>
-                    prev.map((t) => {
-                      if (t.id === task.id) {
-                        const pList =
-                          t.projects || (t.project ? [t.project] : []);
-                        return {
-                          ...t,
-                          projects: pList.includes(val)
-                            ? pList
-                            : [...pList, val],
-                          project: undefined,
-                        };
-                      }
-                      return t;
-                    }),
-                  );
-                  e.target.value = "";
-                  setAssigningProjectId(null);
-                } else if (e.key === "Escape") {
-                  setAssigningProjectId(null);
-                }
-              }}
-              onBlur={(e) => {
-                if (e.target.value.trim()) {
-                  const val = e.target.value.trim();
-                  setTasks((prev) =>
-                    prev.map((t) => {
-                      if (t.id === task.id) {
-                        const pList =
-                          t.projects || (t.project ? [t.project] : []);
-                        return {
-                          ...t,
-                          projects: pList.includes(val)
-                            ? pList
-                            : [...pList, val],
-                          project: undefined,
-                        };
-                      }
-                      return t;
-                    }),
-                  );
-                }
-                setAssigningProjectId(null);
-              }}
-              className="w-full rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-[14px] text-neutral-800 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:text-neutral-200 dark:focus:border-blue-500"
-            />
-          </div>
-        )}
-
         {/* Task Action Buttons (visible on hover) */}
         <div className="mt-2 flex items-center justify-between opacity-0 transition-opacity duration-200 group-hover/task:opacity-100">
           <div className="flex flex-wrap gap-1.5">
@@ -649,15 +627,93 @@ export default function TaskItem({
                 Priority
               </span>
             </button>
-            <button
-              onClick={() => setAssigningProjectId(task.id)}
-              className="btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
-            >
-              <Hash size={13} className="icon-rubbery" />
-              <span className="text-[11px] font-medium leading-none">
-                Project
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setAssigningProjectId(assigningProjectId === task.id ? null : task.id)}
+                className={`btn-tactile group/btn relative flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
+                  assigningProjectId === task.id
+                    ? "border-[#9B6AFF]/30 bg-[#9B6AFF]/10 text-[#9B6AFF]"
+                    : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                }`}
+              >
+                <Hash size={13} className="icon-rubbery" />
+                <span className="text-[11px] font-medium leading-none">
+                  Project
+                </span>
+              </button>
+              {assigningProjectId === task.id && (
+                <div className="absolute left-0 top-full mt-1.5 z-50 w-52 rounded-xl border border-neutral-200 bg-white p-1 shadow-2xl dark:border-neutral-700 dark:bg-neutral-800">
+                  <div className="max-h-[180px] overflow-y-auto custom-scrollbar-hide">
+                    {(availableProjects || [])
+                      .filter(
+                        (p) =>
+                          !(task.projects || (task.project ? [task.project] : [])).includes(p.name),
+                      )
+                      .map((project) => (
+                        <button
+                          key={project.name}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const val = project.name;
+                            setTasks((prev) =>
+                              prev.map((t) => {
+                                if (t.id === task.id) {
+                                  const pList = t.projects || (t.project ? [t.project] : []);
+                                  return {
+                                    ...t,
+                                    projects: pList.includes(val) ? pList : [...pList, val],
+                                    project: undefined,
+                                  };
+                                }
+                                return t;
+                              }),
+                            );
+                            setAssigningProjectId(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:bg-[#9B6AFF]/10 hover:text-[#9B6AFF] dark:text-neutral-400 dark:hover:bg-[#9B6AFF]/10 dark:hover:text-[#9B6AFF]"
+                        >
+                          <Hash size={11} className="shrink-0 text-[#9B6AFF]/50" />
+                          <span className="truncate">{project.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                  <div className="border-t border-neutral-100 dark:border-neutral-700/50 mt-0.5 pt-0.5">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5">
+                      <Hash size={11} className="shrink-0 text-[#9B6AFF]/50" />
+                      <input
+                        autoFocus
+                        placeholder="New project..."
+                        className="w-full bg-transparent text-xs font-medium text-neutral-800 outline-none placeholder:text-neutral-400 dark:text-neutral-200 dark:placeholder:text-neutral-500"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && e.target.value.trim()) {
+                            const val = e.target.value.trim();
+                            setTasks((prev) =>
+                              prev.map((t) => {
+                                if (t.id === task.id) {
+                                  const pList = t.projects || (t.project ? [t.project] : []);
+                                  return {
+                                    ...t,
+                                    projects: pList.includes(val) ? pList : [...pList, val],
+                                    project: undefined,
+                                  };
+                                }
+                                return t;
+                              }),
+                            );
+                            setAssigningProjectId(null);
+                          } else if (e.key === "Escape") {
+                            setAssigningProjectId(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setAssigningProjectId(null), 150);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={() => {
                 setSettingReminderId(task.id);
@@ -733,6 +789,7 @@ TaskItem.propTypes = {
   setPendingSubtaskAttachment: PropTypes.func.isRequired,
   assigningProjectId: PropTypes.any,
   setAssigningProjectId: PropTypes.func.isRequired,
+  availableProjects: PropTypes.array.isRequired,
   setTasks: PropTypes.func.isRequired,
   settingReminderId: PropTypes.any,
   setSettingReminderId: PropTypes.func.isRequired,
@@ -747,7 +804,8 @@ TaskItem.propTypes = {
   triggerDeleteSubtask: PropTypes.func.isRequired,
   handleCopyTask: PropTypes.func.isRequired,
   handleCopyImage: PropTypes.func.isRequired,
-  setPreviewImage: PropTypes.func.isRequired,
+  handleCopyFile: PropTypes.func.isRequired,
+  setPreviewFile: PropTypes.func.isRequired,
   dragOverId: PropTypes.any,
   dragOverPosition: PropTypes.string,
   activeDragHandleId: PropTypes.any,
@@ -758,4 +816,6 @@ TaskItem.propTypes = {
   handleDragLeaveTask: PropTypes.func.isRequired,
   handleDropOnTask: PropTypes.func.isRequired,
   handleDropAction: PropTypes.func.isRequired,
+  handleDownloadAttachment: PropTypes.func.isRequired,
+  handleOpenAttachment: PropTypes.func.isRequired,
 };

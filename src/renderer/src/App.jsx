@@ -8,10 +8,10 @@ import FullScreenSearch from "./components/FullScreenSearch";
 import TaskItem from "./components/TaskItem";
 import HistoryTaskItem from "./components/HistoryTaskItem";
 import TaskInput from "./components/TaskInput";
-import ImagePreviewModal from "./components/ImagePreviewModal";
+import FilePreviewModal from "./components/FilePreviewModal";
 import DeletedTasksPanel from "./components/DeletedTasksPanel";
 import LoginPage from "./components/LoginPage";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, ChevronDown } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
 
@@ -267,7 +267,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showDeletedPanel, setShowDeletedPanel] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null); // { url, name, type }
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [deleteTrigger, setDeleteTrigger] = useState(null);
@@ -283,40 +283,78 @@ export default function App() {
   const [draftDate, setDraftDate] = useState(null);
   const [assigningProjectId, setAssigningProjectId] = useState(null);
 
+  const [jiraStatus, setJiraStatus] = useState({ connected: false });
+  const [jiraProjects, setJiraProjects] = useState([]);
+  const [selectedJiraProject, setSelectedJiraProject] = useState("");
+  const [jiraCloudId, setJiraCloudId] = useState("");
+
   const [activeDragHandleId, setActiveDragHandleId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragOverPosition, setDragOverPosition] = useState(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+
+  const containerRef = useRef(null);
+
 
   const inputRef = useRef(null);
   const availableProjects = useMemo(() => {
-    const pSet = new Set();
-    // Use projects from settings
-    if (settings.projects) {
-      settings.projects.forEach((p) => pSet.add(p));
-    } else {
-      // Fallback/Default system projects
-      ["Work", "Personal", "Health"].forEach((p) => pSet.add(p));
-    }
+    // 1. Get raw project data from settings
+    const settingsProjects = settings.projects || [];
+    
+    // Map of name -> project object for quick lookup and deduplication
+    const projectMap = new Map();
 
-    // Also include projects from current tasks and history to ensure nothing is missed
+    // 2. Process settings projects (normalize to objects)
+    settingsProjects.forEach((p) => {
+      if (typeof p === "string") {
+        projectMap.set(p, { name: p, isFavorite: false });
+      } else if (p && typeof p === "object" && p.name) {
+        projectMap.set(p.name, { ...p });
+      }
+    });
+
+    // 3. Add projects found in tasks and history (as non-favorites if not already present)
+    const addFromName = (name) => {
+      if (name && !projectMap.has(name)) {
+        projectMap.set(name, { name, isFavorite: false });
+      }
+    };
+
     tasks.forEach((t) => {
-      if (t.projects) t.projects.forEach((p) => pSet.add(p));
+      if (t.projects) t.projects.forEach(addFromName);
     });
 
     history.forEach((day) => {
       day.tasks.forEach((t) => {
-        if (t.projects) t.projects.forEach((p) => pSet.add(p));
+        if (t.projects) t.projects.forEach(addFromName);
       });
     });
 
-    return Array.from(pSet).sort();
+    // 4. Convert map to array and sort
+    return Array.from(projectMap.values()).sort((a, b) => {
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return a.name.localeCompare(b.name);
+    });
   }, [tasks, history, settings.projects]);
 
+  const mainScrollRef = useRef(null);
   const todayRef = useRef(null);
   const tasksEndRef = useRef(null);
   const firedRef = useRef(new Set());
   const tasksRef = useRef(tasks);
   const historyRef = useRef(history);
+
+  const filteredHistory = useMemo(() => {
+    if (!selectedProject) return history;
+    return history
+      .map((day) => ({
+        ...day,
+        tasks: day.tasks.filter((t) => t.projects?.includes(selectedProject)),
+      }))
+      .filter((day) => day.tasks.length > 0);
+  }, [history, selectedProject]);
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -327,8 +365,34 @@ export default function App() {
 
   // --- Load persisted data and settings from disk on mount ---
   useEffect(() => {
-    if (ipc) {
-      ipc.invoke("get-settings").then(setSettings);
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke("get-settings").then(setSettings);
+      window.electron.ipcRenderer.invoke("jira-status").then((status) => {
+        setJiraStatus(status);
+        if (status.connected) {
+          window.electron.ipcRenderer.invoke("jira-fetch-projects").then((res) => {
+            if (res.success) {
+              setJiraProjects(res.projects || []);
+              setJiraCloudId(res.cloudId);
+            }
+          });
+        }
+      });
+
+      const handleJiraConnected = () => {
+        window.electron.ipcRenderer.invoke("jira-status").then((status) => {
+          setJiraStatus(status);
+          if (status.connected) {
+            window.electron.ipcRenderer.invoke("jira-fetch-projects").then((res) => {
+              if (res.success) {
+                setJiraProjects(res.projects || []);
+                setJiraCloudId(res.cloudId);
+              }
+            });
+          }
+        });
+      };
+      window.electron.ipcRenderer.on("jira-connected", handleJiraConnected);
     }
     loadAppData().then((data) => {
       const loadedTasks = data.tasks || [];
@@ -471,16 +535,16 @@ export default function App() {
     return () => window.removeEventListener("focus", focusInput);
   }, [showSettings]);
 
-  // --- Close Image Preview on Escape ---
+  // --- Close File Preview on Escape ---
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && previewImage) {
-        setPreviewImage(null);
+      if (e.key === "Escape" && previewFile) {
+        setPreviewFile(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewImage]);
+  }, [previewFile]);
 
   // --- Scroll to Today on mount ---
   useEffect(() => {
@@ -674,6 +738,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loaded]);
 
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // Show button if we are more than 300px from the bottom
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
+    setShowScrollDown(!isNearBottom);
+  };
+
+  const scrollToBottom = () => {
+    tasksEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   // --- Handlers ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -707,7 +782,23 @@ export default function App() {
           };
           reader.readAsDataURL(file);
         }
-        break;
+        return;
+      }
+    }
+    // Handle non-image files (PDF, Excel, etc.)
+    for (let i = 0; i < items.length; i++) {
+      const file = items[i].getAsFile?.();
+      if (file && file.size > 0) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setPendingAttachment({
+            url: event.target.result,
+            name: file.name,
+            type: file.type.startsWith("image/") ? "image" : "file",
+          });
+        };
+        reader.readAsDataURL(file);
+        return;
       }
     }
   };
@@ -784,12 +875,35 @@ export default function App() {
             })
             .catch((err) => console.error("Apple Reminders IPC Error:", err));
         }
+
+        if (selectedJiraProject && jiraCloudId) {
+          window.electron.ipcRenderer
+            .invoke("jira-create-issue", {
+              text: taskText,
+              cloudId: jiraCloudId,
+              projectKey: selectedJiraProject,
+            })
+            .then((result) => {
+              if (result?.success) {
+                console.log("Jira issue created:", result.link);
+                setTasks((prev) =>
+                  prev.map((t) =>
+                    t.id === taskId ? { ...t, jiraLink: result.link, jiraKey: result.key } : t,
+                  ),
+                );
+              } else {
+                console.warn("Jira issue not created:", result?.error);
+              }
+            })
+            .catch((err) => console.error("Jira Issue IPC Error:", err));
+        }
       }
 
       setInputValue("");
       setPendingAttachment(null);
       setDraftProjects([]);
       setDraftDate(null);
+      setSelectedJiraProject("");
       if (!isExpanded && inputRef.current)
         inputRef.current.style.height = "auto";
       setIsExpanded(false);
@@ -951,6 +1065,24 @@ export default function App() {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, attachment: undefined } : t)),
     );
+
+  const handleDownloadAttachment = async (e, attachment) => {
+    e.stopPropagation();
+    if (!window.electron?.ipcRenderer) return;
+    await window.electron.ipcRenderer.invoke("save-attachment-to-disk", {
+      dataUrl: attachment.url,
+      fileName: attachment.name,
+    });
+  };
+
+  const handleOpenAttachment = async (e, attachment) => {
+    e.stopPropagation();
+    if (!window.electron?.ipcRenderer) return;
+    await window.electron.ipcRenderer.invoke("open-file-attachment", {
+      dataUrl: attachment.url,
+      fileName: attachment.name,
+    });
+  };
 
   const deleteTask = (id) => {
     setTasks((prev) => {
@@ -1163,43 +1295,29 @@ export default function App() {
     }
   };
 
-  const handleCopyImage = async (e, url) => {
-    e.stopPropagation();
-    try {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.src = url;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
+  const handleCopyImage = (e, url) => {
+    if (e) e.stopPropagation();
+    fetch(url)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const item = new ClipboardItem({ [blob.type]: blob });
+        navigator.clipboard.write([item]);
       });
+  };
 
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-
-      await new Promise((resolve, reject) => {
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            reject(new Error("Canvas to blob failed"));
-            return;
+  const handleCopyFile = (e, attachment) => {
+    if (e) e.stopPropagation();
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer
+        .invoke("copy-file-to-clipboard", {
+          dataUrl: attachment.url,
+          fileName: attachment.name,
+        })
+        .then((result) => {
+          if (!result.success) {
+            console.error("Failed to copy file:", result.error);
           }
-          try {
-            await navigator.clipboard.write([
-              new ClipboardItem({
-                "image/png": blob,
-              }),
-            ]);
-            resolve();
-          } catch (err) {
-            reject(err);
-          }
-        }, "image/png");
-      });
-    } catch (err) {
-      console.error("Failed to copy image", err);
+        });
     }
   };
 
@@ -1226,6 +1344,10 @@ export default function App() {
 
   const sortedTasks = [...tasks]
     .filter((t) => (showCompleted ? true : !t.completed))
+    .filter((t) => {
+      if (!selectedProject) return true;
+      return t.projects?.includes(selectedProject);
+    })
     .sort((a, b) => {
       if (a.completed === b.completed) {
         if (a.priority === b.priority) return 0;
@@ -1535,7 +1657,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white font-sans text-neutral-800 dark:bg-neutral-900 dark:text-neutral-200">
+    <div 
+      ref={containerRef}
+      className="flex h-screen w-full overflow-hidden bg-white font-sans text-neutral-800 dark:bg-neutral-900 dark:text-neutral-200"
+    >
       <ParticleCanvas trigger={deleteTrigger} />
       <FullScreenSearch
         show={showSearch}
@@ -1557,6 +1682,9 @@ export default function App() {
         onSettingsClick={() => setShowSettings(true)}
         deletedCount={deletedTasks.length}
         onTrashClick={() => setShowDeletedPanel(true)}
+        availableProjects={availableProjects}
+        selectedProject={selectedProject}
+        onProjectClick={setSelectedProject}
       />
       <div className="flex h-full flex-1 flex-col overflow-hidden relative">
         {/* Header */}
@@ -1606,12 +1734,52 @@ export default function App() {
         </div>
 
         {/* Timeline */}
-        <div className="custom-scrollbar relative flex-1 overflow-y-auto">
+        <div
+          ref={mainScrollRef}
+          onScroll={handleScroll}
+          className="custom-scrollbar relative flex-1 overflow-y-auto"
+        >
+          {/* Horizontal Days Scroller */}
+          <div className="sticky top-0 z-50 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
+            <div className="mx-auto max-w-3xl px-5 md:px-8 py-4">
+              <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth">
+                {[
+                  { date: "Today", isToday: true, hasTasks: sortedTasks.length > 0 },
+                  ...[...filteredHistory].reverse().map((h) => ({ date: h.date, isToday: false, hasTasks: true })),
+                ].map((day, idx) => {
+                  const dObj = day.isToday ? { day: new Date().getDate(), month: new Date().toLocaleString("en-US", { month: "short" }) } : (() => {
+                    const parts = day.date.split(" ");
+                    return { day: parts[0] || "", month: parts[1] ? parts[1].substring(0, 3) : "" };
+                  })();
+                  
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => handleDayClick(day.date)}
+                      className={`btn-tactile group flex flex-col items-center justify-center min-w-[50px] h-[65px] rounded-2xl bg-white dark:bg-neutral-800 border transition-all cursor-pointer shrink-0 shadow-sm hover:shadow-md ${
+                        day.hasTasks 
+                          ? "border-neutral-200 dark:border-neutral-700 hover:border-orange-500/50 dark:hover:border-orange-500/50" 
+                          : "border-neutral-100 dark:border-neutral-800 opacity-50 grayscale"
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 group-hover:text-orange-500/80 transition-colors">
+                        {dObj.month}
+                      </span>
+                      <span className="text-lg font-black text-neutral-800 dark:text-neutral-100 group-hover:text-orange-500 transition-colors">
+                        {dObj.day}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="mx-auto w-full max-w-3xl px-5 md:px-8">
             <div className="h-5 w-full shrink-0 md:h-8" />
             <div className="relative pl-2">
               {/* HISTORY */}
-              {history.map((day, idx) => (
+              {filteredHistory.map((day, idx) => (
                 <div
                   key={idx}
                   id={`day-${day.date}`}
@@ -1636,7 +1804,7 @@ export default function App() {
                         formatTaskText={formatTaskText}
                         formatTaskDateTime={formatTaskDateTime}
                         handleCopyImage={handleCopyImage}
-                        setPreviewImage={setPreviewImage}
+                        setPreviewFile={setPreviewFile}
                       />
                     ))}
                   </div>
@@ -1710,6 +1878,7 @@ export default function App() {
                         }
                         assigningProjectId={assigningProjectId}
                         setAssigningProjectId={setAssigningProjectId}
+                        availableProjects={availableProjects}
                         setTasks={setTasks}
                         settingReminderId={settingReminderId}
                         setSettingReminderId={setSettingReminderId}
@@ -1724,7 +1893,8 @@ export default function App() {
                         triggerDeleteSubtask={triggerDeleteSubtask}
                         handleCopyTask={handleCopyTask}
                         handleCopyImage={handleCopyImage}
-                        setPreviewImage={setPreviewImage}
+                        handleCopyFile={handleCopyFile}
+                        setPreviewFile={setPreviewFile}
                         dragOverId={dragOverId}
                         dragOverPosition={dragOverPosition}
                         activeDragHandleId={activeDragHandleId}
@@ -1735,6 +1905,8 @@ export default function App() {
                         handleDragLeaveTask={handleDragLeaveTask}
                         handleDropOnTask={handleDropOnTask}
                         handleDropAction={handleDropAction}
+                        handleDownloadAttachment={handleDownloadAttachment}
+                        handleOpenAttachment={handleOpenAttachment}
                       />
                     ))
                   )}
@@ -1746,6 +1918,22 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Floating Scroll Down Button */}
+        {showScrollDown && (
+          <button
+            onClick={scrollToBottom}
+            className="group absolute right-8 z-50 flex h-10 w-10 animate-bounce cursor-pointer items-center justify-center rounded-full border border-neutral-200 bg-white/80 text-neutral-600 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-white hover:text-blue-500 hover:shadow-xl dark:border-neutral-700 dark:bg-neutral-800/80 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-blue-400"
+            style={{ bottom: isExpanded ? "120px" : "160px" }}
+            title="Scroll to bottom"
+          >
+            <ChevronDown
+              size={22}
+              className="transition-transform duration-300 group-hover:scale-110"
+              strokeWidth={2.5}
+            />
+          </button>
+        )}
 
         {/* Bottom Bar */}
         <TaskInput
@@ -1766,11 +1954,16 @@ export default function App() {
           setDraftDate={setDraftDate}
           setShowSettings={setShowSettings}
           availableProjects={availableProjects}
+          jiraStatus={jiraStatus}
+          jiraProjects={jiraProjects}
+          selectedJiraProject={selectedJiraProject}
+          setSelectedJiraProject={setSelectedJiraProject}
         />
 
         {/* Settings modal */}
         {showSettings && (
           <SettingsPanel
+            settings={settings}
             onClose={() => setShowSettings(false)}
             onExport={handleExportTasks}
             onImport={handleImportTasks}
@@ -1790,12 +1983,17 @@ export default function App() {
           />
         )}
 
-        {/* Image Preview Modal */}
-        <ImagePreviewModal
-          previewImage={previewImage}
-          setPreviewImage={setPreviewImage}
-          handleCopyImage={handleCopyImage}
-        />
+        {/* File Preview Modal */}
+      <FilePreviewModal
+        previewFile={previewFile}
+        setPreviewFile={setPreviewFile}
+        handleCopyImage={handleCopyImage}
+        handleCopyFile={handleCopyFile}
+        handleOpenAttachment={(e, f) => {
+          if (ipc) ipc.invoke("open-file-attachment", { dataUrl: f.url, fileName: f.name });
+        }}
+        handleDownloadAttachment={handleDownloadAttachment}
+      />
       </div>
     </div>
   );

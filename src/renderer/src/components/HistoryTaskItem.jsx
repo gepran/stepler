@@ -14,7 +14,7 @@ export default function HistoryTaskItem({
   formatTaskText,
   formatTaskDateTime,
   handleCopyImage,
-  setPreviewImage,
+  setPreviewFile,
 }) {
   const dt = formatTaskDateTime(task.id);
 
@@ -93,7 +93,7 @@ export default function HistoryTaskItem({
                 <img
                   src={task.attachment.url}
                   alt=""
-                  onClick={() => setPreviewImage(task.attachment.url)}
+                  onClick={() => setPreviewFile(task.attachment)}
                   className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
                 />
                 <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover/attachment:opacity-100">
@@ -107,7 +107,7 @@ export default function HistoryTaskItem({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPreviewImage(task.attachment.url);
+                      setPreviewFile(task.attachment);
                     }}
                     className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                     title="Preview"
@@ -117,7 +117,10 @@ export default function HistoryTaskItem({
                 </div>
               </div>
             ) : (
-              <div className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
+              <div 
+                className="flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-100 p-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+                onClick={() => setPreviewFile(task.attachment)}
+              >
                 <FileText size={12} className="mr-2 shrink-0" />
                 <span className="max-w-[150px] truncate">
                   {task.attachment.name}
@@ -152,7 +155,7 @@ export default function HistoryTaskItem({
                           alt=""
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPreviewImage(st.attachment.url);
+                            setPreviewFile(st.attachment);
                           }}
                           className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover opacity-60 transition-opacity group-hover/st_attachment:opacity-100 dark:border-neutral-800"
                         />
@@ -169,7 +172,7 @@ export default function HistoryTaskItem({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPreviewImage(st.attachment.url);
+                              setPreviewFile(st.attachment);
                             }}
                             className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
                             title="Preview"
@@ -194,5 +197,5 @@ HistoryTaskItem.propTypes = {
   formatTaskText: PropTypes.func.isRequired,
   formatTaskDateTime: PropTypes.func.isRequired,
   handleCopyImage: PropTypes.func.isRequired,
-  setPreviewImage: PropTypes.func.isRequired,
+  setPreviewFile: PropTypes.func.isRequired,
 };

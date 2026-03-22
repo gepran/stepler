@@ -9,8 +9,9 @@ import {
   Notification,
   dialog,
 } from "electron";
-import { join } from "path";
-import { readFileSync, writeFileSync } from "fs";
+import { join, basename, extname } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
 import { exec, execFile } from "child_process";
 import http from "http";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
@@ -29,7 +30,7 @@ const defaults = {
   hotkey: isMac ? "Shift+Command+Space" : "Ctrl+Shift+Space",
   theme: "dark",
   appleReminders: isMac,
-  projects: ["Work", "Personal", "Health"],
+  projects: [],
 };
 
 function loadSettings() {
@@ -162,8 +163,8 @@ function buildMenu() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1000,
+    height: 800,
     show: false,
     titleBarStyle: "hiddenInset",
     vibrancy: "under-window",
@@ -173,6 +174,7 @@ function createWindow() {
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
+      plugins: true,
     },
   });
 
@@ -208,6 +210,98 @@ function createWindow() {
 const GCAL_TOKEN_PATH = join(app.getPath("userData"), "step-gcal-token.json");
 
 let oAuth2Client = null;
+
+// --------------- Jira Integration ---------------
+
+const JIRA_TOKEN_PATH = join(app.getPath("userData"), "step-jira-token.json");
+let jiraAuthToken = null;
+
+function initJiraAuth() {
+  const appRoot = app.getAppPath();
+  const envPath = join(appRoot, ".env");
+  dotenv.config({ path: envPath });
+
+  const clientId = process.env.JIRA_CLIENT_ID;
+  const clientSecret = process.env.JIRA_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.warn("Jira: Missing JIRA_CLIENT_ID or JIRA_CLIENT_SECRET in .env");
+    return;
+  }
+
+  try {
+    const raw = readFileSync(JIRA_TOKEN_PATH, "utf-8");
+    if (raw && raw.trim()) {
+      jiraAuthToken = JSON.parse(raw);
+      console.log("Jira: loaded saved token");
+    }
+  } catch {
+    console.log("Jira: no saved token found");
+  }
+}
+
+function saveJiraToken(token) {
+  // Add expires_at (token.expires_in is usually 3600 seconds)
+  if (token.expires_in) {
+    token.expires_at = Date.now() + token.expires_in * 1000;
+  }
+  jiraAuthToken = token;
+  writeFileSync(JIRA_TOKEN_PATH, JSON.stringify(token));
+}
+
+async function refreshJiraToken() {
+  if (!jiraAuthToken || !jiraAuthToken.refresh_token) return null;
+
+  const clientId = process.env.JIRA_CLIENT_ID;
+  const clientSecret = process.env.JIRA_CLIENT_SECRET;
+
+  try {
+    const response = await fetch("https://auth.atlassian.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: jiraAuthToken.refresh_token,
+      }),
+    });
+
+    const data = await response.json();
+    if (data.access_token) {
+      saveJiraToken(data);
+      return data.access_token;
+    }
+  } catch (err) {
+    console.error("Jira: refresh token error", err);
+  }
+  return null;
+}
+
+async function getJiraAccessToken() {
+  if (!jiraAuthToken) return null;
+  // Check if token is potentially expired (simplified)
+  // For now, we'll just try to refresh if it's there
+  if (jiraAuthToken.expires_at && Date.now() > jiraAuthToken.expires_at) {
+    return await refreshJiraToken();
+  }
+  return jiraAuthToken.access_token;
+}
+
+function jiraAuthUrl() {
+  const clientId = process.env.JIRA_CLIENT_ID;
+  if (!clientId) return null;
+  const scopes = [
+    "read:jira-work",
+    "manage:jira-project",
+    "manage:jira-configuration",
+    "write:jira-work",
+    "read:jira-user",
+    "offline_access",
+  ].join(" ");
+  const redirectUri = "http://127.0.0.1:3000/jira-callback";
+  return `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=stepler-jira&response_type=code&prompt=consent`;
+}
 
 function initGoogleAuth() {
   // Load .env from the app root (works in both dev and production)
@@ -649,6 +743,147 @@ end tell
       });
     }
   );
+
+  ipcMain.handle("save-attachment-to-disk", async (_, { dataUrl, fileName }) => {
+    const ext = extname(fileName).replace(".", "") || "bin";
+    const nameWithoutExt = basename(fileName, `.${ext}`);
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "Save Attachment",
+      defaultPath: fileName,
+      filters: [{ name: nameWithoutExt, extensions: [ext] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    try {
+      const base64Data = dataUrl.split(",")[1] || dataUrl;
+      writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+      return { success: true, filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("open-file-attachment", async (_, { dataUrl, fileName }) => {
+    try {
+      const tempDir = join(tmpdir(), "stepler-attachments");
+      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+      const tempPath = join(tempDir, `${Date.now()}-${fileName}`);
+      const base64Data = dataUrl.split(",")[1] || dataUrl;
+      writeFileSync(tempPath, Buffer.from(base64Data, "base64"));
+      await shell.openPath(tempPath);
+      // Clean up temp file after a delay
+      setTimeout(() => {
+        try { unlinkSync(tempPath); } catch { /* ignore */ }
+      }, 30000);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+  ipcMain.handle("jira-status", async () => {
+    const configured = !!(process.env.JIRA_CLIENT_ID && process.env.JIRA_CLIENT_SECRET);
+    const connected = !!(jiraAuthToken && jiraAuthToken.access_token);
+    let email = null;
+
+    if (connected) {
+      // Potentially fetch user info if needed
+    }
+
+    return { configured, connected, email };
+  });
+
+  ipcMain.handle("jira-auth", async () => {
+    const url = jiraAuthUrl();
+    if (url) shell.openExternal(url);
+    return { success: !!url };
+  });
+
+  ipcMain.handle("jira-disconnect", () => {
+    jiraAuthToken = null;
+    try {
+      writeFileSync(JIRA_TOKEN_PATH, "");
+    } catch { /* ignore */ }
+    return { success: true };
+  });
+
+  ipcMain.handle("jira-get-projects", async () => {
+    const token = await getJiraAccessToken();
+    if (!token) return { success: false, error: "Not connected" };
+
+    try {
+      // 1. Get cloudid
+      const resRes = await fetch("https://api.atlassian.com/oauth/token/accessible-resources", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const resources = await resRes.json();
+      if (!resources || !resources.length) return { success: false, error: "No accessible Jira resources" };
+      
+      const cloudId = resources[0].id; // Use the first one for now
+
+      // 2. Get projects
+      const projRes = await fetch(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const projects = await projRes.json();
+      return { success: true, projects, cloudId };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("jira-create-issue", async (_, { text, cloudId, projectKey }) => {
+    const token = await getJiraAccessToken();
+    if (!token) return { success: false, error: "Not connected" };
+
+    try {
+      const body = {
+        fields: {
+          project: { key: projectKey },
+          summary: text,
+          issuetype: { name: "Task" } // Default to Task
+        }
+      };
+
+      const res = await fetch(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/issue`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      if (data.key) {
+        const link = `https://${data.self.split("/")[2]}/browse/${data.key}`;
+        return { success: true, key: data.key, link };
+      }
+      return { success: false, error: data.errorMessages?.join(", ") || "Failed to create issue" };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("copy-file-to-clipboard", async (_, { dataUrl, fileName }) => {
+    try {
+      const tempDir = join(tmpdir(), "stepler-attachments-clipboard");
+      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+      const tempPath = join(tempDir, fileName); // Use original name for clipboard
+      const base64Data = dataUrl.split(",")[1] || dataUrl;
+      writeFileSync(tempPath, Buffer.from(base64Data, "base64"));
+
+      // In Electron, to copy a FILE (not just its path) so it can be pasted in Finder/Explorer,
+      // we use clipboard.write({ filenames: [path] })
+      const { clipboard } = require("electron");
+      clipboard.write({
+        filenames: [tempPath],
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error("Copy file error:", err);
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 // --------------- HTTP API Server (for CLI) ---------------
@@ -699,6 +934,53 @@ function startAPIServer() {
         } catch {
           res.writeHead(500);
           res.end("Auth Error");
+        }
+      } else {
+        res.writeHead(400);
+        res.end("No code provided");
+      }
+      return;
+    }
+
+    // GET /jira-callback
+    if (method === "GET" && url.startsWith("/jira-callback")) {
+      const urlObj = new URL(url, "http://localhost:3000");
+      const code = urlObj.searchParams.get("code");
+      if (code) {
+        try {
+          const clientId = process.env.JIRA_CLIENT_ID;
+          const clientSecret = process.env.JIRA_CLIENT_SECRET;
+          const redirectUri = "http://127.0.0.1:3000/jira-callback";
+
+          const response = await fetch("https://auth.atlassian.com/oauth/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              grant_type: "authorization_code",
+              client_id: clientId,
+              client_secret: clientSecret,
+              code: code,
+              redirect_uri: redirectUri,
+            }),
+          });
+
+          const tokens = await response.json();
+          if (tokens.access_token) {
+            saveJiraToken(tokens);
+            if (mainWindow) {
+              mainWindow.webContents.send("jira-connected", true);
+            }
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(
+              "<h1>Jira Authentication successful!</h1><p>You can close this tab and return to Stepler.</p><script>window.setTimeout(()=>window.close(), 2000)</script>",
+            );
+          } else {
+            throw new Error("No access token in response");
+          }
+        } catch (err) {
+          console.error("Jira Auth Error:", err);
+          res.writeHead(500);
+          res.end("Jira Auth Error");
         }
       } else {
         res.writeHead(400);
@@ -792,6 +1074,7 @@ app.whenReady().then(() => {
 
   // Initialize Google Auth now that app is ready (needs app.getAppPath())
   initGoogleAuth();
+  initJiraAuth();
 
   const settings = loadSettings();
   applyTheme(settings.theme);
