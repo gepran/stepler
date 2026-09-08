@@ -1505,6 +1505,12 @@ function setupIPC() {
     return { success: true };
   });
 
+  /** Where to send someone whose update could not install itself. */
+  ipcMain.handle("open-releases-page", () => {
+    shell.openExternal("https://github.com/gepran/stepler/releases/latest");
+    return { success: true };
+  });
+
   /** Reveal the data folder, so "put your credentials here" is one click. */
   ipcMain.handle("open-data-folder", async () => {
     const err = await shell.openPath(USER_DATA);
@@ -2287,7 +2293,13 @@ if (!app.requestSingleInstanceLock()) {
         );
         autoUpdater.on("error", (err) => {
           console.warn("Updater:", err.message);
-          sendUpdateState({ status: "error", error: err.message });
+          // Keep the version: a failed install still leaves the person with
+          // somewhere to go, and the pill turns into that link.
+          sendUpdateState({
+            status: "error",
+            error: err.message,
+            version: updateState.version || null,
+          });
         });
 
         const check = () => autoUpdater.checkForUpdates().catch(() => {});

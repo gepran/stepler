@@ -1345,6 +1345,7 @@ export default function App() {
               <UpdatePill
                 state={updateState}
                 onInstall={() => ipc?.invoke("install-update")}
+                onOpenReleases={() => ipc?.invoke("open-releases-page")}
               />
               <button
                 onClick={() => setShowCompleted((v) => !v)}
