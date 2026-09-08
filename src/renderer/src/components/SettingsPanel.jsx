@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
 import GuideTab from "./GuideTab";
+import { LANGUAGES, setLanguage, useLanguage, useT } from "../lib/i18n";
 import {
   BookOpen,
   X,
@@ -17,6 +18,7 @@ import {
   Plus,
   Star,
   Keyboard,
+  Languages,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -97,6 +99,8 @@ export default function SettingsPanel({
   onSettingsUpdate,
   onToast,
 }) {
+  const t = useT();
+  const language = useLanguage();
   const [settings, setSettings] = useState(initialSettings || {});
   const [recording, setRecording] = useState(false);
   const [recordError, setRecordError] = useState("");
@@ -190,9 +194,7 @@ export default function SettingsPanel({
       }
       const acc = keyEventToAccelerator(e);
       if (!acc) {
-        setRecordError(
-          "Use at least one of ⌘, ⌃ or ⌥ together with another key.",
-        );
+        setRecordError(t("settings.general.shortcutError"));
         return;
       }
       setRecording(false);
@@ -207,7 +209,7 @@ export default function SettingsPanel({
         onToast?.("Shortcut updated");
       }
     },
-    [recording, updateSetting, onToast],
+    [recording, updateSetting, onToast, t],
   );
 
   const projects = settings.projects || [];
@@ -227,11 +229,15 @@ export default function SettingsPanel({
   };
 
   const tabs = [
-    { id: "general", label: "General", Icon: SunMedium },
-    { id: "projects", label: "Projects", Icon: Hash },
-    { id: "integrations", label: "Integrations", Icon: Calendar },
-    { id: "guide", label: "Guide", Icon: BookOpen },
-    { id: "data", label: "Data", Icon: Download },
+    { id: "general", label: t("settings.tabs.general"), Icon: SunMedium },
+    { id: "projects", label: t("settings.tabs.projects"), Icon: Hash },
+    {
+      id: "integrations",
+      label: t("settings.tabs.integrations"),
+      Icon: Calendar,
+    },
+    { id: "guide", label: t("settings.tabs.guide"), Icon: BookOpen },
+    { id: "data", label: t("settings.tabs.data"), Icon: Download },
   ];
 
   return (
@@ -249,7 +255,7 @@ export default function SettingsPanel({
               <SunMedium size={18} />
             </div>
             <h2 className="text-xl font-bold text-neutral-800 dark:text-neutral-100">
-              Settings
+              {t("settings.title")}
             </h2>
           </div>
 
@@ -276,7 +282,7 @@ export default function SettingsPanel({
               className="btn-tactile flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400"
             >
               <X size={16} />
-              Close
+              {t("common.close")}
             </button>
           </div>
         </div>
@@ -285,18 +291,30 @@ export default function SettingsPanel({
           {activeTab === "general" && (
             <div>
               <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                General
+                {t("settings.general.title")}
               </h3>
 
               <section className="mb-10">
                 <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  Appearance
+                  {t("settings.general.appearance")}
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { value: "light", label: "Light", Icon: SunMedium },
-                    { value: "dark", label: "Dark", Icon: Moon },
-                    { value: "system", label: "System", Icon: Monitor },
+                    {
+                      value: "light",
+                      label: t("settings.general.light"),
+                      Icon: SunMedium,
+                    },
+                    {
+                      value: "dark",
+                      label: t("settings.general.dark"),
+                      Icon: Moon,
+                    },
+                    {
+                      value: "system",
+                      label: t("settings.general.system"),
+                      Icon: Monitor,
+                    },
                   ].map(({ value, label, Icon }) => (
                     <button
                       key={value}
@@ -314,9 +332,37 @@ export default function SettingsPanel({
                 </div>
               </section>
 
+              <section className="mb-10">
+                <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
+                  {t("settings.general.language")}
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {LANGUAGES.map(({ code, native }) => (
+                    <button
+                      key={code}
+                      onClick={() => {
+                        setLanguage(code);
+                        updateSetting({ language: code });
+                      }}
+                      className={`btn-tactile flex flex-col items-center justify-center gap-3 rounded-2xl border p-5 transition-all ${
+                        language === code
+                          ? "border-neutral-900 bg-neutral-900 text-white shadow-lg dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+                          : "border-neutral-100 bg-neutral-50/50 text-neutral-500 hover:border-neutral-200 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30 dark:text-neutral-400"
+                      }`}
+                    >
+                      <Languages size={24} />
+                      <span className="text-sm font-semibold">{native}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-sm text-neutral-500">
+                  {t("settings.general.languageHint")}
+                </p>
+              </section>
+
               <section className="mb-8">
                 <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  Global Shortcut
+                  {t("settings.general.shortcut")}
                 </label>
                 <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
                   {recording ? (
@@ -328,7 +374,7 @@ export default function SettingsPanel({
                       className="flex h-14 items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-white text-sm text-neutral-500 outline-none ring-4 ring-neutral-100 dark:border-neutral-600 dark:bg-neutral-900 dark:ring-neutral-800/50"
                     >
                       <span className="animate-pulse font-medium">
-                        Press the new combination… (Esc to cancel)
+                        {t("settings.general.recording")}
                       </span>
                     </div>
                   ) : (
@@ -346,38 +392,35 @@ export default function SettingsPanel({
                         }}
                         className="btn-tactile rounded-xl bg-neutral-900 px-6 py-3.5 text-sm font-bold text-white transition-all hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
                       >
-                        Change
+                        {t("settings.general.change")}
                       </button>
                     </div>
                   )}
                   <p
                     className={`mt-4 text-sm ${recordError ? "text-red-500" : "text-neutral-500 dark:text-neutral-400"}`}
                   >
-                    {recordError ||
-                      "Press this combination from any app to show or hide Stepler."}
+                    {recordError || t("settings.general.shortcutHint")}
                   </p>
                 </div>
               </section>
 
               <section>
                 <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  Behaviour
+                  {t("settings.general.behaviour")}
                 </label>
                 {isMac && (
                   <div className="mb-4 flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
                     <div>
                       <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                        Bring the selection with you
+                        {t("settings.general.captureSelection")}
                       </div>
                       <div className="text-sm text-neutral-500">
-                        Text selected in another app lands in the composer when
-                        you open Stepler with the shortcut. Your clipboard is
-                        put back afterwards.
+                        {t("settings.general.captureSelectionHint")}
                       </div>
                     </div>
                     <Toggle
                       on={settings.captureSelection !== false}
-                      label="Bring the selection with you"
+                      label={t("settings.general.captureSelection")}
                       onClick={() =>
                         updateSetting({
                           captureSelection: settings.captureSelection === false,
@@ -390,15 +433,15 @@ export default function SettingsPanel({
                 <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
                   <div>
                     <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                      Hide with Esc
+                      {t("settings.general.escToHide")}
                     </div>
                     <div className="text-sm text-neutral-500">
-                      Press Esc on an empty input to send the window away.
+                      {t("settings.general.escToHideHint")}
                     </div>
                   </div>
                   <Toggle
                     on={!!settings.escToHide}
-                    label="Hide with Esc"
+                    label={t("settings.general.escToHide")}
                     onClick={() =>
                       updateSetting({ escToHide: !settings.escToHide })
                     }
@@ -411,12 +454,12 @@ export default function SettingsPanel({
           {activeTab === "projects" && (
             <div>
               <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                Projects
+                {t("settings.projects.title")}
               </h3>
               <div className="mb-8 flex gap-3">
                 <input
                   type="text"
-                  placeholder="Enter project name…"
+                  placeholder={t("settings.projects.placeholder")}
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddProject()}
@@ -434,8 +477,7 @@ export default function SettingsPanel({
               <div className="space-y-3">
                 {projects.length === 0 && (
                   <p className="text-sm text-neutral-400">
-                    No saved projects yet. Projects you type on a task show up
-                    here automatically.
+                    {t("settings.projects.empty")}
                   </p>
                 )}
                 {projects.map((project, idx) => {
@@ -521,7 +563,7 @@ export default function SettingsPanel({
                                   ? "bg-amber-50 text-amber-500 dark:bg-amber-900/20"
                                   : "text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                               }`}
-                              title="Pin to the top"
+                              title={t("settings.projects.pin")}
                             >
                               <Star
                                 size={18}
@@ -534,7 +576,7 @@ export default function SettingsPanel({
                                 setEditingProjectName(name);
                               }}
                               className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              title="Rename"
+                              title={t("settings.projects.rename")}
                             >
                               <Edit2 size={18} />
                             </button>
@@ -547,7 +589,7 @@ export default function SettingsPanel({
                                 })
                               }
                               className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                              title="Remove from the saved list"
+                              title={t("settings.projects.removeSaved")}
                             >
                               <Trash2 size={18} />
                             </button>
@@ -564,11 +606,10 @@ export default function SettingsPanel({
           {activeTab === "integrations" && (
             <div>
               <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                Integrations
+                {t("settings.integrations.title")}
               </h3>
               <p className="mb-8 text-sm text-neutral-500">
-                Everything here is off until you turn it on. Nothing leaves this
-                machine otherwise.
+                {t("settings.integrations.blurb")}
               </p>
 
               <div className="space-y-4">
@@ -585,10 +626,11 @@ export default function SettingsPanel({
                         </div>
                         <div className="text-sm text-neutral-500">
                           {!gcalStatus.configured
-                            ? "Needs your own Google OAuth credentials."
+                            ? t("settings.integrations.gcalNeedsCreds")
                             : gcalStatus.connected
-                              ? gcalStatus.email || "Connected"
-                              : "Create an event for tasks that have a date."}
+                              ? gcalStatus.email ||
+                                t("settings.integrations.gcalConnected")
+                              : t("settings.integrations.gcalBlurb")}
                         </div>
                       </div>
                     </div>
@@ -601,11 +643,11 @@ export default function SettingsPanel({
                             connected: false,
                             email: null,
                           }));
-                          onToast?.("Disconnected from Google Calendar");
+                          onToast?.(t("toast.gcalDisconnected"));
                         }}
                         className="rounded-xl px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10"
                       >
-                        Disconnect
+                        {t("common.disconnect")}
                       </button>
                     ) : (
                       <button
@@ -613,7 +655,8 @@ export default function SettingsPanel({
                           const res = await ipc?.invoke("google-calendar-auth");
                           if (!res?.success)
                             onToast?.(
-                              res?.error || "Could not start sign-in",
+                              res?.error ||
+                                t("settings.integrations.signInFailed"),
                               "error",
                             );
                         }}
@@ -624,27 +667,25 @@ export default function SettingsPanel({
                             : "cursor-not-allowed bg-neutral-200 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-600"
                         }`}
                       >
-                        Connect
+                        {t("common.connect")}
                       </button>
                     )}
                   </div>
                   {!gcalStatus.configured && (
                     <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
                       <div className="text-sm text-neutral-500">
-                        No credentials ship inside Stepler, so nobody borrows
-                        anyone else&apos;s. Register your own OAuth app, then
-                        put the id and secret in{" "}
+                        {t("settings.integrations.gcalCredsBefore")}{" "}
                         <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] dark:bg-neutral-800">
                           stepler-integrations.json
                         </code>{" "}
-                        in the data folder.
+                        {t("settings.integrations.gcalCredsAfter")}
                       </div>
                       <div className="mt-3 flex gap-2">
                         <button
                           onClick={() => ipc?.invoke("open-data-folder")}
                           className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                         >
-                          Open data folder
+                          {t("settings.integrations.openDataFolder")}
                         </button>
                         <button
                           onClick={() =>
@@ -655,7 +696,7 @@ export default function SettingsPanel({
                           }
                           className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                         >
-                          Setup guide
+                          {t("settings.integrations.setupGuide")}
                         </button>
                       </div>
                     </div>
@@ -664,15 +705,15 @@ export default function SettingsPanel({
                     <div className="mt-5 flex items-center justify-between border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
                       <div>
                         <div className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-                          Create events automatically
+                          {t("settings.integrations.autoEvents")}
                         </div>
                         <div className="text-sm text-neutral-500">
-                          Only for tasks that carry a date.
+                          {t("settings.integrations.autoEventsHint")}
                         </div>
                       </div>
                       <Toggle
                         on={!!settings.calendarSync}
-                        label="Create calendar events automatically"
+                        label={t("settings.integrations.autoEvents")}
                         onClick={() =>
                           updateSetting({
                             calendarSync: !settings.calendarSync,
@@ -698,8 +739,8 @@ export default function SettingsPanel({
                           {jiraStatus.connected
                             ? jiraStatus.site
                               ? `${jiraStatus.email} at ${jiraStatus.site.replace(/^https:\/\//, "")}`
-                              : "Connected"
-                            : "Create Jira issues straight from a note, in the sprint you pick."}
+                              : t("settings.integrations.gcalConnected")
+                            : t("settings.integrations.jiraBlurb")}
                         </div>
                       </div>
                     </div>
@@ -713,11 +754,11 @@ export default function SettingsPanel({
                             site: null,
                             email: null,
                           }));
-                          onToast?.("Disconnected from Jira");
+                          onToast?.(t("toast.jiraDisconnected"));
                         }}
                         className="rounded-xl px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400"
                       >
-                        Disconnect
+                        {t("common.disconnect")}
                       </button>
                     ) : null}
                   </div>
@@ -725,10 +766,7 @@ export default function SettingsPanel({
                   {!jiraStatus.connected && (
                     <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
                       <div className="text-sm text-neutral-500">
-                        Atlassian has no sign-in that a downloadable app can
-                        ship, so Stepler uses an API token you make yourself. It
-                        is stored encrypted on this machine and goes nowhere
-                        else.
+                        {t("settings.integrations.jiraNote")}
                       </div>
 
                       <div className="mt-4 grid gap-2">
@@ -751,7 +789,7 @@ export default function SettingsPanel({
                               email: e.target.value,
                             }))
                           }
-                          placeholder="Your Atlassian account email"
+                          placeholder={t("settings.integrations.jiraEmail")}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
                         />
                         <input
@@ -763,7 +801,7 @@ export default function SettingsPanel({
                               token: e.target.value,
                             }))
                           }
-                          placeholder="API token"
+                          placeholder={t("settings.integrations.jiraToken")}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
                         />
                       </div>
@@ -787,11 +825,14 @@ export default function SettingsPanel({
                                 ?.invoke("jira-status")
                                 .then((st) => st && setJiraStatus(st));
                               onToast?.(
-                                `Connected to Jira as ${res.displayName}`,
+                                t("toast.jiraConnected", {
+                                  name: res.displayName,
+                                }),
                               );
                             } else {
                               onToast?.(
-                                res?.error || "Could not connect",
+                                res?.error ||
+                                  t("settings.integrations.jiraConnectFailed"),
                                 "error",
                               );
                             }
@@ -799,7 +840,9 @@ export default function SettingsPanel({
                           disabled={jiraBusy}
                           className="rounded-xl bg-black px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 dark:bg-white dark:text-black dark:disabled:bg-neutral-700"
                         >
-                          {jiraBusy ? "Checking…" : "Connect"}
+                          {jiraBusy
+                            ? t("settings.integrations.jiraChecking")
+                            : t("common.connect")}
                         </button>
                         <button
                           onClick={() =>
@@ -810,7 +853,7 @@ export default function SettingsPanel({
                           }
                           className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                         >
-                          Create a token
+                          {t("settings.integrations.jiraCreateToken")}
                         </button>
                         {jiraStatus.oauthConfigured && (
                           <button
@@ -818,13 +861,14 @@ export default function SettingsPanel({
                               const res = await ipc?.invoke("jira-auth");
                               if (!res?.success)
                                 onToast?.(
-                                  res?.error || "Could not start sign-in",
+                                  res?.error ||
+                                    t("settings.integrations.signInFailed"),
                                   "error",
                                 );
                             }}
                             className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                           >
-                            Use OAuth instead
+                            {t("settings.integrations.jiraUseOauth")}
                           </button>
                         )}
                       </div>
@@ -844,7 +888,7 @@ export default function SettingsPanel({
                           Apple Reminders
                         </div>
                         <div className="text-sm text-neutral-500">
-                          Mirror dated tasks into Reminders.
+                          {t("settings.integrations.remindersBlurb")}
                         </div>
                       </div>
                     </div>
@@ -870,20 +914,19 @@ export default function SettingsPanel({
                     </div>
                     <div>
                       <div className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                        Command line access
+                        {t("settings.integrations.cli")}
                       </div>
                       <div className="max-w-md text-sm text-neutral-500">
-                        Lets the bundled CLI add and list tasks on 127.0.0.1.
-                        Requires a token that only apps on this Mac can read.
+                        {t("settings.integrations.cliBlurb")}
                       </div>
                     </div>
                   </div>
                   <Toggle
                     on={!!settings.apiEnabled}
-                    label="Command line access"
+                    label={t("settings.integrations.cli")}
                     onClick={async () => {
                       await updateSetting({ apiEnabled: !settings.apiEnabled });
-                      onToast?.("Restart Stepler to apply this change");
+                      onToast?.(t("toast.restartToApply"));
                     }}
                   />
                 </div>
@@ -896,7 +939,7 @@ export default function SettingsPanel({
           {activeTab === "data" && (
             <div>
               <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                Data Management
+                {t("settings.data.title")}
               </h3>
               <div className="grid grid-cols-2 gap-6">
                 <button
@@ -907,11 +950,10 @@ export default function SettingsPanel({
                     <Download size={28} />
                   </div>
                   <h4 className="mb-2 text-xl font-bold text-neutral-800 group-hover:text-white dark:text-neutral-100 dark:group-hover:text-neutral-900">
-                    Export
+                    {t("settings.data.export")}
                   </h4>
                   <p className="text-sm text-neutral-500 group-hover:text-neutral-400 dark:group-hover:text-neutral-500">
-                    One JSON file with every task, including the attachments
-                    themselves.
+                    {t("settings.data.exportBlurb")}
                   </p>
                 </button>
 
@@ -923,18 +965,16 @@ export default function SettingsPanel({
                     <Upload size={28} />
                   </div>
                   <h4 className="mb-2 text-xl font-bold text-neutral-800 group-hover:text-white dark:text-neutral-100 dark:group-hover:text-neutral-900">
-                    Import
+                    {t("settings.data.import")}
                   </h4>
                   <p className="text-sm text-neutral-500 group-hover:text-neutral-400 dark:group-hover:text-neutral-500">
-                    Merge an export back in. Existing tasks are never
-                    overwritten.
+                    {t("settings.data.importBlurb")}
                   </p>
                 </button>
               </div>
 
               <p className="mt-8 text-sm text-neutral-500">
-                Stepler keeps a backup copy of the previous data file every time
-                it starts, next to your tasks in the app data folder.
+                {t("settings.data.backupNote")}
               </p>
             </div>
           )}

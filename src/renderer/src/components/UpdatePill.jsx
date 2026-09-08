@@ -1,11 +1,13 @@
 import PropTypes from "prop-types";
 import { ArrowUpCircle, Loader2 } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 /**
  * The header's update affordance. Stays out of the way until there is
  * genuinely something to install, then offers one click to restart into it.
  */
 export default function UpdatePill({ state, onInstall, onOpenReleases }) {
+  const t = useT();
   const status = state?.status;
   const failed = status === "error" && state.version;
   if (status !== "downloading" && status !== "ready" && !failed) return null;
@@ -17,11 +19,13 @@ export default function UpdatePill({ state, onInstall, onOpenReleases }) {
       <button
         onClick={onOpenReleases}
         style={{ WebkitAppRegion: "no-drag" }}
-        title={`Stepler could not replace itself (${state.error || "unknown error"}). This puts the downloaded build in your Downloads folder.`}
+        title={t("update.replaceFailed", {
+          error: state.error || t("update.unknownError"),
+        })}
         className="flex items-center gap-1.5 rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-amber-600"
       >
         <ArrowUpCircle size={12} />
-        <span>Install {state.version}</span>
+        <span>{t("update.install", { version: state.version })}</span>
       </button>
     );
 
@@ -35,8 +39,10 @@ export default function UpdatePill({ state, onInstall, onOpenReleases }) {
       style={{ WebkitAppRegion: "no-drag" }}
       title={
         downloading
-          ? "Downloading the new version"
-          : `Restart to update to ${state.version || "the new version"}`
+          ? t("update.downloading")
+          : t("update.restartTo", {
+              version: state.version || t("update.theNewVersion"),
+            })
       }
       className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
         downloading
@@ -47,12 +53,16 @@ export default function UpdatePill({ state, onInstall, onOpenReleases }) {
       {downloading ? (
         <>
           <Loader2 size={12} className="animate-spin" />
-          <span>{percent === null ? "Updating…" : `${percent}%`}</span>
+          <span>{percent === null ? t("update.updating") : `${percent}%`}</span>
         </>
       ) : (
         <>
           <ArrowUpCircle size={12} />
-          <span>Update{state.version ? ` to ${state.version}` : ""}</span>
+          <span>
+            {state.version
+              ? t("update.updateTo", { version: state.version })
+              : t("update.update")}
+          </span>
         </>
       )}
     </button>

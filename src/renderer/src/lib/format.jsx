@@ -9,6 +9,7 @@ import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
 import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
 import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import { formatDate, translate } from "./i18n";
 
 // Only the languages worth shipping — the full Prism build added ~1.5 MB to
 // the bundle and delayed first paint.
@@ -42,7 +43,7 @@ export function labelForYMD(ymd) {
   const date = ymdToDate(ymd);
   if (isNaN(date.getTime())) return String(ymd);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString("en-GB", {
+  return formatDate(date, {
     day: "numeric",
     month: "short",
     ...(sameYear ? {} : { year: "numeric" }),
@@ -54,10 +55,10 @@ export function dueDateLabel(value) {
   if (!value) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value; // legacy label, show as-is
   const today = localYMD(new Date());
-  if (value === today) return "Today";
+  if (value === today) return translate("app.today");
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  if (value === localYMD(tomorrow)) return "Tomorrow";
+  if (value === localYMD(tomorrow)) return translate("app.tomorrow");
   return labelForYMD(value);
 }
 

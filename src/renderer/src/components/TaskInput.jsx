@@ -27,6 +27,7 @@ import {
   Calendar,
   Hash,
 } from "lucide-react";
+import { formatDate, translate, useLanguage, useT } from "../lib/i18n";
 
 const isMac =
   window.electron?.process?.platform === "darwin" ||
@@ -42,11 +43,11 @@ function buildWeek(todayYMD) {
       ymd: localYMD(d),
       label:
         i === 0
-          ? "Today"
+          ? translate("app.today")
           : i === 1
-            ? "Tomorrow"
-            : d.toLocaleDateString("en-US", { weekday: "short" }),
-      weekday: d.toLocaleDateString("en-US", { weekday: "short" }),
+            ? translate("app.tomorrow")
+            : formatDate(d, { weekday: "short" }),
+      weekday: formatDate(d, { weekday: "short" }),
       dayNum: d.getDate(),
     });
   }
@@ -70,6 +71,8 @@ const TaskInput = forwardRef(function TaskInput(
   },
   ref,
 ) {
+  const t = useT();
+  const language = useLanguage();
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [value, setValue] = useState("");
@@ -128,7 +131,11 @@ const TaskInput = forwardRef(function TaskInput(
     }, 60_000);
     return () => clearInterval(id);
   }, []);
-  const weekDays = useMemo(() => buildWeek(weekSeed), [weekSeed]);
+  const weekDays = useMemo(
+    () => buildWeek(weekSeed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekSeed, language],
+  );
 
   useEffect(() => () => releasePending(pending), [pending]);
 
@@ -138,7 +145,7 @@ const TaskInput = forwardRef(function TaskInput(
   const attach = (file) => {
     if (!file) return;
     if (file.size > 64 * 1024 * 1024) {
-      onToast?.("That file is larger than 64 MB", "error");
+      onToast?.(t("toast.fileTooLarge"), "error");
       return;
     }
     setPending((prev) => {
@@ -208,7 +215,7 @@ const TaskInput = forwardRef(function TaskInput(
       >
         <div className="mb-4 flex items-center gap-2 text-xl font-medium text-neutral-800 dark:text-neutral-200">
           <SteplerLogo size={26} />
-          <span>What&apos;s on your mind?</span>
+          <span>{t("input.prompt")}</span>
         </div>
 
         <div className="relative flex flex-col">
@@ -233,7 +240,7 @@ const TaskInput = forwardRef(function TaskInput(
                       setPending(null);
                     }}
                     className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-red-500/90 group-hover/pending:opacity-100"
-                    title="Remove attachment"
+                    title={t("common.removeAttachment")}
                   >
                     <X size={12} />
                   </button>
@@ -250,7 +257,7 @@ const TaskInput = forwardRef(function TaskInput(
                       setPending(null);
                     }}
                     className="btn-tactile shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-900 dark:hover:text-neutral-200"
-                    title="Remove attachment"
+                    title={t("common.removeAttachment")}
                   >
                     <X size={14} className="icon-rubbery" />
                   </button>
@@ -275,7 +282,7 @@ const TaskInput = forwardRef(function TaskInput(
               className={`btn-tactile absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
                 isExpanded ? "top-4" : "top-3.5"
               }`}
-              title={isExpanded ? "Collapse" : "Expand"}
+              title={isExpanded ? t("input.collapse") : t("input.expand")}
             >
               {isExpanded ? (
                 <Minimize2 size={18} className="icon-rubbery" />
@@ -298,7 +305,7 @@ const TaskInput = forwardRef(function TaskInput(
                         setDraftProjects((prev) => prev.filter((x) => x !== p))
                       }
                       className="ml-1 text-[#9B6AFF]/50 hover:text-[#9B6AFF]"
-                      title="Remove project"
+                      title={t("task.removeProject")}
                     >
                       <X size={14} />
                     </button>
@@ -312,7 +319,7 @@ const TaskInput = forwardRef(function TaskInput(
                     <button
                       onClick={() => setDraftDate(null)}
                       className="ml-1 text-[#FF9A00]/50 hover:text-[#FF9A00]"
-                      title="Remove date"
+                      title={t("input.removeDate")}
                     >
                       <X size={14} />
                     </button>
@@ -329,7 +336,7 @@ const TaskInput = forwardRef(function TaskInput(
               onPaste={handlePaste}
               onFocus={() => setIsFocused(true)}
               rows={isExpanded ? undefined : 1}
-              placeholder="What's on your mind?"
+              placeholder={t("input.prompt")}
               className={`flex-1 resize-none bg-transparent px-5 pr-12 text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 ${
                 isExpanded ? "mt-4 h-full py-6" : "autosize max-h-40 pb-2 pt-4"
               }`}
@@ -363,7 +370,7 @@ const TaskInput = forwardRef(function TaskInput(
                 >
                   <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#9B6AFF]/10 bg-neutral-50 px-2.5 py-1 text-[10px] font-bold tracking-widest text-[#9B6AFF] dark:bg-[#9B6AFF]/5">
                     <Hash size={12} />
-                    PROJECTS
+                    {t("input.projects")}
                   </div>
                   {availableProjects.map((project) => {
                     const name =
@@ -392,7 +399,7 @@ const TaskInput = forwardRef(function TaskInput(
                   <div className="ml-1 flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800">
                     <input
                       type="text"
-                      placeholder="New..."
+                      placeholder={t("input.newShort")}
                       value={newProjectDraft}
                       onChange={(e) => setNewProjectDraft(e.target.value)}
                       className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
@@ -449,7 +456,7 @@ const TaskInput = forwardRef(function TaskInput(
                         }}
                         className="cursor-pointer bg-transparent text-xs font-medium text-neutral-600 outline-none dark:text-neutral-400"
                       >
-                        <option value="">Jira Project</option>
+                        <option value="">{t("input.jiraProject")}</option>
                         {jiraProjects.map((p) => (
                           <option key={p.id} value={p.key}>
                             {p.key}
@@ -462,7 +469,7 @@ const TaskInput = forwardRef(function TaskInput(
                           onChange={(e) => setJiraSprintId(e.target.value)}
                           className="cursor-pointer bg-transparent text-xs font-medium text-neutral-600 outline-none dark:text-neutral-400"
                         >
-                          <option value="">Backlog</option>
+                          <option value="">{t("input.backlog")}</option>
                           {jiraSprints.map((sp) => (
                             <option key={sp.id} value={sp.id}>
                               {sp.name}
@@ -475,7 +482,7 @@ const TaskInput = forwardRef(function TaskInput(
                         <button
                           onClick={() => setJiraProjectKey("")}
                           className="text-neutral-400 transition-colors hover:text-red-500"
-                          title="Clear Jira project"
+                          title={t("input.clearJiraProject")}
                         >
                           <X size={12} />
                         </button>
@@ -487,7 +494,7 @@ const TaskInput = forwardRef(function TaskInput(
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                      title="Attach image or file"
+                      title={t("input.attach")}
                     >
                       <Plus size={20} className="icon-rubbery" />
                     </button>
@@ -496,10 +503,10 @@ const TaskInput = forwardRef(function TaskInput(
                       className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                         isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                       }`}
-                      title="Settings"
+                      title={t("common.settings")}
                     >
                       <Settings size={16} className="icon-rubbery" />
-                      {isExpanded && <span>Settings</span>}
+                      {isExpanded && <span>{t("common.settings")}</span>}
                     </button>
                     {isMac && (
                       <button
@@ -509,17 +516,17 @@ const TaskInput = forwardRef(function TaskInput(
                         className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                           isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                         }`}
-                        title="Start dictation (Fn twice)"
+                        title={t("input.dictateHint")}
                       >
                         <Mic size={16} className="icon-rubbery" />
-                        {isExpanded && <span>Dictate</span>}
+                        {isExpanded && <span>{t("input.dictate")}</span>}
                       </button>
                     )}
                     <button
                       onClick={submit}
                       disabled={!value.trim() && !pending}
                       className="btn-tactile ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 disabled:opacity-30 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                      title="Add task"
+                      title={t("input.addTask")}
                     >
                       <ArrowUp
                         size={20}

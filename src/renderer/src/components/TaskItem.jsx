@@ -35,6 +35,7 @@ import {
   ExternalLink,
   ImageOff,
 } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 const MODULE_LOAD_TIME = Date.now();
 
@@ -43,6 +44,7 @@ const MODULE_LOAD_TIME = Date.now();
  * task's current time without an effect having to copy it in.
  */
 function ReminderEditor({ initial, onSave, onClear, onCancel }) {
+  const t = useT();
   const [value, setValue] = useState(initial || "09:00");
   return (
     <div className="mt-2 flex items-center space-x-2">
@@ -51,19 +53,19 @@ function ReminderEditor({ initial, onSave, onClear, onCancel }) {
         onClick={() => onSave(value)}
         className="btn-tactile rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400"
       >
-        Save
+        {t("common.save")}
       </button>
       <button
         onClick={onClear}
         className="btn-tactile rounded bg-neutral-200 px-2 py-1 text-xs text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
       >
-        Clear
+        {t("common.clear")}
       </button>
       <button
         onClick={onCancel}
         className="btn-tactile rounded px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-300"
       >
-        Cancel
+        {t("common.cancel")}
       </button>
     </div>
   );
@@ -113,6 +115,7 @@ function TaskItem({
   // Draft state lives here so typing only re-renders this one row. The text
   // areas are uncontrolled: React does not need to see each keystroke, which
   // keeps editing at one frame even with hundreds of rows on screen.
+  const t = useT();
   const [editingSubtaskId, setEditingSubtaskId] = useState(null);
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [pendingSubtask, setPendingSubtask] = useState(null);
@@ -188,7 +191,7 @@ function TaskItem({
           openAttachment(att);
         }}
         className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
-        title="Open"
+        title={t("common.open")}
       >
         <ExternalLink size={size} className="icon-rubbery" />
       </button>
@@ -199,14 +202,14 @@ function TaskItem({
           onToast?.(
             res?.success
               ? res.mode === "path"
-                ? "File path copied"
-                : "File copied"
-              : "Copy failed",
+                ? t("toast.filePathCopied")
+                : t("toast.fileCopied")
+              : t("toast.copyFailed"),
             res?.success ? "info" : "error",
           );
         }}
         className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
-        title="Copy file"
+        title={t("common.copyFile")}
       >
         <Copy size={size} className="icon-rubbery" />
       </button>
@@ -216,7 +219,7 @@ function TaskItem({
           downloadAttachment(att);
         }}
         className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
-        title="Save as…"
+        title={t("common.saveAs")}
       >
         <Download size={size} className="icon-rubbery" />
       </button>
@@ -262,7 +265,7 @@ function TaskItem({
         className="ml-1 mr-1 mt-1 flex w-4 shrink-0 cursor-grab items-center justify-center text-neutral-400 opacity-0 transition-opacity active:cursor-grabbing group-hover/task:opacity-100 dark:text-neutral-500"
         onMouseEnter={() => setActiveHandleId(task.id)}
         onMouseLeave={() => setActiveHandleId(null)}
-        title="Drag to reorder or nest"
+        title={t("task.dragHint")}
       >
         <GripVertical size={14} />
       </div>
@@ -270,7 +273,7 @@ function TaskItem({
       <button
         onClick={() => toggleTask(task.id)}
         className="btn-tactile mr-3 mt-1 shrink-0 text-neutral-400 transition-colors hover:text-yellow-500 focus:outline-none dark:text-neutral-500 dark:hover:text-yellow-400"
-        title={task.completed ? "Mark as not done" : "Mark as done"}
+        title={task.completed ? t("task.markNotDone") : t("task.markDone")}
       >
         {task.completed ? (
           <CheckCircle2 size={18} className="icon-rubbery text-yellow-500" />
@@ -352,7 +355,7 @@ function TaskItem({
                       );
                     }}
                     className="btn-tactile ml-0.5 opacity-0 transition-opacity hover:text-red-500 group-hover/proj:opacity-100"
-                    title="Remove project"
+                    title={t("task.removeProject")}
                   >
                     <X size={10} className="icon-rubbery" />
                   </button>
@@ -402,7 +405,7 @@ function TaskItem({
                       removeAttachment(task.id);
                     }}
                     className="btn-tactile hover:text-red-500"
-                    title="Remove"
+                    title={t("task.remove")}
                   >
                     <X size={12} />
                   </button>
@@ -424,12 +427,14 @@ function TaskItem({
                         e.stopPropagation();
                         const res = await copyAttachmentImage(attachment);
                         onToast?.(
-                          res?.success ? "Image copied" : "Copy failed",
+                          res?.success
+                            ? t("toast.imageCopied")
+                            : t("toast.copyFailed"),
                           res?.success ? "info" : "error",
                         );
                       }}
                       className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80"
-                      title="Copy image"
+                      title={t("common.copyImage")}
                     >
                       <Copy size={14} className="icon-rubbery" />
                     </button>
@@ -439,7 +444,7 @@ function TaskItem({
                         onPreview(attachment);
                       }}
                       className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80"
-                      title="Preview"
+                      title={t("common.preview")}
                     >
                       <Maximize2 size={14} className="icon-rubbery" />
                     </button>
@@ -449,7 +454,7 @@ function TaskItem({
                         removeAttachment(task.id);
                       }}
                       className="btn-tactile rounded-md bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-red-500/90"
-                      title="Remove attachment"
+                      title={t("common.removeAttachment")}
                     >
                       <X size={14} className="icon-rubbery" />
                     </button>
@@ -472,7 +477,7 @@ function TaskItem({
                         removeAttachment(task.id);
                       }}
                       className="btn-tactile rounded-md bg-neutral-200 p-1 text-neutral-600 transition-colors hover:bg-red-100 hover:text-red-500 dark:bg-neutral-800 dark:text-neutral-300"
-                      title="Remove attachment"
+                      title={t("common.removeAttachment")}
                     >
                       <X size={12} className="icon-rubbery" />
                     </button>
@@ -600,13 +605,13 @@ function TaskItem({
                                   );
                                   onToast?.(
                                     res?.success
-                                      ? "Image copied"
-                                      : "Copy failed",
+                                      ? t("toast.imageCopied")
+                                      : t("toast.copyFailed"),
                                     res?.success ? "info" : "error",
                                   );
                                 }}
                                 className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md hover:bg-black/80"
-                                title="Copy image"
+                                title={t("common.copyImage")}
                               >
                                 <Copy size={10} className="icon-rubbery" />
                               </button>
@@ -616,7 +621,7 @@ function TaskItem({
                                   onPreview(st.attachment);
                                 }}
                                 className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md hover:bg-black/80"
-                                title="Preview"
+                                title={t("common.preview")}
                               >
                                 <Maximize2 size={10} className="icon-rubbery" />
                               </button>
@@ -646,7 +651,7 @@ function TaskItem({
                     <button
                       onClick={(e) => triggerDeleteSubtask(e, task.id, st.id)}
                       className="btn-tactile rounded p-0.5 text-neutral-400 transition-colors hover:text-red-500 focus:outline-none dark:text-neutral-500"
-                      title="Delete subtask"
+                      title={t("task.deleteSubtask")}
                     >
                       <X size={12} className="icon-rubbery" />
                     </button>
@@ -692,7 +697,7 @@ function TaskItem({
                   }
                 }}
                 onBlur={() => setTimeout(() => commitSubtask(false), 150)}
-                placeholder="New subtask…"
+                placeholder={t("task.newSubtask")}
                 className="w-full rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-[14px] text-neutral-800 focus:border-blue-500 focus:outline-none dark:border-neutral-700 dark:text-neutral-200"
               />
             </div>
@@ -711,7 +716,7 @@ function TaskItem({
                     setPendingSubtask(null);
                   }}
                   className="btn-tactile absolute -right-2 -top-2 rounded-full border border-neutral-200 bg-white p-0.5 text-neutral-500 shadow hover:text-red-500 dark:border-neutral-700 dark:bg-neutral-800"
-                  title="Remove attachment"
+                  title={t("common.removeAttachment")}
                 >
                   <X size={12} className="icon-rubbery" />
                 </button>
@@ -731,7 +736,7 @@ function TaskItem({
               >
                 <CornerDownRight size={13} className="icon-rubbery" />
                 <span className="text-[11px] font-medium leading-none">
-                  Subtask
+                  {t("task.subtask")}
                 </span>
               </button>
               <button
@@ -748,7 +753,7 @@ function TaskItem({
                   className="icon-rubbery"
                 />
                 <span className="text-[11px] font-medium leading-none">
-                  Priority
+                  {t("task.priority")}
                 </span>
               </button>
               <div className="relative">
@@ -764,7 +769,7 @@ function TaskItem({
                 >
                   <Hash size={13} className="icon-rubbery" />
                   <span className="text-[11px] font-medium leading-none">
-                    Project
+                    {t("task.project")}
                   </span>
                 </button>
                 {isAssigningProject && (
@@ -802,7 +807,7 @@ function TaskItem({
                         />
                         <input
                           autoFocus
-                          placeholder="New project…"
+                          placeholder={t("task.newProject")}
                           className="w-full bg-transparent text-xs font-medium text-neutral-800 outline-none placeholder:text-neutral-400 dark:text-neutral-200"
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && e.target.value.trim()) {
@@ -831,7 +836,7 @@ function TaskItem({
               >
                 <Bell size={13} className="icon-rubbery" />
                 <span className="text-[11px] font-medium leading-none">
-                  Remind
+                  {t("task.remind")}
                 </span>
               </button>
               <button
@@ -839,14 +844,16 @@ function TaskItem({
                   e.stopPropagation();
                   const res = await copyTask(task);
                   onToast?.(
-                    res?.withImage ? "Task and image copied" : "Task copied",
+                    res?.withImage
+                      ? t("toast.taskAndImageCopied")
+                      : t("toast.taskCopied"),
                   );
                 }}
                 className="btn-tactile flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
               >
                 <Copy size={13} className="icon-rubbery" />
                 <span className="text-[11px] font-medium leading-none">
-                  Copy
+                  {t("common.copy")}
                 </span>
               </button>
               {task.gcalLink && (
@@ -859,7 +866,7 @@ function TaskItem({
                     );
                   }}
                   className="btn-tactile flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60"
-                  title="View in Google Calendar"
+                  title={t("task.viewInCalendar")}
                 >
                   <Calendar size={13} className="icon-rubbery text-[#4285F4]" />
                 </button>
@@ -874,7 +881,7 @@ function TaskItem({
                     );
                   }}
                   className="btn-tactile flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-[11px] font-bold text-[#0052CC] shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60"
-                  title="Open in Jira"
+                  title={t("task.openInJira")}
                 >
                   Jira
                 </button>
@@ -886,7 +893,7 @@ function TaskItem({
             >
               <X size={13} className="icon-rubbery" />
               <span className="text-[11px] font-medium leading-none">
-                Delete
+                {t("common.delete")}
               </span>
             </button>
           </div>

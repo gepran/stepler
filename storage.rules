@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Attachments. Same rule as Firestore: your files, nobody else's, and a size
+// ceiling so a runaway upload cannot quietly become a bill.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/attachments/{fileId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

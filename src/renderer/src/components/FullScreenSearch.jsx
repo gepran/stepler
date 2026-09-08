@@ -14,6 +14,7 @@ import {
   Bell,
   Paperclip,
 } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 export default function FullScreenSearch({
   onClose,
@@ -26,6 +27,7 @@ export default function FullScreenSearch({
   onRemind,
   onAssignProject,
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef(null);
@@ -50,7 +52,7 @@ export default function FullScreenSearch({
       return {
         ...t,
         ymd: isToday ? null : ymd,
-        dateLabel: isToday ? "Today" : labelForYMD(ymd),
+        dateLabel: isToday ? t("app.today") : labelForYMD(ymd),
       };
     });
     return all
@@ -135,7 +137,7 @@ export default function FullScreenSearch({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search tasks, projects, files…"
+            placeholder={t("search.placeholder")}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -150,7 +152,7 @@ export default function FullScreenSearch({
         <div className="custom-scrollbar max-h-[60vh] flex-1 overflow-y-auto px-6">
           {query.trim() && searchResults.length === 0 && (
             <div className="mt-12 text-center text-lg text-neutral-400">
-              No tasks found
+              {t("search.noResults")}
             </div>
           )}
 
@@ -239,7 +241,7 @@ export default function FullScreenSearch({
                     >
                       <CornerDownRight size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">
-                        Subtask
+                        {t("task.subtask")}
                       </span>
                     </button>
                     <button
@@ -259,7 +261,7 @@ export default function FullScreenSearch({
                         className="icon-rubbery"
                       />
                       <span className="text-[11px] font-medium leading-none">
-                        Priority
+                        {t("task.priority")}
                       </span>
                     </button>
                     <button
@@ -271,7 +273,7 @@ export default function FullScreenSearch({
                     >
                       <Hash size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">
-                        Project
+                        {t("task.project")}
                       </span>
                     </button>
                     <button
@@ -283,7 +285,7 @@ export default function FullScreenSearch({
                     >
                       <Bell size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">
-                        Remind
+                        {t("task.remind")}
                       </span>
                     </button>
                     <button
@@ -295,7 +297,7 @@ export default function FullScreenSearch({
                     >
                       <Copy size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">
-                        Copy
+                        {t("common.copy")}
                       </span>
                     </button>
                     <button
@@ -307,7 +309,7 @@ export default function FullScreenSearch({
                     >
                       <X size={12} className="icon-rubbery" />
                       <span className="text-[11px] font-medium leading-none">
-                        Delete
+                        {t("common.delete")}
                       </span>
                     </button>
                   </div>
@@ -321,7 +323,7 @@ export default function FullScreenSearch({
       <button
         onClick={onClose}
         className="btn-tactile absolute right-8 top-8 rounded-full p-3 text-neutral-500 transition-colors hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50"
-        title="Close (Esc)"
+        title={t("search.close")}
       >
         <X size={24} className="icon-rubbery" />
       </button>

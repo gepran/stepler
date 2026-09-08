@@ -1,0 +1,63 @@
+rules_version = '2';
+
+// Stepler — every document lives under the user who owns it, and nothing is
+// readable across accounts. The client is never trusted to say who it is: the
+// only uid that matters is the one Firebase Auth put in the token.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Ordering between devices is decided by the server clock, not by whichever
+    // laptop has the most confident idea of what time it is.
+    function stampedByServer() {
+      return request.resource.data.updatedAt == request.time;
+    }
+
+    function isString(field, maxLen) {
+      return request.resource.data[field] is string
+        && request.resource.data[field].size() <= maxLen;
+    }
+
+    // A task carries a little more than the desktop version stores: the day it
+    // belongs to, a tombstone flag so a delete can travel between devices, and
+    // the server stamp above.
+    function validTask() {
+      return isString('id', 64)
+        && isString('text', 20000)
+        && isString('ymd', 10)
+        && request.resource.data.completed is bool
+        && request.resource.data.deleted is bool
+        && stampedByServer();
+    }
+
+    match /users/{uid} {
+      allow read: if signedInAs(uid);
+      allow write: if signedInAs(uid) && stampedByServer();
+
+      match /tasks/{taskId} {
+        allow read: if signedInAs(uid);
+        // A task is never really removed — it is tombstoned, so the other
+        // devices learn about the delete instead of resurrecting the task on
+        // their next sync.
+        allow create, update: if signedInAs(uid) && validTask();
+        allow delete: if signedInAs(uid);
+      }
+
+      // Settings and sync bookkeeping. Shape is left open on purpose; these
+      // documents are small and only ever read by their own owner.
+      match /meta/{docId} {
+        allow read: if signedInAs(uid);
+        allow write: if signedInAs(uid) && stampedByServer();
+      }
+    }
+
+    // Anything not matched above is denied, which is the Firestore default and
+    // is spelled out here so it stays a decision rather than an oversight.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

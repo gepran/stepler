@@ -23,8 +23,10 @@ import {
   Undo2,
   ImageOff,
 } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
+  const t = useT();
   const dt = formatTaskDateTime(task.id);
   const projects = task.projects || [];
 
@@ -102,12 +104,14 @@ function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
                       e.stopPropagation();
                       const res = await copyAttachmentImage(task.attachment);
                       onToast?.(
-                        res?.success ? "Image copied" : "Copy failed",
+                        res?.success
+                          ? t("toast.imageCopied")
+                          : t("toast.copyFailed"),
                         res?.success ? "info" : "error",
                       );
                     }}
                     className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md hover:bg-black/80"
-                    title="Copy image"
+                    title={t("common.copyImage")}
                   >
                     <Copy size={12} className="icon-rubbery" />
                   </button>
@@ -117,7 +121,7 @@ function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
                       onPreview(task.attachment);
                     }}
                     className="btn-tactile rounded-md bg-black/60 p-1 text-white backdrop-blur-md hover:bg-black/80"
-                    title="Preview"
+                    title={t("common.preview")}
                   >
                     <Maximize2 size={12} className="icon-rubbery" />
                   </button>
@@ -178,18 +182,20 @@ function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
           <button
             onClick={() => onReopen(task.id)}
             className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400"
-            title="Copy this note into Today so you can work on it again"
+            title={t("task.carryOver")}
           >
             <Undo2 size={12} className="icon-rubbery" />
             <span className="text-[11px] font-medium leading-none">
-              Move to Today
+              {t("task.moveToToday")}
             </span>
           </button>
           <button
             onClick={async () => {
               const res = await copyTask(task);
               onToast?.(
-                res?.withImage ? "Task and image copied" : "Task copied",
+                res?.withImage
+                  ? t("toast.taskAndImageCopied")
+                  : t("toast.taskCopied"),
               );
             }}
             className="btn-tactile flex items-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400"

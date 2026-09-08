@@ -27,9 +27,10 @@ import {
 } from "./lib/format";
 import { ipc, persistAttachment } from "./lib/attachments";
 import {
-  currentLocale,
+  formatDate,
   getLanguage,
   setLanguage,
+  translatePlural as tPlural,
   useLanguage,
   useT,
 } from "./lib/i18n";
@@ -99,7 +100,7 @@ function DayChip({ chip, onClick }) {
       }`}
     >
       <span className="text-[9px] font-bold uppercase leading-none tracking-wider text-neutral-400 transition-colors group-hover:text-orange-500/80 dark:text-neutral-500">
-        {d.toLocaleString(currentLocale(), { month: "short" })}
+        {formatDate(d, { month: "short" })}
       </span>
       <span className="text-sm font-black leading-tight text-neutral-800 transition-colors group-hover:text-orange-500 dark:text-neutral-100">
         {d.getDate()}
@@ -187,7 +188,7 @@ export default function App() {
 
   const formattedDate = useMemo(
     () =>
-      new Date().toLocaleDateString(currentLocale(), {
+      formatDate(new Date(), {
         weekday: "long",
         month: "long",
         day: "numeric",
@@ -621,8 +622,7 @@ export default function App() {
       jiraSprintId,
     }) => {
       const stored = attachment ? await persistAttachment(attachment) : null;
-      if (attachment && !stored)
-        toast(t("toast.attachmentFailed"), "error");
+      if (attachment && !stored) toast(t("toast.attachmentFailed"), "error");
       const body =
         (text || "").trim() ||
         (stored && stored.type !== "image" ? stored.name : "");
@@ -672,10 +672,7 @@ export default function App() {
             }
             // Silence here is what makes calendar sync look broken: the task
             // appears, no event does, and nothing says why.
-            toast(
-              res?.error || "Could not add this to Google Calendar",
-              "error",
-            );
+            toast(res?.error || t("toast.gcalFailed"), "error");
           })
           .catch((err) =>
             toast(err?.message || t("toast.gcalUnreachable"), "error"),
@@ -717,14 +714,25 @@ export default function App() {
               );
               // The issue exists either way; say so if only the sprint failed.
               if (res.sprintError)
-                toast(`${res.key} created, but ${res.sprintError}`, "error");
+                toast(
+                  t("toast.jiraSprint", {
+                    key: res.key,
+                    error: res.sprintError,
+                  }),
+                  "error",
+                );
             } else
-              toast(`Jira: ${res?.error || "could not create issue"}`, "error");
+              toast(
+                t("toast.jiraFailed", {
+                  error: res?.error || t("toast.jiraNoIssue"),
+                }),
+                "error",
+              );
           })
           .catch(() => {});
       }
     },
-    [toast, rememberProjects],
+    [toast, rememberProjects, t],
   );
 
   const saveEdit = useCallback((id, nextText) => {
@@ -1251,7 +1259,7 @@ export default function App() {
     if (result?.success) toast(t("toast.exported"));
     else if (result && !result.canceled)
       toast(result.error || t("toast.exportFailed"), "error");
-  }, [allDays, todayYMD, deletedTasks, toast]);
+  }, [allDays, todayYMD, deletedTasks, toast, t]);
 
   const handleImportTasks = useCallback(async () => {
     const result = await ipc?.invoke("import-tasks");
@@ -1276,10 +1284,13 @@ export default function App() {
       ];
     });
     setTimeout(
-      () => toast(added ? `Imported ${added} tasks` : "Nothing new to import"),
+      () =>
+        toast(
+          added ? tPlural("toast.imported", added) : t("toast.nothingToImport"),
+        ),
       0,
     );
-  }, [toast]);
+  }, [toast, t]);
 
   // ------------------------- render -------------------------
 
@@ -1394,9 +1405,7 @@ export default function App() {
                 className="flex items-center gap-2 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
               >
                 <span>
-                  {showCompleted
-                    ? t("app.hideCompleted")
-                    : t("app.showAll")}
+                  {showCompleted ? t("app.hideCompleted") : t("app.showAll")}
                 </span>
                 <div
                   className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
@@ -1413,8 +1422,10 @@ export default function App() {
                 </div>
               </button>
               <div className="border-l border-neutral-300 pl-3 text-sm font-medium text-neutral-400 dark:border-neutral-700 dark:text-neutral-500">
-                {todayTasks.filter((t) => t.completed).length} /{" "}
-                {todayTasks.length} Today
+                {t("app.counter", {
+                  done: todayTasks.filter((task) => task.completed).length,
+                  total: todayTasks.length,
+                })}
               </div>
             </div>
           </div>
@@ -1460,7 +1471,7 @@ export default function App() {
                     onClick={showOlderWeek}
                     className="btn-tactile rounded-full border border-neutral-200 bg-white/70 px-4 py-1.5 text-xs font-medium text-neutral-500 shadow-sm transition-colors hover:text-neutral-800 dark:border-neutral-700 dark:bg-neutral-800/70 dark:text-neutral-400"
                   >
-                    Show the previous week
+                    {t("app.showPreviousWeek")}
                   </button>
                 </div>
               )}
@@ -1504,7 +1515,7 @@ export default function App() {
                   <div className="absolute left-[4px] top-[18px] z-10 h-2 w-2 rounded-full bg-neutral-600 ring-[5px] ring-white dark:bg-neutral-300 dark:ring-neutral-900" />
                   <div className="pl-8">
                     <h2 className="text-lg font-bold leading-none text-neutral-900 dark:text-neutral-100">
-                      Today
+                      {t("app.today")}
                     </h2>
                     <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
                       {formattedDate}

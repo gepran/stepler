@@ -22,6 +22,13 @@
 - **Trash and history.** Restore deleted tasks, or pull a finished note from any past day back into today.
 - **Export and import.** One portable JSON file with the attachments embedded.
 - **Optional integrations.** Google Calendar, Jira and Apple Reminders — all off until you turn them on.
+- **English, ქართული and Русский.** Switch the interface language in Settings → General.
+
+## 📥 Installing on Windows
+
+The first launch shows a blue **“Windows protected your PC”** screen: click **More info**, then **Run anyway**.
+
+Microsoft Defender SmartScreen blocks anything it has no reputation record for, and Stepler is not signed with a paid Microsoft certificate. Every release is built from the source in this repository, so you can read the code — or build it yourself with `npm run build:win` — before running it.
 
 ## 🛠 Project setup
 

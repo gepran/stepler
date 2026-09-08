@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { X, Copy, Download, ExternalLink, FileText } from "lucide-react";
+import { useT } from "../lib/i18n";
 import {
   attachmentSrc,
   attachmentBlob,
@@ -15,6 +16,7 @@ export default function FilePreviewModal({
   setPreviewFile,
   onToast,
 }) {
+  const t = useT();
   const [pdfUrl, setPdfUrl] = useState(null);
 
   const isPDF = !!previewFile?.name?.toLowerCase().endsWith(".pdf");
@@ -56,12 +58,12 @@ export default function FilePreviewModal({
                 ? await copyAttachmentImage(previewFile)
                 : await copyAttachmentFile(previewFile);
               onToast?.(
-                res?.success ? "Copied" : "Copy failed",
+                res?.success ? t("toast.copied") : t("toast.copyFailed"),
                 res?.success ? "info" : "error",
               );
             }}
             className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
-            title={isImage ? "Copy image" : "Copy file"}
+            title={isImage ? t("common.copyImage") : t("common.copyFile")}
           >
             <Copy size={20} />
           </button>
@@ -71,14 +73,14 @@ export default function FilePreviewModal({
               downloadAttachment(previewFile);
             }}
             className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
-            title="Save as…"
+            title={t("common.saveAs")}
           >
             <Download size={20} />
           </button>
           <button
             onClick={() => setPreviewFile(null)}
             className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
-            title="Close (Esc)"
+            title={t("search.close")}
           >
             <X size={20} />
           </button>
@@ -112,7 +114,7 @@ export default function FilePreviewModal({
                   {previewFile.name}
                 </h3>
                 <p className="text-sm text-neutral-400">
-                  Preview is not available for this file type
+                  {t("file.noPreview")}
                 </p>
               </div>
               <button
@@ -120,7 +122,7 @@ export default function FilePreviewModal({
                 className="btn-tactile flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-200"
               >
                 <ExternalLink size={18} />
-                Open in system app
+                {t("file.openInSystem")}
               </button>
             </div>
           )}

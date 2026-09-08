@@ -1,6 +1,7 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
 import { Settings, Trash2, Layers } from "lucide-react";
+import { translatePlural as tPlural, useT } from "../lib/i18n";
 import SteplerLogo from "./SteplerLogo";
 
 export default function Sidebar({
@@ -13,6 +14,7 @@ export default function Sidebar({
   selectedProject,
   onProjectClick,
 }) {
+  const t = useT();
   const [isHovered, setIsHovered] = useState(false);
   const isExpanded = show || isHovered;
 
@@ -48,7 +50,7 @@ export default function Sidebar({
 
         <div className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
           <div className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 mb-3 flex items-center uppercase tracking-wider">
-            <Layers size={13} className="mr-2" /> Projects
+            <Layers size={13} className="mr-2" /> {t("sidebar.projects")}
           </div>
 
           <div className="space-y-2 pb-6">
@@ -61,7 +63,9 @@ export default function Sidebar({
               }`}
             >
               <Layers size={16} className="mr-3" />
-              <span className="text-sm font-medium">All Projects</span>
+              <span className="text-sm font-medium">
+                {t("sidebar.allProjects")}
+              </span>
               <span className="ml-auto text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded text-neutral-500">
                 {tasks.length}
               </span>
@@ -95,7 +99,7 @@ export default function Sidebar({
             })}
             {availableProjects.length === 0 && (
               <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-                No projects found.
+                {t("sidebar.noProjects")}
               </div>
             )}
           </div>
@@ -141,7 +145,7 @@ export default function Sidebar({
                 ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-900/20 dark:border-blue-800/50 text-blue-600 dark:text-blue-400"
                 : "bg-neutral-100/50 dark:bg-neutral-800/30 border-transparent text-neutral-500 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-600"
             }`}
-            title="All Projects"
+            title={t("sidebar.allProjects")}
           >
             <Layers size={18} />
           </div>
@@ -161,7 +165,9 @@ export default function Sidebar({
                     ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-900/20 dark:border-blue-800/50 text-blue-600 dark:text-blue-400"
                     : "bg-neutral-100/50 dark:bg-neutral-800/30 border-transparent text-neutral-500 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-600"
                 }`}
-                title={`${project.name} - ${projectTasksCount} tasks`}
+                title={tPlural("sidebar.projectTasks", projectTasksCount, {
+                  name: project.name,
+                })}
               >
                 <div className="w-2.5 h-2.5 rounded-full bg-violet-500" />
                 {projectTasksCount > 0 && (
@@ -177,7 +183,7 @@ export default function Sidebar({
           <button
             onClick={onTrashClick}
             className="btn-tactile relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            title="Trash"
+            title={t("sidebar.trash")}
           >
             <Trash2 size={18} className="icon-rubbery" />
             {deletedCount > 0 && (
@@ -189,7 +195,7 @@ export default function Sidebar({
           <button
             onClick={onSettingsClick}
             className="btn-tactile p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            title="Settings"
+            title={t("common.settings")}
           >
             <Settings size={18} className="icon-rubbery" />
           </button>

@@ -377,6 +377,56 @@
       }
 
       /* ---------------------------------------------------------------
+         First-run note. Windows SmartScreen blocks anything it has not
+         seen before, and a red full-screen warning reads like a virus
+         alert — so the page says what to expect before the download does.
+      --------------------------------------------------------------- */
+      .firstrun {
+        max-width: 620px;
+        margin: 22px auto 0;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--bg-card);
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--text-muted);
+        text-align: left;
+      }
+
+      .firstrun summary {
+        cursor: pointer;
+        font-weight: 560;
+        color: var(--text);
+        list-style: none;
+      }
+
+      .firstrun summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .firstrun summary::before {
+        content: "▸";
+        display: inline-block;
+        width: 1em;
+        color: var(--text-faint);
+        transition: transform 0.15s ease;
+      }
+
+      .firstrun[open] summary::before {
+        transform: rotate(90deg);
+      }
+
+      .firstrun p {
+        margin: 10px 0 0 1em;
+      }
+
+      .firstrun b {
+        color: var(--text);
+        font-weight: 580;
+      }
+
+      /* ---------------------------------------------------------------
          Screenshot
       --------------------------------------------------------------- */
       .showcase {
@@ -868,7 +918,7 @@
           <div class="actions">
             <a
               class="btn btn-primary"
-              href="https://github.com/gepran/stepler/releases/download/v1.3.1/stepler-1.3.1.dmg"
+              href="https://github.com/gepran/stepler/releases/download/v1.3.2/stepler-1.3.2.dmg"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path
@@ -880,7 +930,7 @@
 
             <a
               class="btn btn-ghost"
-              href="https://github.com/gepran/stepler/releases/download/v1.3.1/stepler-1.3.1-setup.exe"
+              href="https://github.com/gepran/stepler/releases/download/v1.3.2/stepler-1.3.2-setup.exe"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path
@@ -892,7 +942,7 @@
           </div>
 
           <p class="fineprint">
-            <b>v1.3.1</b> &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; free and
+            <b>v1.3.2</b> &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; free and
             open source &nbsp;·&nbsp;
             <a
               href="https://github.com/gepran/stepler/releases"
@@ -901,6 +951,21 @@
               >all releases</a
             >
           </p>
+
+          <details class="firstrun">
+            <summary>Windows warns you the first time — this is expected</summary>
+            <p>
+              Windows shows a blue <b>“Windows protected your PC”</b> screen for
+              any app it has not seen before. Click <b>More info</b>, then
+              <b>Run anyway</b>, and the installer carries on as normal.
+            </p>
+            <p>
+              Stepler is not yet signed with a paid Microsoft certificate, so
+              SmartScreen has no record of it. Every release is built from the
+              public source in this repository — you can check the code, or
+              build it yourself, before running it.
+            </p>
+          </details>
         </section>
 
         <!-- Screenshot -->
@@ -1150,7 +1215,7 @@
             <div class="actions reveal">
               <a
                 class="btn btn-primary"
-                href="https://github.com/gepran/stepler/releases/download/v1.3.1/stepler-1.3.1.dmg"
+                href="https://github.com/gepran/stepler/releases/download/v1.3.2/stepler-1.3.2.dmg"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path
@@ -1162,7 +1227,7 @@
 
               <a
                 class="btn btn-ghost"
-                href="https://github.com/gepran/stepler/releases/download/v1.3.1/stepler-1.3.1-setup.exe"
+                href="https://github.com/gepran/stepler/releases/download/v1.3.2/stepler-1.3.2-setup.exe"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path
@@ -1172,6 +1237,11 @@
                 Download for Windows
               </a>
             </div>
+
+            <p class="fineprint reveal">
+              On Windows, SmartScreen asks first: click <b>More info</b> →
+              <b>Run anyway</b>.
+            </p>
           </div>
         </section>
       </main>

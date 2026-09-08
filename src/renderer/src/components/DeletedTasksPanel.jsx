@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import PropTypes from "prop-types";
 import { X, Undo2, Trash2, AlertCircle } from "lucide-react";
+import { formatDate, translatePlural as tPlural, useT } from "../lib/i18n";
 
 export default function DeletedTasksPanel({
   deletedTasks,
@@ -10,6 +11,7 @@ export default function DeletedTasksPanel({
   onClearAll,
   formatTaskText,
 }) {
+  const t = useT();
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === "Escape") onClose();
@@ -22,13 +24,12 @@ export default function DeletedTasksPanel({
     const d = new Date(ts);
     const now = new Date();
     const diff = now - d;
-    if (diff < 60_000) return "just now";
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    if (diff < 60_000) return t("trash.justNow");
+    if (diff < 3_600_000)
+      return t("trash.minutesAgo", { count: Math.floor(diff / 60_000) });
+    if (diff < 86_400_000)
+      return t("trash.hoursAgo", { count: Math.floor(diff / 3_600_000) });
+    return formatDate(d, { month: "short", day: "numeric" });
   };
 
   return (
@@ -42,11 +43,10 @@ export default function DeletedTasksPanel({
             </div>
             <div>
               <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-                Deleted Tasks
+                {t("trash.title")}
               </h2>
               <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                {deletedTasks.length}{" "}
-                {deletedTasks.length === 1 ? "task" : "tasks"} in trash
+                {tPlural("trash.inTrash", deletedTasks.length)}
               </p>
             </div>
           </div>
@@ -63,10 +63,8 @@ export default function DeletedTasksPanel({
           {deletedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-neutral-400 dark:text-neutral-600">
               <Trash2 size={36} className="mb-3 opacity-30" />
-              <p className="text-sm font-medium">Trash is empty</p>
-              <p className="mt-1 text-xs opacity-60">
-                Deleted tasks will appear here
-              </p>
+              <p className="text-sm font-medium">{t("trash.empty")}</p>
+              <p className="mt-1 text-xs opacity-60">{t("trash.emptyHint")}</p>
             </div>
           ) : (
             <div className="divide-y divide-neutral-100 dark:divide-neutral-800/60">
@@ -81,17 +79,19 @@ export default function DeletedTasksPanel({
                     </span>
                     <div className="mt-1 flex items-center gap-2">
                       <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
-                        Deleted {formatDeletedTime(task.deletedAt)}
+                        {t("trash.deletedAt", {
+                          when: formatDeletedTime(task.deletedAt),
+                        })}
                       </span>
                       {task.completed && (
                         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                          Completed
+                          {t("trash.completed")}
                         </span>
                       )}
                       {task.subtasks && task.subtasks.length > 0 && (
                         <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
-                          · {task.subtasks.length}{" "}
-                          {task.subtasks.length === 1 ? "subtask" : "subtasks"}
+                          ·{" "}
+                          {tPlural("trash.subtaskCount", task.subtasks.length)}
                         </span>
                       )}
                     </div>
@@ -100,14 +100,14 @@ export default function DeletedTasksPanel({
                     <button
                       onClick={() => onRestore(task.id)}
                       className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-blue-50 hover:text-blue-500 dark:text-neutral-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
-                      title="Restore task"
+                      title={t("trash.restore")}
                     >
                       <Undo2 size={15} />
                     </button>
                     <button
                       onClick={() => onPermanentDelete(task.id)}
                       className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-neutral-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"
-                      title="Delete forever"
+                      title={t("trash.deleteForever")}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -123,13 +123,13 @@ export default function DeletedTasksPanel({
           <div className="flex items-center justify-between border-t border-neutral-200 px-6 py-3 dark:border-neutral-800">
             <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
               <AlertCircle size={12} />
-              <span>Deleted tasks persist until cleared</span>
+              <span>{t("trash.persistNote")}</span>
             </div>
             <button
               onClick={onClearAll}
               className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              Clear All
+              {t("trash.clearAll")}
             </button>
           </div>
         )}

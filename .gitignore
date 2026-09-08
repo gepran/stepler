@@ -33,3 +33,18 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
+.gstack/
+
+# Web build output
+dist-web/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Stale esbuild bundle at the repo root — build output, not source
+/index.js
+
+# Personal agent permissions, not shared
+.claude/settings.local.json

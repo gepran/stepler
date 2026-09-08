@@ -17,6 +17,7 @@ import {
   Tray,
 } from "electron";
 import { join, basename, extname } from "path";
+import { translations } from "../renderer/src/lib/translations";
 import { pathToFileURL } from "url";
 import {
   readFileSync,
@@ -803,15 +804,25 @@ async function toggleWindowFromHotkey() {
 
 // --------------- macOS application menu ---------------
 
+/**
+ * The window is translated in the renderer, but the menu bar and the tray are
+ * built here — so the main process reads the same dictionary rather than
+ * keeping a second copy of these nine labels.
+ */
+function menuText(key) {
+  const lang = loadSettings().language;
+  return translations[lang]?.menu?.[key] ?? translations.en.menu[key];
+}
+
 function buildMenu() {
   const template = [
     {
       label: app.name,
       submenu: [
-        { label: "About Stepler", role: "about" },
+        { label: menuText("about"), role: "about" },
         { type: "separator" },
         {
-          label: "Settings…",
+          label: menuText("settings"),
           accelerator: "CmdOrCtrl+,",
           click: () => mainWindow?.webContents.send("open-settings"),
         },
@@ -823,17 +834,17 @@ function buildMenu() {
         { role: "quit" },
       ],
     },
-    { label: "Edit", role: "editMenu" },
+    { label: menuText("edit"), role: "editMenu" },
     {
-      label: "View",
+      label: menuText("view"),
       submenu: [
         {
-          label: "Search Tasks",
+          label: menuText("searchTasks"),
           accelerator: "CmdOrCtrl+F",
           click: () => mainWindow?.webContents.send("open-search"),
         },
         {
-          label: "New Task",
+          label: menuText("newTask"),
           accelerator: "CmdOrCtrl+N",
           click: () => mainWindow?.webContents.send("focus-input"),
         },
@@ -850,9 +861,28 @@ function buildMenu() {
           : []),
       ],
     },
-    { label: "Window", submenu: [{ role: "minimize" }, { role: "close" }] },
+    {
+      label: menuText("window"),
+      submenu: [{ role: "minimize" }, { role: "close" }],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function applyTrayMenu() {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: menuText("showStepler"), click: showWindow },
+      { type: "separator" },
+      {
+        label: menuText("quit"),
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
 }
 
 function buildTray() {
@@ -863,19 +893,7 @@ function buildTray() {
       .resize({ width: 16, height: 16 });
     tray = new Tray(img);
     tray.setToolTip("Stepler");
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "Show Stepler", click: showWindow },
-        { type: "separator" },
-        {
-          label: "Quit",
-          click: () => {
-            app.isQuitting = true;
-            app.quit();
-          },
-        },
-      ]),
-    );
+    applyTrayMenu();
     tray.on("click", toggleWindow);
   } catch (err) {
     console.warn("Tray unavailable:", err.message);
@@ -1492,6 +1510,10 @@ function setupIPC() {
     let hotkeyOk = true;
     if (clean.hotkey !== undefined) hotkeyOk = registerHotkey(settings.hotkey);
     if (clean.theme !== undefined) applyTheme(settings.theme);
+    if (clean.language !== undefined) {
+      buildMenu();
+      applyTrayMenu();
+    }
     return { ...publicSettings(settings), hotkeyOk };
   });
 

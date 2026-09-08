@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "stepler-490308"
+  },
+  "targets": {
+    "stepler-490308": {
+      "hosting": {
+        "web": ["steplerapp"]
+      }
+    }
+  }
+}
