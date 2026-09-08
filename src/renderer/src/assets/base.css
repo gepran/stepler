@@ -119,6 +119,37 @@
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Auto-growing text areas without JavaScript. Measuring scrollHeight on every
+   keystroke forced a full layout of the timeline and was the single biggest
+   source of typing lag. */
+.autosize {
+  field-sizing: content;
+}
+
+/* Connector lines that tie subtasks back to their parent task, drawn in the
+   same column as the parent's checkbox. */
+:root {
+  --tree-line: #d4d4d4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tree-line: #3f3f3f;
+  }
+}
+
+.tree-line {
+  background-color: var(--tree-line);
+}
+
+/* The last child turns a corner instead of meeting a T-junction, so it gets a
+   rounded elbow rather than two square segments. */
+.tree-corner {
+  border-bottom: 1px solid var(--tree-line);
+  border-left: 1px solid var(--tree-line);
+  border-bottom-left-radius: 8px;
 }

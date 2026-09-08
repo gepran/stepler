@@ -1,152 +1,137 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { X, Copy, Download, ExternalLink, FileText } from "lucide-react";
+import {
+  attachmentSrc,
+  attachmentBlob,
+  copyAttachmentImage,
+  copyAttachmentFile,
+  downloadAttachment,
+  openAttachment,
+} from "../lib/attachments";
 
 export default function FilePreviewModal({
   previewFile,
   setPreviewFile,
-  handleCopyImage,
-  handleCopyFile,
-  handleOpenAttachment,
-  handleDownloadAttachment,
+  onToast,
 }) {
-  const [blobUrl, setBlobUrl] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+
+  const isPDF = !!previewFile?.name?.toLowerCase().endsWith(".pdf");
 
   useEffect(() => {
+    if (!previewFile || !isPDF) return undefined;
     let active = true;
-    let currentUrl = null;
-
-    if (previewFile && previewFile.name.toLowerCase().endsWith(".pdf")) {
-      fetch(previewFile.url)
-        .then((res) => res.blob())
-        .then((blob) => {
-          if (!active) return;
-          currentUrl = URL.createObjectURL(blob);
-          setBlobUrl(currentUrl);
-        })
-        .catch((err) => console.error("PDF Preview Error:", err));
-    }
-
+    let objectUrl = null;
+    // The PDF plugin needs a blob URL; the attachment scheme is not something
+    // the page itself is allowed to fetch under the CSP.
+    attachmentBlob(previewFile).then((blob) => {
+      if (!active || !blob) return;
+      objectUrl = URL.createObjectURL(blob);
+      setPdfUrl(objectUrl);
+    });
     return () => {
       active = false;
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
-      setBlobUrl(null);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setPdfUrl(null);
     };
-  }, [previewFile]);
+  }, [previewFile, isPDF]);
 
   if (!previewFile) return null;
 
-  const { url, name, type } = previewFile;
-  const isImage = type === "image";
-  const isPDF = name.toLowerCase().endsWith(".pdf");
+  const isImage = previewFile.type === "image";
+  const src = attachmentSrc(previewFile);
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+      className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 p-10 backdrop-blur-sm"
       onClick={() => setPreviewFile(null)}
     >
-      <div className="relative flex max-h-full max-w-full flex-col items-center">
-        {/* Header Actions */}
+      <div className="relative flex h-full max-h-full w-full max-w-5xl flex-col items-center">
         <div className="absolute right-0 top-0 z-10 flex gap-2 p-4">
-          {isImage ? (
-            <button
-              onClick={(e) => handleCopyImage(e, url)}
-              className="rounded-md bg-black/50 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-              title="Copy Image"
-            >
-              <Copy size={20} />
-            </button>
-          ) : (
-            <button
-              onClick={(e) => handleCopyFile(e, previewFile)}
-              className="rounded-md bg-black/50 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-              title="Copy File"
-            >
-              <Copy size={20} />
-            </button>
-          )}
           <button
-            onClick={(e) => handleDownloadAttachment(e, previewFile)}
-            className="rounded-md bg-black/50 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-            title="Download"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const res = isImage
+                ? await copyAttachmentImage(previewFile)
+                : await copyAttachmentFile(previewFile);
+              onToast?.(
+                res?.success ? "Copied" : "Copy failed",
+                res?.success ? "info" : "error",
+              );
+            }}
+            className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            title={isImage ? "Copy image" : "Copy file"}
+          >
+            <Copy size={20} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadAttachment(previewFile);
+            }}
+            className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            title="Save as…"
           >
             <Download size={20} />
           </button>
           <button
             onClick={() => setPreviewFile(null)}
-            className="rounded-md bg-black/50 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/80 dark:bg-black/80 dark:hover:bg-black"
-            title="Close Preview"
+            className="btn-tactile rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            title="Close (Esc)"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
-        <div 
-          className="flex max-h-[90vh] max-w-[90vw] items-center justify-center overflow-hidden rounded-xl bg-white/5 shadow-2xl backdrop-blur-sm"
+        <div
+          className="flex h-full w-full items-center justify-center pt-16"
           onClick={(e) => e.stopPropagation()}
         >
           {isImage ? (
             <img
-              src={url}
-              alt={name}
-              className="max-h-full max-w-full object-contain"
+              src={src}
+              alt={previewFile.name}
+              className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
             />
           ) : isPDF ? (
-            <embed
-              src={blobUrl || url}
-              type="application/pdf"
-              width="100%"
-              height="100%"
-              className="h-[85vh] w-[80vw] rounded-lg border-none bg-white"
-            />
+            pdfUrl ? (
+              <embed
+                src={pdfUrl}
+                type="application/pdf"
+                className="h-full w-full rounded-lg"
+              />
+            ) : (
+              <div className="text-sm text-neutral-400">Loading preview…</div>
+            )
           ) : (
             <div className="flex flex-col items-center gap-6 p-12 text-center">
-              <div className="relative">
-                <div className="absolute -inset-4 rounded-full bg-blue-500/20 blur-xl" />
-                <FileText size={80} className="relative text-blue-500" />
-              </div>
+              <FileText size={72} className="text-blue-500" />
               <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-white">{name}</h3>
+                <h3 className="text-xl font-semibold text-white">
+                  {previewFile.name}
+                </h3>
                 <p className="text-sm text-neutral-400">
-                  Preview not available for this file type
+                  Preview is not available for this file type
                 </p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={(e) => handleOpenAttachment(e, previewFile)}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95"
-                >
-                  <ExternalLink size={18} />
-                  Open in System
-                </button>
-              </div>
+              <button
+                onClick={() => openAttachment(previewFile)}
+                className="btn-tactile flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-200"
+              >
+                <ExternalLink size={18} />
+                Open in system app
+              </button>
             </div>
           )}
         </div>
-        
-        {/* Footer Info (for non-images/PDFs) */}
-        {!isImage && !isPDF && (
-          <div className="mt-4 text-xs font-medium text-neutral-500">
-            Press Esc to close
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
 FilePreviewModal.propTypes = {
-  previewFile: PropTypes.shape({
-    url: PropTypes.string.isRequired,
-    name: PropTypes.string.isRequired,
-    type: PropTypes.string.isRequired,
-  }),
+  previewFile: PropTypes.object,
   setPreviewFile: PropTypes.func.isRequired,
-  handleCopyImage: PropTypes.func.isRequired,
-  handleCopyFile: PropTypes.func.isRequired,
-  handleOpenAttachment: PropTypes.func.isRequired,
-  handleDownloadAttachment: PropTypes.func.isRequired,
+  onToast: PropTypes.func,
 };

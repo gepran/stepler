@@ -1,108 +1,98 @@
 <h1 align="center">
-  <img src="icon.png" alt="Stepler Logo" width="120" />
+  <img src="docs/icon.png" alt="Stepler" width="120" />
   <br>
   Stepler
 </h1>
 
 <p align="center">
-  <strong>A minimal daily task timeline application for macOS and Windows.</strong>
+  <strong>A fast daily task timeline for macOS and Windows.</strong>
 </p>
 
 <p align="center">
-  Built with Electron, React, Vite, and Tailwind CSS.
+  Built with Electron, React, Vite and Tailwind CSS.
 </p>
 
 ## ✨ Features
 
-- **Daily Task Timeline:** Organize your tasks seamlessly on a vertical timeline.
-- **Subtasks & Attachments:** Break tasks into smaller subtasks, attach images by pasting from clipboard, and quickly sort completed tasks.
-- **Multiple Projects:** Support for various projects to switch contexts effortlessly.
-- **Trash & History:** Accidentally deleted a task? Easily restore it from the Deleted Tasks history panel.
-- **Export & Import:** Export all or parts of your task history to JSON, and import them freely across devices.
-- **Advanced Search:** Robust search overlay with click-to-jump task navigation, keyboard shortcuts, and quick action buttons.
-- **Tactile UI Animations:** Smooth jelly-like micro-animations, rubbery buttons, and refined subtask transitions for an engaging user experience.
-- **Auto-Updates:** Built-in background update checker keeps you on the latest version seamlessly.
+- **Daily timeline.** Today's work sits at the bottom next to the composer; finished days roll into history above it.
+- **Quick capture.** A global shortcut brings the window up from anywhere, Esc sends it away, and `⌘N` / `⌘F` jump to the composer and to search.
+- **Subtasks, projects, dates and reminders.** Tag a note with a project, give it a day, set a time and get a notification.
+- **Attachments.** Paste or attach images and files. They are stored as real files in the app's data folder and can be copied, opened or saved anywhere.
+- **Search everything.** Text, subtasks, project names and attachment file names, with keyboard navigation.
+- **Trash and history.** Restore deleted tasks, or pull a finished note from any past day back into today.
+- **Export and import.** One portable JSON file with the attachments embedded.
+- **Optional integrations.** Google Calendar, Jira and Apple Reminders — all off until you turn them on.
 
-## 🛠 Project Setup
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/)
-- npm
-
-### Installation
-
-Clone the repository and install the dependencies:
+## 🛠 Project setup
 
 ```bash
 npm install
-```
-
-### Development
-
-To start the local development server with hot-reloading:
-
-```bash
 npm run dev
 ```
 
-### Building the App
-
-Generate distributable binaries for your operating system:
+Build a distributable:
 
 ```bash
-# For macOS
-npm run build:mac
-
-# For Windows
-npm run build:win
-
-# For Linux
-npm run build:linux
+npm run build:mac    # or build:win / build:linux
 ```
 
-## 💻 Command Line Interface (CLI)
+## 💾 Where your data lives
 
-Stepler includes a built-in CLI utility (`stepler-cli.js`) to interact with your local task backend directly from the terminal.
+| File | What it is |
+| --- | --- |
+| `stepler-data.json` | Tasks, history and trash |
+| `stepler-data.backup.json` | The previous good copy, refreshed at every successful start |
+| `attachments/` | Every image and file you attached |
+| `stepler-settings.json` | Preferences, including the local API token |
 
-### Usage Modes
+On macOS these sit in `~/Library/Application Support/stepler`, on Windows in `%APPDATA%\stepler`, and on Linux in `~/.config/stepler`.
 
-You can use the CLI in either **one-shot mode** or **interactive REPL mode**.
+Writes are atomic and batched, so a crash or a forced quit cannot leave the data file half written. If it is ever unreadable anyway, Stepler falls back to the backup on the next start.
 
-#### One-Shot Mode
+**Upgrading from an older version:** attachments used to be stored inline as base64 inside `stepler-data.json`. The first launch after this release moves them into `attachments/` automatically and keeps the old file as `stepler-data.backup.json`. Nothing is lost, and the data file shrinks from tens of megabytes to a few hundred kilobytes.
 
-Execute single commands directly from your shell.
+## 💻 Command line
+
+Stepler exposes a small HTTP API on `127.0.0.1` for the bundled CLI. It requires a token that is written to `stepler-api.json` in the data folder, so only programs running as you can reach it; requests coming from a browser are refused outright. Turn the whole thing off under **Settings → Integrations → Command line access**.
 
 ```bash
-# List all tasks
-node stepler-cli.js list
-
-# Add a new task
-node stepler-cli.js add "Review pull requests"
-
-# Remove a task by ID
-node stepler-cli.js remove <task_id>
+node stepler-cli.mjs list
+node stepler-cli.mjs add "Review pull requests"
+node stepler-cli.mjs remove <task_id>
+node stepler-cli.mjs            # interactive
 ```
 
-#### Interactive REPL Mode
+`STEPLER_URL` and `STEPLER_TOKEN` override the auto-detected connection.
 
-Start an interactive session keeping the CLI open for repeated commands:
+## 🔌 Integrations
 
-```bash
-node stepler-cli.js
-```
+Google Calendar and Jira need OAuth client credentials, which are deliberately **not** shipped inside the app. Provide your own in either place:
 
-Inside the interactive prompt, you can use the following commands:
+- a `.env` file next to `package.json` while developing:
 
-- `list` (or `ls`): List all tasks
-- `add <title>` (or `create`): Create a new task
-- `remove <id>` (or `rm`, `delete`, `del`): Remove a task by its ID
-- `help` (or `?`): Show usage help
-- `exit` (or `quit`, `q`): Exit the CLI
+  ```
+  GOOGLE_CLIENT_ID=...
+  GOOGLE_CLIENT_SECRET=...
+  JIRA_CLIENT_ID=...
+  JIRA_CLIENT_SECRET=...
+  ```
 
-_(Note: By default, the CLI connects to `http://localhost:3000`. You can override this by providing the `STEPLER_URL` environment variable. The code comments also mention using a `STEPLER_TOKEN` if you ever set up basic auth on the backend)._
+- or `stepler-integrations.json` in the data folder for an installed copy:
 
-## 🤝 Code Quality
+  ```json
+  {
+    "googleClientId": "...",
+    "googleClientSecret": "...",
+    "jiraClientId": "...",
+    "jiraClientSecret": "..."
+  }
+  ```
 
-- **Linting:** Run `npm run lint` to check for code issues using ESLint.
-- **Formatting:** Run `npm run format` to auto-format files using Prettier.
+Register `http://127.0.0.1:3000/oauth2callback` (Google) and `http://127.0.0.1:3000/jira-callback` (Jira) as the redirect URIs. Access tokens are encrypted with the OS keychain where that is available.
+
+Calendar events are only created for tasks that carry a date, and only while **Create events automatically** is on. Completing or deleting a task updates or removes the mirrored event and reminder.
+
+## 🤝 Code quality
+
+- `npm run lint` — ESLint
+- `npm run format` — Prettier

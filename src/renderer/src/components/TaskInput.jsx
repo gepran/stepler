@@ -1,7 +1,20 @@
-import { useRef, useMemo, useState } from "react";
+import {
+  useRef,
+  useMemo,
+  useState,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import PropTypes from "prop-types";
 import SteplerLogo from "./SteplerLogo";
 import FileTypeIcon from "./FileTypeIcon";
+import {
+  pendingAttachment,
+  releasePending,
+  attachmentSrc,
+} from "../lib/attachments";
+import { localYMD, ymdToDate } from "../lib/format";
 import {
   X,
   Plus,
@@ -10,135 +23,196 @@ import {
   Minimize2,
   ArrowUp,
   Mic,
-  User,
   Calendar,
   Hash,
-  Copy,
 } from "lucide-react";
 
 const isMac =
   window.electron?.process?.platform === "darwin" ||
   /Mac/.test(navigator.userAgent);
 
-export default function TaskInput({
-  inputValue,
-  setInputValue,
-  inputRef,
-  addTask,
-  handlePaste,
-  handleFileChange,
-  handleCopyImage,
-  isExpanded,
-  setIsExpanded,
-  pendingAttachment,
-  setPendingAttachment,
-  draftProjects,
-  setDraftProjects,
-  draftDate,
-  setDraftDate,
-  setShowSettings,
-  availableProjects,
-  jiraStatus,
-  jiraProjects,
-  selectedJiraProject,
-  setSelectedJiraProject,
-}) {
+function buildWeek(todayYMD) {
+  const days = [];
+  const now = ymdToDate(todayYMD);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    days.push({
+      ymd: localYMD(d),
+      label:
+        i === 0
+          ? "Today"
+          : i === 1
+            ? "Tomorrow"
+            : d.toLocaleDateString("en-US", { weekday: "short" }),
+      weekday: d.toLocaleDateString("en-US", { weekday: "short" }),
+      dayNum: d.getDate(),
+    });
+  }
+  return days;
+}
+
+/**
+ * The composer owns its own draft state: keeping the text in App re-rendered
+ * every task row on every keystroke.
+ */
+const TaskInput = forwardRef(function TaskInput(
+  {
+    onSubmit,
+    isExpanded,
+    setIsExpanded,
+    availableProjects,
+    onOpenSettings,
+    onToast,
+    jiraStatus,
+    jiraProjects,
+  },
+  ref,
+) {
+  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
-  const scrollContainerRef = useRef(null);
+  const [value, setValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [draftProjects, setDraftProjects] = useState([]);
+  const [draftDate, setDraftDate] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [jiraProjectKey, setJiraProjectKey] = useState("");
+  const [newProjectDraft, setNewProjectDraft] = useState("");
 
-  const showControls = isFocused || inputValue || draftProjects.length > 0 || draftDate || pendingAttachment;
+  useImperativeHandle(ref, () => ({
+    focus: () => textareaRef.current?.focus(),
+  }));
 
-
-  const weekDays = useMemo(() => {
-    const days = [];
-    const now = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() + i);
-      const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
-      const dayNum = d.getDate();
-      const monthName = d.toLocaleDateString("en-US", { month: "short" });
-      
-      let label = `${dayName} ${dayNum}`;
-      if (i === 0) label = "Today";
-      else if (i === 1) label = "Tomorrow";
-      
-      days.push({
-        full: label,
-        displayDay: dayName,
-        displayNum: dayNum,
-        displayMonth: monthName,
-        isToday: i === 0,
-        isTomorrow: i === 1
-      });
-    }
-    return days;
+  // Recompute the day strip if the app is left open across midnight.
+  const [weekSeed, setWeekSeed] = useState(() => localYMD(new Date()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const today = localYMD(new Date());
+      setWeekSeed((prev) => (prev === today ? prev : today));
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
+  const weekDays = useMemo(() => buildWeek(weekSeed), [weekSeed]);
+
+  useEffect(() => () => releasePending(pending), [pending]);
+
+  const showControls =
+    isFocused || value || draftProjects.length > 0 || draftDate || pending;
+
+  const attach = (file) => {
+    if (!file) return;
+    if (file.size > 64 * 1024 * 1024) {
+      onToast?.("That file is larger than 64 MB", "error");
+      return;
+    }
+    setPending((prev) => {
+      releasePending(prev);
+      return pendingAttachment(file);
+    });
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (file && file.size > 0) {
+        e.preventDefault();
+        attach(file);
+        return;
+      }
+    }
+  };
+
+  const submit = () => {
+    const text = value.trim();
+    if (!text && !pending) return;
+    onSubmit({
+      text,
+      projects: draftProjects,
+      dueDate: draftDate,
+      attachment: pending,
+      jiraProjectKey,
+    });
+    setValue("");
+    setPending(null); // ownership passes to App, which persists it
+    setDraftProjects([]);
+    setDraftDate(null);
+    setJiraProjectKey("");
+    setNewProjectDraft("");
+    setIsExpanded(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return;
+    // Never submit half a word while an IME candidate window is open.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    submit();
+  };
 
   return (
     <div
       className={`z-40 flex shrink-0 justify-center transition-all duration-300 ${
         isExpanded
-          ? "fixed inset-0 bg-neutral-950 p-6 md:p-12 z-[100]"
+          ? "fixed inset-0 z-[100] bg-white p-6 dark:bg-neutral-950 md:p-12"
           : "p-4 md:p-6"
       }`}
       onFocus={() => setIsFocused(true)}
       onBlur={(e) => {
-        // Only set unfocused if the new focus target is outside this container
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-          setIsFocused(false);
-        }
+        if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false);
       }}
     >
       <div
-        className={`w-full max-w-3xl flex flex-col ${isExpanded ? "h-full justify-center max-w-4xl mx-auto" : ""}`}
+        className={`flex w-full max-w-3xl flex-col ${isExpanded ? "mx-auto h-full max-w-4xl justify-center" : ""}`}
       >
-        <div className="mb-4 flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-xl font-medium text-neutral-800 dark:text-neutral-200">
-            <SteplerLogo size={26} />
-            <span>What&apos;s on your mind?</span>
-          </div>
+        <div className="mb-4 flex items-center gap-2 text-xl font-medium text-neutral-800 dark:text-neutral-200">
+          <SteplerLogo size={26} />
+          <span>What&apos;s on your mind?</span>
         </div>
 
         <div className="relative flex flex-col">
-          {pendingAttachment && (
+          {pending && (
             <div
-              className={`absolute bottom-full left-0 mb-3 flex items-center shadow-lg ${pendingAttachment.type === "image" ? "rounded-lg" : "rounded-lg border border-neutral-300 bg-neutral-100 p-1.5 pr-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"}`}
+              className={`absolute bottom-full left-0 mb-3 flex items-center shadow-lg ${
+                pending.type === "image"
+                  ? "rounded-lg"
+                  : "rounded-lg border border-neutral-300 bg-neutral-100 p-1.5 pr-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+              }`}
             >
-              {pendingAttachment.type === "image" ? (
-                <div className="relative group/pending inline-block">
+              {pending.type === "image" ? (
+                <div className="group/pending relative inline-block">
                   <img
-                    src={pendingAttachment.url}
-                    alt=""
-                    className="h-16 w-16 shrink-0 rounded-lg object-cover border border-neutral-200 dark:border-neutral-800"
+                    src={attachmentSrc(pending)}
+                    alt={pending.name}
+                    className="h-16 w-16 shrink-0 rounded-lg border border-neutral-200 object-cover dark:border-neutral-800"
                   />
-                  <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover/pending:opacity-100">
-                    <button
-                      onClick={(e) => handleCopyImage(e, pendingAttachment.url)}
-                      className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-neutral-800 dark:bg-black/80 dark:hover:bg-neutral-700"
-                      title="Copy Image"
-                    >
-                      <Copy size={12} />
-                    </button>
-                    <button
-                      onClick={() => setPendingAttachment(null)}
-                      className="rounded-md bg-black/60 p-1 text-white backdrop-blur-md transition-colors hover:bg-red-500/90 hover:text-white dark:bg-black/80 dark:hover:bg-red-600/90"
-                      title="Remove Attachment"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => {
+                      releasePending(pending);
+                      setPending(null);
+                    }}
+                    className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-red-500/90 group-hover/pending:opacity-100"
+                    title="Remove attachment"
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
               ) : (
                 <>
-                  <FileTypeIcon fileName={pendingAttachment.name} size={28} />
-                  <span className="mr-3 ml-1 max-w-[200px] truncate">
-                    {pendingAttachment.name}
+                  <FileTypeIcon fileName={pending.name} size={28} />
+                  <span className="ml-1 mr-3 max-w-[200px] truncate">
+                    {pending.name}
                   </span>
                   <button
-                    onClick={() => setPendingAttachment(null)}
+                    onClick={() => {
+                      releasePending(pending);
+                      setPending(null);
+                    }}
                     className="btn-tactile shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-900 dark:hover:text-neutral-200"
+                    title="Remove attachment"
                   >
                     <X size={14} className="icon-rubbery" />
                   </button>
@@ -148,19 +222,20 @@ export default function TaskInput({
           )}
 
           <div
-            className={`relative flex flex-col rounded-[24px] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] border ${
+            className={`relative flex flex-col rounded-[24px] border bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] transition-all duration-300 dark:bg-[#1a1a1a] ${
               draftProjects.length > 0 || draftDate
                 ? "border-[#9B6AFF]/50"
                 : "border-neutral-200 dark:border-neutral-800/80"
-            } transition-all duration-300 dark:bg-[#1a1a1a] ${
-              isExpanded ? "h-[60vh] md:h-[70vh]" : showControls ? "min-h-[140px]" : "min-h-[56px]"
-            } ${!isExpanded && showControls ? "pb-2" : ""}`}
+            } ${isExpanded ? "h-[60vh] md:h-[70vh]" : showControls ? "min-h-[140px]" : "min-h-[56px]"} ${
+              !isExpanded && showControls ? "pb-2" : ""
+            }`}
           >
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className={`btn-tactile absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
                 isExpanded ? "top-4" : "top-3.5"
               }`}
+              title={isExpanded ? "Collapse" : "Expand"}
             >
               {isExpanded ? (
                 <Minimize2 size={18} className="icon-rubbery" />
@@ -169,193 +244,179 @@ export default function TaskInput({
               )}
             </button>
 
-            {(!isExpanded || isExpanded) &&
-              (draftProjects.length > 0 || draftDate) && (
-                <div className="flex flex-col px-5 pt-4 pb-0 gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {draftProjects.length > 0 &&
-                      draftProjects.map((p, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-1.5 rounded-full bg-[#9B6AFF]/10 border border-[#9B6AFF]/20 px-3 py-1.5 text-xs font-medium text-[#9B6AFF]"
-                        >
-                          <User size={14} />
-                          {p}
-                          <button
-                            onClick={() =>
-                              setDraftProjects((prev) =>
-                                prev.filter((x) => x !== p),
-                              )
-                            }
-                            className="ml-1 text-[#9B6AFF]/50 hover:text-[#9B6AFF]"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-
-                      ))}
-                    {draftDate && (
-                      <div className="flex items-center gap-1.5 rounded-full bg-[#FF9A00]/10 border border-[#FF9A00]/20 px-3 py-1.5 text-xs font-medium text-[#FF9A00]">
-                        <Calendar size={14} />
-                        {draftDate}
-                        <button
-                          onClick={() => setDraftDate(null)}
-                          className="ml-1 text-[#FF9A00]/50 hover:text-[#FF9A00]"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-
-                    )}
+            {(draftProjects.length > 0 || draftDate) && (
+              <div className="flex flex-wrap items-center gap-2 px-5 pb-0 pt-4">
+                {draftProjects.map((p) => (
+                  <div
+                    key={p}
+                    className="flex items-center gap-1.5 rounded-full border border-[#9B6AFF]/20 bg-[#9B6AFF]/10 px-3 py-1.5 text-xs font-medium text-[#9B6AFF]"
+                  >
+                    <Hash size={14} />
+                    {p}
+                    <button
+                      onClick={() =>
+                        setDraftProjects((prev) => prev.filter((x) => x !== p))
+                      }
+                      className="ml-1 text-[#9B6AFF]/50 hover:text-[#9B6AFF]"
+                      title="Remove project"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                </div>
-              )}
+                ))}
+                {draftDate && (
+                  <div className="flex items-center gap-1.5 rounded-full border border-[#FF9A00]/20 bg-[#FF9A00]/10 px-3 py-1.5 text-xs font-medium text-[#FF9A00]">
+                    <Calendar size={14} />
+                    {weekDays.find((d) => d.ymd === draftDate)?.label ||
+                      draftDate}
+                    <button
+                      onClick={() => setDraftDate(null)}
+                      className="ml-1 text-[#FF9A00]/50 hover:text-[#FF9A00]"
+                      title="Remove date"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={addTask}
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onFocus={() => setIsFocused(true)}
               rows={isExpanded ? undefined : 1}
-              onInput={(e) => {
-                if (!isExpanded) {
-                  e.target.style.height = "auto";
-                  e.target.style.height =
-                    Math.min(e.target.scrollHeight, 160) + "px";
-                }
-              }}
               placeholder="What's on your mind?"
-              className={`flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 px-5 pr-12 ${
-                isExpanded
-                  ? "mt-4 py-6 h-full"
-                  : "pt-4 pb-2"
+              className={`flex-1 resize-none bg-transparent px-5 pr-12 text-[16px] leading-relaxed text-neutral-800 placeholder-neutral-400 focus:outline-none dark:text-neutral-200 dark:placeholder-neutral-500 ${
+                isExpanded ? "mt-4 h-full py-6" : "autosize max-h-40 pb-2 pt-4"
               }`}
               style={isExpanded ? { height: "100%" } : {}}
             />
 
-
             <input
               type="file"
               ref={fileInputRef}
-              onChange={handleFileChange}
+              onChange={(e) => {
+                attach(e.target.files?.[0]);
+                e.target.value = "";
+              }}
               className="hidden"
             />
 
-            {/* Bottom tools row */}
-            {/* Bottom Controls Area */}
             {showControls && (
               <div
                 className={`flex flex-col gap-1.5 ${
                   isExpanded
-                    ? "mt-auto p-5 w-full border-t border-neutral-100 dark:border-neutral-800/50"
-                    : "px-5 pb-4 mt-1"
-                } duration-200`}
-
+                    ? "mt-auto w-full border-t border-neutral-100 p-5 dark:border-neutral-800/50"
+                    : "mt-1 px-5 pb-4"
+                }`}
               >
-                {/* Row 1: Projects */}
+                {/* Projects */}
                 <div
-                  ref={scrollContainerRef}
                   className="custom-scrollbar-hide flex items-center gap-2 overflow-x-auto pb-0.5"
                   onWheel={(e) => {
-                    if (e.deltaY !== 0) {
-                      e.currentTarget.scrollLeft += e.deltaY;
-                    }
+                    if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
                   }}
                 >
-                  <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[10px] font-bold tracking-widest text-[#9B6AFF] border border-[#9B6AFF]/10 dark:bg-[#9B6AFF]/5 dark:text-[#9B6AFF]">
+                  <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#9B6AFF]/10 bg-neutral-50 px-2.5 py-1 text-[10px] font-bold tracking-widest text-[#9B6AFF] dark:bg-[#9B6AFF]/5">
                     <Hash size={12} />
                     PROJECTS
                   </div>
                   {availableProjects.map((project) => {
-                    const projectName = typeof project === "string" ? project : project.name;
-                    const isSelected = draftProjects.includes(projectName);
+                    const name =
+                      typeof project === "string" ? project : project.name;
+                    const isSelected = draftProjects.includes(name);
                     return (
                       <button
-                        key={projectName}
-                        onClick={() => {
-                          if (isSelected) {
-                            setDraftProjects((prev) =>
-                              prev.filter((p) => p !== projectName),
-                            );
-                          } else {
-                            setDraftProjects((prev) => [...prev, projectName]);
-                          }
-                        }}
-                        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                        key={name}
+                        onClick={() =>
+                          setDraftProjects((prev) =>
+                            isSelected
+                              ? prev.filter((p) => p !== name)
+                              : [...prev, name],
+                          )
+                        }
+                        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all active:scale-95 ${
                           isSelected
-                            ? "border-[#9B6AFF]/30 bg-[#9B6AFF]/10 text-[#9B6AFF] shadow-sm active:scale-95"
-                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200 active:scale-95"
+                            ? "border-[#9B6AFF]/30 bg-[#9B6AFF]/10 text-[#9B6AFF] shadow-sm"
+                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
                         }`}
                       >
-                        {projectName}
+                        {name}
                       </button>
                     );
                   })}
-                  <div className="flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800 ml-1">
+                  <div className="ml-1 flex shrink-0 items-center border-l border-neutral-200 pl-2 dark:border-neutral-800">
                     <input
                       type="text"
                       placeholder="New..."
+                      value={newProjectDraft}
+                      onChange={(e) => setNewProjectDraft(e.target.value)}
                       className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const val = e.target.value.trim();
-                          if (val && !draftProjects.includes(val)) {
-                            setDraftProjects((prev) => [...prev, val]);
-                            e.target.value = "";
-                          }
-                        }
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const val = newProjectDraft.trim();
+                        if (val && !draftProjects.includes(val))
+                          setDraftProjects((prev) => [...prev, val]);
+                        setNewProjectDraft("");
                       }}
                     />
                   </div>
                 </div>
-                {/* Row 2: Dates and Actions */}
+
+                {/* Dates and actions */}
                 <div className="flex items-center gap-3">
-                  <div className="flex flex-1 items-center gap-1.5 overflow-x-auto custom-scrollbar-hide">
+                  <div className="custom-scrollbar-hide flex flex-1 items-center gap-1.5 overflow-x-auto">
                     {weekDays.map((day) => {
-                      const isSelected = draftDate === day.full || (!draftDate && day.isToday);
+                      const isSelected = draftDate === day.ymd;
                       return (
                         <button
-                          key={day.full}
-                          onClick={() => {
-                            setDraftDate(day.full);
-                          }}
-                          className={`flex shrink-0 items-baseline gap-1 rounded-full border px-2.5 py-1 transition-all ${
+                          key={day.ymd}
+                          onClick={() =>
+                            setDraftDate(isSelected ? null : day.ymd)
+                          }
+                          title={day.label}
+                          className={`flex shrink-0 items-baseline gap-1 rounded-full border px-2.5 py-1 transition-all active:scale-95 ${
                             isSelected
-                              ? "border-[#FF9A00]/40 bg-[#FF9A00]/10 text-[#FF9A00] shadow-sm active:scale-95"
-                              : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200 active:scale-95"
+                              ? "border-[#FF9A00]/40 bg-[#FF9A00]/10 text-[#FF9A00] shadow-sm"
+                              : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
                           }`}
                         >
                           <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">
-                            {day.displayDay}
+                            {day.weekday}
                           </span>
-                          <span className="text-xs font-bold">{day.displayNum}</span>
+                          <span className="text-xs font-bold">
+                            {day.dayNum}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
 
-                  {jiraStatus.connected && jiraProjects.length > 0 && (
-                    <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-2">
+                  {jiraStatus?.connected && jiraProjects.length > 0 && (
+                    <div className="flex items-center gap-1 border-l border-neutral-100 pl-2 dark:border-neutral-800/50">
                       <select
-                        value={selectedJiraProject}
-                        onChange={(e) => setSelectedJiraProject(e.target.value)}
-                        className="bg-transparent text-xs font-medium text-neutral-600 outline-none hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200 cursor-pointer"
+                        value={jiraProjectKey}
+                        onChange={(e) => setJiraProjectKey(e.target.value)}
+                        className="cursor-pointer bg-transparent text-xs font-medium text-neutral-600 outline-none dark:text-neutral-400"
                       >
-                        <option value="" className="dark:bg-[#1a1a1a]">Jira Project</option>
+                        <option value="">Jira Project</option>
                         {jiraProjects.map((p) => (
-                          <option key={p.id} value={p.key} className="dark:bg-[#1a1a1a]">
+                          <option key={p.id} value={p.key}>
                             {p.key}
                           </option>
                         ))}
                       </select>
-                      {selectedJiraProject && (
+                      {jiraProjectKey && (
                         <button
-                          onClick={() => setSelectedJiraProject("")}
-                          className="text-neutral-400 hover:text-red-500 transition-colors"
-                          title="Clear Jira Project"
+                          onClick={() => setJiraProjectKey("")}
+                          className="text-neutral-400 transition-colors hover:text-red-500"
+                          title="Clear Jira project"
                         >
                           <X size={12} />
                         </button>
@@ -363,7 +424,7 @@ export default function TaskInput({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1 border-l border-neutral-100 dark:border-neutral-800/50 pl-2">
+                  <div className="flex items-center gap-1 border-l border-neutral-100 pl-2 dark:border-neutral-800/50">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="btn-tactile flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
@@ -372,30 +433,34 @@ export default function TaskInput({
                       <Plus size={20} className="icon-rubbery" />
                     </button>
                     <button
-                      onClick={() => setShowSettings(true)}
+                      onClick={onOpenSettings}
                       className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
                         isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
                       }`}
-                      title="Tools"
+                      title="Settings"
                     >
                       <Settings size={16} className="icon-rubbery" />
-                      {isExpanded && <span>Tools</span>}
+                      {isExpanded && <span>Settings</span>}
                     </button>
+                    {isMac && (
+                      <button
+                        onClick={() =>
+                          window.electron?.ipcRenderer.invoke("start-dictation")
+                        }
+                        className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                          isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
+                        }`}
+                        title="Start dictation (Fn twice)"
+                      >
+                        <Mic size={16} className="icon-rubbery" />
+                        {isExpanded && <span>Dictate</span>}
+                      </button>
+                    )}
                     <button
-                      onClick={() =>
-                        window.electron?.ipcRenderer.invoke("start-dictation")
-                      }
-                      className={`btn-tactile flex h-8 items-center rounded-lg text-sm font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-                        isExpanded ? "gap-1.5 px-2" : "w-8 justify-center"
-                      }`}
-                      title={`Start Dictation ${isMac ? "(Fn twice)" : ""}`}
-                    >
-                      <Mic size={16} className="icon-rubbery" />
-                      {isExpanded && <span>Dictate</span>}
-                    </button>
-                    <button
-                      onClick={addTask}
-                      className="btn-tactile flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 ml-1"
+                      onClick={submit}
+                      disabled={!value.trim() && !pending}
+                      className="btn-tactile ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 disabled:opacity-30 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                      title="Add task"
                     >
                       <ArrowUp
                         size={20}
@@ -407,34 +472,22 @@ export default function TaskInput({
                 </div>
               </div>
             )}
-
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
 TaskInput.propTypes = {
-  inputValue: PropTypes.string.isRequired,
-  setInputValue: PropTypes.func.isRequired,
-  inputRef: PropTypes.object.isRequired,
-  addTask: PropTypes.func.isRequired,
-  handlePaste: PropTypes.func.isRequired,
-  handleFileChange: PropTypes.func.isRequired,
-  handleCopyImage: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired,
   isExpanded: PropTypes.bool.isRequired,
   setIsExpanded: PropTypes.func.isRequired,
-  pendingAttachment: PropTypes.any,
-  setPendingAttachment: PropTypes.func.isRequired,
-  draftProjects: PropTypes.array.isRequired,
-  setDraftProjects: PropTypes.func.isRequired,
-  draftDate: PropTypes.string,
-  setDraftDate: PropTypes.func.isRequired,
-  setShowSettings: PropTypes.func.isRequired,
   availableProjects: PropTypes.array.isRequired,
-  jiraStatus: PropTypes.object.isRequired,
-  jiraProjects: PropTypes.array.isRequired,
-  selectedJiraProject: PropTypes.string.isRequired,
-  setSelectedJiraProject: PropTypes.func.isRequired,
+  onOpenSettings: PropTypes.func.isRequired,
+  onToast: PropTypes.func,
+  jiraStatus: PropTypes.object,
+  jiraProjects: PropTypes.array,
 };
+
+export default TaskInput;

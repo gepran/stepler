@@ -8,6 +8,7 @@ files:
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
+  - "!{build_icon.js,gen-icons.mjs,logo.svg,docs,dist}"
 asarUnpack:
   - resources/**
 win:
@@ -39,5 +40,6 @@ appImage:
 afterSign: build/afterSign.cjs
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: gepran
+  repo: stepler

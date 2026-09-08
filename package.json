@@ -1,13 +1,13 @@
 {
   "name": "stepler",
-  "version": "1.0.0",
-  "description": "Stepler — a minimal daily task timeline for macOS",
+  "version": "1.2.1",
+  "description": "Stepler — a fast daily task timeline for macOS and Windows",
   "main": "./out/main/index.js",
   "bin": {
-    "stepler": "./stepler-cli.js"
+    "stepler": "./stepler-cli.mjs"
   },
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "gepran",
+  "homepage": "https://github.com/gepran/stepler",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -19,7 +19,7 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
-    "cli": "node stepler-cli.js"
+    "cli": "node stepler-cli.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -28,7 +28,7 @@
     "electron-updater": "^6.8.3",
     "googleapis": "^171.4.0",
     "lucide-react": "^0.575.0",
-    "open": "^11.0.0",
+    "prop-types": "^15.8.1",
     "react-syntax-highlighter": "^16.1.0"
   },
   "devDependencies": {
@@ -48,7 +48,7 @@
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.2.0",
     "vite": "^7.2.6"
   }

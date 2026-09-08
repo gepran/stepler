@@ -70,7 +70,9 @@ export default function Sidebar({
             <div className="my-2 border-t border-neutral-100 dark:border-neutral-800" />
 
             {availableProjects.map((project, idx) => {
-              const projectTasksCount = tasks.filter(t => t.projects?.includes(project.name)).length;
+              const projectTasksCount = tasks.filter((t) =>
+                t.projects?.includes(project.name),
+              ).length;
               return (
                 <div
                   key={idx}
@@ -147,7 +149,9 @@ export default function Sidebar({
           <div className="w-8 border-t border-neutral-100 dark:border-neutral-800" />
 
           {availableProjects.map((project, idx) => {
-            const projectTasksCount = tasks.filter(t => t.projects?.includes(project.name)).length;
+            const projectTasksCount = tasks.filter((t) =>
+              t.projects?.includes(project.name),
+            ).length;
             return (
               <div
                 key={idx}

@@ -2,83 +2,92 @@ import { useRef, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 
 /**
- * @param {Object} trigger - An object containing { x, y, width, height } of the element to "disintegrate"
+ * Dust burst played when a task is deleted.
+ *
+ * The loop only runs while there are particles alive — it used to hold a
+ * requestAnimationFrame loop open forever, which kept the compositor busy
+ * (~18% CPU) even when the app was sitting idle.
  */
 const ParticleCanvas = ({ trigger }) => {
   const canvasRef = useRef(null);
   const particles = useRef([]);
   const animationRef = useRef(null);
+  const runningRef = useRef(false);
 
-  const createParticles = (x, y, width, height) => {
-    const count = 1200; // Particle density
-    const colors = ["#94a3b8", "#6366f1", "#475569", "#334155"]; // Ash/Dust colors
-
-    for (let i = 0; i < count; i++) {
-      particles.current.push({
-        x: x + Math.random() * width,
-        y: y + Math.random() * height,
-        // vx: -3 to -1 moves particles Right to Left
-        vx: -(Math.random() * 1.5 + 0.5),
-        vy: Math.random() * 1.5 - 1.2,
-        life: 1.0,
-        size: 0.4 + Math.random() * 1.1,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        opacity: 1,
-        turbulence: Math.random() * 0.1,
-        angle: Math.random() * Math.PI * 2,
-      });
+  const frame = useCallback(function step() {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) {
+      runningRef.current = false;
+      return;
     }
-  };
 
-  useEffect(() => {
-    if (trigger) {
-      createParticles(trigger.x, trigger.y, trigger.width, trigger.height);
-    }
-  }, [trigger]);
-
-  const update = useCallback(function updateFrame() {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     particles.current = particles.current.filter((p) => p.life > 0);
+
+    if (particles.current.length === 0) {
+      runningRef.current = false;
+      animationRef.current = null;
+      return; // nothing left to draw: stop burning frames
+    }
 
     particles.current.forEach((p) => {
       p.angle += p.turbulence * 0.5;
       p.x += p.vx + Math.cos(p.angle) * 0.3;
       p.y += p.vy + Math.sin(p.angle) * 0.3;
-
-      p.life -= 0.006; // Controls speed of fade (smaller = slower)
-      p.opacity = p.life;
-
+      p.life -= 0.006;
       ctx.fillStyle = p.color;
-      ctx.globalAlpha = p.opacity;
+      ctx.globalAlpha = Math.max(p.life, 0);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     });
+    ctx.globalAlpha = 1;
 
-    animationRef.current = requestAnimationFrame(updateFrame);
+    animationRef.current = requestAnimationFrame(step);
   }, []);
+
+  const start = useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    animationRef.current = requestAnimationFrame(frame);
+  }, [frame]);
+
+  useEffect(() => {
+    if (!trigger) return;
+    const { x, y, width, height } = trigger;
+    const colors = ["#94a3b8", "#6366f1", "#475569", "#334155"];
+    for (let i = 0; i < 900; i++) {
+      particles.current.push({
+        x: x + Math.random() * width,
+        y: y + Math.random() * height,
+        vx: -(Math.random() * 1.5 + 0.5),
+        vy: Math.random() * 1.5 - 1.2,
+        life: 1,
+        size: 0.4 + Math.random() * 1.1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        turbulence: Math.random() * 0.1,
+        angle: Math.random() * Math.PI * 2,
+      });
+    }
+    start();
+  }, [trigger, start]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
+    if (!canvas) return undefined;
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
-
-    window.addEventListener("resize", resize);
     resize();
-    update();
-
+    window.addEventListener("resize", resize);
     return () => {
       window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animationRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      runningRef.current = false;
     };
-  }, [update]);
+  }, []);
 
   return (
     <canvas

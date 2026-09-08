@@ -1,20 +1,58 @@
 #!/usr/bin/env node
 
 /**
- * Stepler CLI — interact with your Todo backend from the terminal.
+ * Stepler CLI — talk to the running Stepler app from a terminal.
  *
- * Usage:
- *   Interactive:  STEPLER_TOKEN=<token> node stepler-cli.js
- *   One-shot:     STEPLER_TOKEN=<token> node stepler-cli.js list
- *                 STEPLER_TOKEN=<token> node stepler-cli.js add Buy milk
- *                 STEPLER_TOKEN=<token> node stepler-cli.js remove <id>
+ *   stepler list
+ *   stepler add "Review pull requests"
+ *   stepler remove <id>
+ *   stepler                      (interactive)
+ *
+ * The app writes its port and access token to its own data folder; this reads
+ * them from there, so no configuration is needed. Override with STEPLER_URL /
+ * STEPLER_TOKEN when talking to a non-default instance.
  */
 
 import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
+import { homedir, platform } from "node:os";
+import { join } from "node:path";
 
-// ── Config ───────────────────────────────────────────────────────────────────
+// ── Connection details ───────────────────────────────────────────────────────
 
-const BASE_URL = process.env.STEPLER_URL || "http://127.0.0.1:3000";
+function userDataDir() {
+  if (platform() === "darwin")
+    return join(homedir(), "Library", "Application Support", "stepler");
+  if (platform() === "win32")
+    return join(
+      process.env.APPDATA || join(homedir(), "AppData", "Roaming"),
+      "stepler",
+    );
+  return join(
+    process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
+    "stepler",
+  );
+}
+
+function connection() {
+  let port = 3000;
+  let token = process.env.STEPLER_TOKEN || "";
+  try {
+    const info = JSON.parse(
+      readFileSync(join(userDataDir(), "stepler-api.json"), "utf-8"),
+    );
+    if (info.port) port = info.port;
+    if (!token && info.token) token = info.token;
+  } catch {
+    /* fall back to the defaults below */
+  }
+  return {
+    baseUrl: process.env.STEPLER_URL || `http://127.0.0.1:${port}`,
+    token,
+  };
+}
+
+const { baseUrl: BASE_URL, token: TOKEN } = connection();
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 
@@ -27,28 +65,26 @@ const c = {
   yellow: "\x1b[33m",
   cyan: "\x1b[36m",
   magenta: "\x1b[35m",
-  white: "\x1b[37m",
-  bgCyan: "\x1b[46m",
-  bgRed: "\x1b[41m",
 };
 
 const ok = (msg) => console.log(`${c.green}✔${c.reset} ${msg}`);
 const err = (msg) => console.log(`${c.red}✖${c.reset} ${msg}`);
 const info = (msg) => console.log(`${c.cyan}ℹ${c.reset} ${msg}`);
 
-// ── HTTP helpers ─────────────────────────────────────────────────────────────
-
-function headers() {
-  return { "Content-Type": "application/json" };
-}
+// ── HTTP ─────────────────────────────────────────────────────────────────────
 
 async function request(method, path, body) {
-  const url = `${BASE_URL}${path}`;
-  const opts = { method, headers: headers() };
+  const opts = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+    },
+  };
   if (body) opts.body = JSON.stringify(body);
 
   try {
-    const res = await fetch(url, opts);
+    const res = await fetch(`${BASE_URL}${path}`, opts);
     const text = await res.text();
     let data;
     try {
@@ -56,18 +92,25 @@ async function request(method, path, body) {
     } catch {
       data = text;
     }
-
+    if (res.status === 401) {
+      err(
+        "Not authorised. Is Stepler running, and is command line access enabled in Settings?",
+      );
+      return null;
+    }
     if (!res.ok) {
       err(`${c.bold}HTTP ${res.status}${c.reset} ${res.statusText}`);
       if (data)
         console.log(
-          `  ${c.dim}${typeof data === "string" ? data : JSON.stringify(data, null, 2)}${c.reset}`,
+          `  ${c.dim}${typeof data === "string" ? data : JSON.stringify(data)}${c.reset}`,
         );
       return null;
     }
     return data;
   } catch (e) {
-    err(`Connection failed: ${e.message}`);
+    err(
+      `Could not reach Stepler at ${BASE_URL} (${e.message}). Is the app running?`,
+    );
     return null;
   }
 }
@@ -77,48 +120,38 @@ async function request(method, path, body) {
 async function listTasks() {
   const data = await request("GET", "/api/tasks");
   if (!data) return;
-
-  const tasks = Array.isArray(data) ? data : data.tasks || data.data || [];
-
-  if (tasks.length === 0) {
-    info("No tasks found.");
-    return;
-  }
+  const tasks = Array.isArray(data) ? data : [];
+  if (tasks.length === 0) return info("No tasks found.");
 
   console.log();
-  console.log(`${c.bold}${c.cyan}  ID${" ".repeat(20)}Task${c.reset}`);
-  console.log(`${c.dim}  ${"─".repeat(50)}${c.reset}`);
-
   for (const t of tasks) {
-    const id = String(t.id || t._id || "???");
-    const title = t.text || t.title || "(untitled)";
-    const done =
-      t.completed || t.done ? `${c.green}✔${c.reset}` : `${c.dim}○${c.reset}`;
-    console.log(`  ${done} ${c.yellow}${id.padEnd(22)}${c.reset}${title}`);
+    const done = t.completed ? `${c.green}✔${c.reset}` : `${c.dim}○${c.reset}`;
+    const tags = (t.projects || [])
+      .map((p) => `${c.magenta}#${p}${c.reset}`)
+      .join(" ");
+    const first = String(t.text || "(untitled)").split("\n")[0];
+    console.log(
+      `  ${done} ${c.yellow}${String(t.id).padEnd(15)}${c.reset}${first} ${tags}`,
+    );
+    for (const st of t.subtasks || []) {
+      console.log(
+        `      ${st.completed ? c.green + "✔" : c.dim + "○"}${c.reset} ${st.text}`,
+      );
+    }
   }
   console.log();
 }
 
 async function addTask(title) {
-  if (!title) {
-    err("Usage: add <title>");
-    return;
-  }
+  if (!title) return err("Usage: add <title>");
   const data = await request("POST", "/api/tasks", { title });
-  if (data) {
-    ok(`Task created: ${c.bold}${title}${c.reset}`);
-  }
+  if (data) ok(`Task created: ${c.bold}${title}${c.reset}`);
 }
 
 async function removeTask(id) {
-  if (!id) {
-    err("Usage: remove <id>");
-    return;
-  }
-  const data = await request("DELETE", `/api/tasks/${id}`);
-  if (data !== null) {
-    ok(`Task ${c.yellow}${id}${c.reset} removed.`);
-  }
+  if (!id) return err("Usage: remove <id>");
+  const data = await request("DELETE", `/api/tasks/${encodeURIComponent(id)}`);
+  if (data) ok(`Task ${c.yellow}${id}${c.reset} moved to the trash.`);
 }
 
 function printHelp() {
@@ -126,34 +159,31 @@ function printHelp() {
 ${c.bold}${c.cyan}Stepler CLI${c.reset} — manage your tasks from the terminal
 
 ${c.bold}Commands:${c.reset}
-  ${c.green}list${c.reset}              List all tasks
+  ${c.green}list${c.reset}              List today's tasks
   ${c.green}add ${c.dim}<title>${c.reset}       Add a new task
-  ${c.green}remove ${c.dim}<id>${c.reset}       Remove a task by ID
+  ${c.green}remove ${c.dim}<id>${c.reset}       Move a task to the trash
   ${c.green}help${c.reset}              Show this help
   ${c.green}exit${c.reset}              Quit the CLI
 
 ${c.bold}Environment:${c.reset}
-  ${c.yellow}STEPLER_URL${c.reset}       Base URL (default: http://localhost:3000)
+  ${c.yellow}STEPLER_URL${c.reset}       Base URL (default: the running app's port)
+  ${c.yellow}STEPLER_TOKEN${c.reset}     Access token (default: read from the app data folder)
 `);
 }
 
-// ── Command dispatcher ───────────────────────────────────────────────────────
-
 async function dispatch(input) {
   const trimmed = input.trim();
-  if (!trimmed) return;
+  if (!trimmed) return undefined;
+  const [cmd, ...rest] = trimmed.split(/\s+/);
+  const args = rest.join(" ");
 
-  const parts = trimmed.split(/\s+/);
-  const cmd = parts[0].toLowerCase();
-  const args = parts.slice(1).join(" ");
-
-  switch (cmd) {
+  switch (cmd.toLowerCase()) {
     case "list":
     case "ls":
       return listTasks();
     case "add":
     case "create":
-      return addTask(args);
+      return addTask(args.replace(/^["']|["']$/g, ""));
     case "remove":
     case "rm":
     case "delete":
@@ -161,6 +191,8 @@ async function dispatch(input) {
       return removeTask(args);
     case "help":
     case "?":
+    case "--help":
+    case "-h":
       return printHelp();
     case "exit":
     case "quit":
@@ -173,36 +205,29 @@ async function dispatch(input) {
         `Unknown command: ${c.bold}${cmd}${c.reset}. Type ${c.green}help${c.reset} for usage.`,
       );
   }
+  return undefined;
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
-
 async function main() {
-  // One-shot mode: `node stepler-cli.js list`
   const cliArgs = process.argv.slice(2);
   if (cliArgs.length > 0) {
     await dispatch(cliArgs.join(" "));
     return;
   }
 
-  // Interactive REPL mode
   console.log(
-    `\n${c.bold}${c.cyan}Stepler CLI${c.reset} ${c.dim}v1.0.0${c.reset}  —  type ${c.green}help${c.reset} for commands\n`,
+    `\n${c.bold}${c.cyan}Stepler CLI${c.reset}  —  type ${c.green}help${c.reset} for commands\n`,
   );
-
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: `${c.magenta}stepler${c.reset}${c.dim}>${c.reset} `,
   });
-
   rl.prompt();
-
   rl.on("line", async (line) => {
     await dispatch(line);
     rl.prompt();
   });
-
   rl.on("close", () => {
     console.log(`\n${c.dim}Bye! 👋${c.reset}`);
     process.exit(0);
