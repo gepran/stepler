@@ -17,11 +17,11 @@ export default function UpdatePill({ state, onInstall, onOpenReleases }) {
       <button
         onClick={onOpenReleases}
         style={{ WebkitAppRegion: "no-drag" }}
-        title={`Stepler could not install the update itself: ${state.error || "unknown error"}`}
+        title={`Stepler could not replace itself (${state.error || "unknown error"}). This puts the downloaded build in your Downloads folder.`}
         className="flex items-center gap-1.5 rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-amber-600"
       >
         <ArrowUpCircle size={12} />
-        <span>Get {state.version}</span>
+        <span>Install {state.version}</span>
       </button>
     );
 

@@ -61,6 +61,8 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow = null;
 let tray = null;
 let autoUpdater = null;
+/** Where electron-updater put the update it could not install. */
+let downloadedUpdateFile = null;
 /** What the header pill is showing right now, replayed to a fresh window. */
 let updateState = { status: "idle" };
 
@@ -161,6 +163,9 @@ function localYMD(date) {
 const defaults = {
   hotkey: isMac ? "Shift+Command+Space" : "Ctrl+Shift+Space",
   theme: "dark",
+  // null until the window reports what it picked, so the renderer's own
+  // detection gets first say on a fresh install.
+  language: null,
   appleReminders: false,
   captureSelection: true,
   calendarSync: false,
@@ -1472,6 +1477,7 @@ function setupIPC() {
     const allowed = [
       "hotkey",
       "theme",
+      "language",
       "appleReminders",
       "captureSelection",
       "calendarSync",
@@ -1629,9 +1635,25 @@ function setupIPC() {
   });
 
   /** Where to send someone whose update could not install itself. */
-  ipcMain.handle("open-releases-page", () => {
-    shell.openExternal("https://github.com/gepran/stepler/releases/latest");
-    return { success: true };
+  /**
+   * The way out when Stepler cannot replace itself. The build is already
+   * downloaded, so put a copy somewhere findable and open Finder on it
+   * rather than sending someone back to the website to fetch it again.
+   */
+  ipcMain.handle("reveal-downloaded-update", () => {
+    try {
+      if (!downloadedUpdateFile || !existsSync(downloadedUpdateFile))
+        throw new Error("no local copy");
+      const name = `Stepler-${updateState.version || "update"}${extname(downloadedUpdateFile)}`;
+      const target = join(app.getPath("downloads"), name);
+      copyFileSync(downloadedUpdateFile, target);
+      shell.showItemInFolder(target);
+      return { success: true, path: target, name };
+    } catch {
+      // No copy to hand: the website is still better than nothing.
+      shell.openExternal("https://github.com/gepran/stepler/releases/latest");
+      return { success: false };
+    }
   });
 
   /** Reveal the data folder, so "put your credentials here" is one click. */
@@ -2518,9 +2540,12 @@ if (!app.requestSingleInstanceLock()) {
             percent: Math.round(p?.percent || 0),
           }),
         );
-        autoUpdater.on("update-downloaded", (info) =>
-          sendUpdateState({ status: "ready", version: info?.version }),
-        );
+        autoUpdater.on("update-downloaded", (info) => {
+          // Keep the file. If the swap is refused, this is already on disk
+          // and there is no reason to make anyone fetch 200 MB again.
+          downloadedUpdateFile = info?.downloadedFile || null;
+          sendUpdateState({ status: "ready", version: info?.version });
+        });
         autoUpdater.on("error", (err) => {
           console.warn("Updater:", err.message);
           // Keep the version: a failed install still leaves the person with

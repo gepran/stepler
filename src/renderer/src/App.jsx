@@ -26,6 +26,13 @@ import {
   ymdToDate,
 } from "./lib/format";
 import { ipc, persistAttachment } from "./lib/attachments";
+import {
+  currentLocale,
+  getLanguage,
+  setLanguage,
+  useLanguage,
+  useT,
+} from "./lib/i18n";
 
 // --------------------------------------------------------------------------
 // Day bookkeeping. Days are keyed by a real ISO date rather than a "21 Feb"
@@ -79,11 +86,12 @@ function minutesOf(hhmm) {
 
 /** One day in the jump bar, 30% smaller than the original strip. */
 function DayChip({ chip, onClick }) {
+  const t = useT();
   const d = ymdToDate(chip.ymd);
   return (
     <button
       onClick={() => onClick(chip.ymd, chip.isToday)}
-      title={chip.isToday ? "Today" : labelForYMD(chip.ymd)}
+      title={chip.isToday ? t("app.today") : labelForYMD(chip.ymd)}
       className={`btn-tactile group flex h-[46px] min-w-[36px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-xl border bg-white shadow-sm transition-all hover:shadow-md dark:bg-neutral-800 ${
         chip.isToday
           ? "border-orange-300 dark:border-orange-500/50"
@@ -91,7 +99,7 @@ function DayChip({ chip, onClick }) {
       }`}
     >
       <span className="text-[9px] font-bold uppercase leading-none tracking-wider text-neutral-400 transition-colors group-hover:text-orange-500/80 dark:text-neutral-500">
-        {d.toLocaleString("en-US", { month: "short" })}
+        {d.toLocaleString(currentLocale(), { month: "short" })}
       </span>
       <span className="text-sm font-black leading-tight text-neutral-800 transition-colors group-hover:text-orange-500 dark:text-neutral-100">
         {d.getDate()}
@@ -112,6 +120,8 @@ export default function App() {
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [todayYMD, setTodayYMD] = useState(() => localYMD(new Date()));
   const [loaded, setLoaded] = useState(false);
+  const t = useT();
+  const language = useLanguage();
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [toasts, setToasts] = useState([]);
 
@@ -177,12 +187,13 @@ export default function App() {
 
   const formattedDate = useMemo(
     () =>
-      new Date().toLocaleDateString("en-US", {
+      new Date().toLocaleDateString(currentLocale(), {
         weekday: "long",
         month: "long",
         day: "numeric",
       }),
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [language],
   );
 
   // --- Projects available across settings, tasks and history ---
@@ -202,7 +213,11 @@ export default function App() {
     });
   }, [tasks, settings.projects]);
 
-  const allDays = useMemo(() => groupByDay(tasks, todayYMD), [tasks, todayYMD]);
+  const allDays = useMemo(
+    () => groupByDay(tasks, todayYMD),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, todayYMD, language],
+  );
 
   const todayTasks = useMemo(
     () => allDays.find((d) => d.ymd === todayYMD)?.tasks || [],
@@ -311,6 +326,10 @@ export default function App() {
     }
     ipc.invoke("get-settings").then((s) => {
       if (s) setSettings(s);
+      if (s?.language) setLanguage(s.language);
+      // First run: keep whatever the renderer detected so the choice survives
+      // a reinstall of the settings file.
+      else if (s) ipc.invoke("update-settings", { language: getLanguage() });
       setSettingsLoaded(true);
     });
     ipc.invoke("jira-status").then((status) => {
@@ -603,7 +622,7 @@ export default function App() {
     }) => {
       const stored = attachment ? await persistAttachment(attachment) : null;
       if (attachment && !stored)
-        toast("Could not save that attachment", "error");
+        toast(t("toast.attachmentFailed"), "error");
       const body =
         (text || "").trim() ||
         (stored && stored.type !== "image" ? stored.name : "");
@@ -659,7 +678,7 @@ export default function App() {
             );
           })
           .catch((err) =>
-            toast(err?.message || "Could not reach Google Calendar", "error"),
+            toast(err?.message || t("toast.gcalUnreachable"), "error"),
           );
       }
       if (dueDate && settingsRef.current.appleReminders) {
@@ -1229,16 +1248,16 @@ export default function App() {
       history: allDays.filter((d) => d.ymd !== todayYMD),
       deletedTasks,
     });
-    if (result?.success) toast("Exported");
+    if (result?.success) toast(t("toast.exported"));
     else if (result && !result.canceled)
-      toast(result.error || "Export failed", "error");
+      toast(result.error || t("toast.exportFailed"), "error");
   }, [allDays, todayYMD, deletedTasks, toast]);
 
   const handleImportTasks = useCallback(async () => {
     const result = await ipc?.invoke("import-tasks");
     if (!result?.success) {
       if (result && !result.canceled)
-        toast(result.error || "Import failed", "error");
+        toast(result.error || t("toast.importFailed"), "error");
       return;
     }
     const imported = result.data || {};
@@ -1349,7 +1368,7 @@ export default function App() {
                 onClick={() => setShowSidebar((v) => !v)}
                 className="pointer-events-auto rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
                 style={{ WebkitAppRegion: "no-drag" }}
-                title="Toggle Sidebar"
+                title={t("app.toggleSidebar")}
               >
                 <PanelLeft size={18} />
               </button>
@@ -1361,13 +1380,24 @@ export default function App() {
               <UpdatePill
                 state={updateState}
                 onInstall={() => ipc?.invoke("install-update")}
-                onOpenReleases={() => ipc?.invoke("open-releases-page")}
+                onOpenReleases={async () => {
+                  const res = await ipc?.invoke("reveal-downloaded-update");
+                  toast(
+                    res?.success
+                      ? `${res.name} is in your Downloads — unzip it and drag Stepler into Applications.`
+                      : "Opening the download page.",
+                  );
+                }}
               />
               <button
                 onClick={() => setShowCompleted((v) => !v)}
                 className="flex items-center gap-2 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
               >
-                <span>{showCompleted ? "Hide Completed" : "Show All"}</span>
+                <span>
+                  {showCompleted
+                    ? t("app.hideCompleted")
+                    : t("app.showAll")}
+                </span>
                 <div
                   className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
                     showCompleted
@@ -1487,8 +1517,8 @@ export default function App() {
                   {sortedTasks.length === 0 ? (
                     <p className="py-2 text-sm italic text-neutral-400 dark:text-neutral-600">
                       {todayTasks.length > 0
-                        ? "Everything here is done and hidden."
-                        : "Nothing today yet. Start typing below."}
+                        ? t("app.allDone")
+                        : t("app.nothingToday")}
                     </p>
                   ) : (
                     sortedTasks.map(renderTask)
@@ -1507,7 +1537,7 @@ export default function App() {
             onClick={scrollToBottom}
             className="group absolute right-8 z-50 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-neutral-200 bg-white/80 text-neutral-600 shadow-lg backdrop-blur-md transition-all hover:bg-white hover:text-blue-500 dark:border-neutral-700 dark:bg-neutral-800/80 dark:text-neutral-400"
             style={{ bottom: isExpanded ? "120px" : "160px" }}
-            title="Jump to the newest task"
+            title={t("app.jumpNewest")}
           >
             <ChevronDown size={22} strokeWidth={2.5} />
           </button>
