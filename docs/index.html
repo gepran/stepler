@@ -41,13 +41,32 @@
         --amber: #ff9a00;
         --red: #ff3b30;
 
+        /* The logo is two ribbons: a cool one over a warm one. The page
+           uses both, and --brand-full sweeps through all four stops. */
         --brand: linear-gradient(135deg, var(--blue), var(--violet));
+        --brand-warm: linear-gradient(135deg, var(--amber), var(--red));
+        /* #ff5f9e is the bridge: straight violet -> amber crosses a muddy
+           grey, so the sweep is routed through pink instead. */
+        --brand-full: linear-gradient(
+          100deg,
+          var(--blue) 0%,
+          var(--violet) 26%,
+          #ff5f9e 54%,
+          var(--amber) 82%,
+          var(--red) 100%
+        );
+        --warm-ink: #e2481a;
+        --glow-cool: 120, 100, 255;
+        --glow-warm: 255, 92, 26;
+
         --shadow-sm: 0 1px 2px rgba(12, 12, 25, 0.05);
         --shadow-md: 0 12px 32px -12px rgba(12, 12, 25, 0.18);
         --shadow-xl: 0 48px 100px -32px rgba(12, 12, 25, 0.35);
 
         --particle: 155, 106, 255;
-        --particle-link: 65, 161, 255;
+        --particle-warm: 255, 128, 30;
+        --particle-link: 255, 122, 24;
+        --particle-warm-share: 0.34;
         --particle-alpha: 0.55;
         --link-alpha: 0.22;
 
@@ -99,11 +118,18 @@
         inset: 0;
         z-index: 0;
         pointer-events: none;
-        background: radial-gradient(
-          520px circle at var(--pointer-x) var(--pointer-y),
-          rgba(155, 106, 255, 0.1),
-          transparent 68%
-        );
+        background:
+          radial-gradient(
+            520px circle at var(--pointer-x) var(--pointer-y),
+            rgba(155, 106, 255, 0.1),
+            transparent 68%
+          ),
+          radial-gradient(
+            760px circle at calc(var(--pointer-x) + 200px)
+              calc(var(--pointer-y) + 140px),
+            rgba(255, 138, 0, 0.1),
+            transparent 66%
+          );
       }
 
       .page {
@@ -201,12 +227,12 @@
         gap: 7px;
         padding: 7px 15px;
         border-radius: 999px;
-        background: var(--brand);
+        background: var(--brand-warm);
         color: #fff !important;
         font-size: 14px;
         font-weight: 600;
         text-decoration: none;
-        box-shadow: 0 6px 18px -6px rgba(120, 100, 255, 0.65);
+        box-shadow: 0 6px 18px -6px rgba(var(--glow-warm), 0.6);
         transition:
           transform 0.18s ease,
           box-shadow 0.18s ease;
@@ -214,7 +240,7 @@
 
       .nav-cta:hover {
         transform: translateY(-1px);
-        box-shadow: 0 10px 24px -8px rgba(120, 100, 255, 0.8);
+        box-shadow: 0 10px 24px -8px rgba(var(--glow-warm), 0.78);
       }
 
       @media (max-width: 700px) {
@@ -270,7 +296,7 @@
 
       .hero h1 .grad {
         display: inline-block;
-        background: var(--brand);
+        background: var(--brand-full);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -315,14 +341,14 @@
       }
 
       .btn-primary {
-        background: var(--brand);
+        background: var(--brand-warm);
         color: #fff;
-        box-shadow: 0 14px 34px -14px rgba(120, 100, 255, 0.9);
+        box-shadow: 0 14px 34px -14px rgba(var(--glow-warm), 0.85);
       }
 
       .btn-primary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 20px 44px -16px rgba(120, 100, 255, 1);
+        box-shadow: 0 20px 44px -16px rgba(var(--glow-warm), 0.95);
       }
 
       .btn-ghost {
@@ -446,6 +472,10 @@
         color: var(--violet);
       }
 
+      .kicker.warm {
+        color: var(--warm-ink);
+      }
+
       .section-head h2 {
         margin-top: 14px;
         font-size: clamp(1.9rem, 3.4vw, 2.7rem);
@@ -506,7 +536,14 @@
         border-radius: 11px;
         background: var(--brand);
         color: #fff;
-        box-shadow: 0 8px 20px -10px rgba(120, 100, 255, 0.9);
+        box-shadow: 0 8px 20px -10px rgba(var(--glow-cool), 0.9);
+      }
+
+      /* Every other card wears the warm ribbon, so the grid reads as a
+         checkerboard of the logo's two halves instead of one purple wall. */
+      .card:nth-child(even) .ico {
+        background: var(--brand-warm);
+        box-shadow: 0 8px 20px -10px rgba(var(--glow-warm), 0.85);
       }
 
       .card .ico svg {
@@ -555,7 +592,7 @@
         padding: 5px 10px;
         border-radius: 8px;
         border: 1px solid var(--line-strong);
-        border-bottom-width: 2px;
+        border-bottom: 2px solid rgba(255, 122, 24, 0.5);
         background: var(--bg);
         font-family: inherit;
         font-size: 13.5px;
@@ -580,7 +617,18 @@
         padding: 40px;
         border: 1px solid var(--line);
         border-radius: 24px;
-        background: var(--bg-card);
+        background:
+          radial-gradient(
+            72% 120% at 0% 0%,
+            rgba(155, 106, 255, 0.09),
+            transparent 62%
+          ),
+          radial-gradient(
+            72% 130% at 100% 100%,
+            rgba(255, 138, 0, 0.11),
+            transparent 64%
+          ),
+          var(--bg-card);
         backdrop-filter: blur(14px);
         -webkit-backdrop-filter: blur(14px);
         box-shadow: var(--shadow-sm);
@@ -640,10 +688,33 @@
 
       /* Closing CTA */
       .closing {
+        position: relative;
         margin-top: 112px;
         padding: 76px 24px 84px;
         text-align: center;
         border-top: 1px solid var(--line);
+      }
+
+      .closing::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            56% 110% at 20% 0%,
+            rgba(155, 106, 255, 0.11),
+            transparent 70%
+          ),
+          radial-gradient(
+            58% 120% at 82% 40%,
+            rgba(255, 138, 0, 0.13),
+            transparent 72%
+          );
+      }
+
+      .closing > .wrap {
+        position: relative;
       }
 
       .closing h2 {
@@ -1004,7 +1075,7 @@
         <!-- Shortcuts -->
         <section class="band wrap" id="shortcuts">
           <div class="section-head center reveal">
-            <div class="kicker">Keyboard first</div>
+            <div class="kicker warm">Keyboard first</div>
             <h2>Four keys and you're done.</h2>
           </div>
 
@@ -1032,7 +1103,7 @@
         <section class="band wrap" id="data">
           <div class="split reveal">
             <div>
-              <div class="kicker">Local first</div>
+              <div class="kicker warm">Local first</div>
               <h2>Your notes never leave the machine.</h2>
               <p>
                 Everything lives in a plain folder on your own disk. Writes are
@@ -1178,7 +1249,10 @@
           var s = getComputedStyle(root);
           return {
             dot: s.getPropertyValue("--particle").trim() || "155, 106, 255",
-            link: s.getPropertyValue("--particle-link").trim() || "65, 161, 255",
+            warm: s.getPropertyValue("--particle-warm").trim() || "255, 128, 30",
+            link: s.getPropertyValue("--particle-link").trim() || "255, 122, 24",
+            warmShare:
+              parseFloat(s.getPropertyValue("--particle-warm-share")) || 0.34,
             dotA: parseFloat(s.getPropertyValue("--particle-alpha")) || 0.55,
             linkA: parseFloat(s.getPropertyValue("--link-alpha")) || 0.22,
           };
@@ -1194,6 +1268,8 @@
           this.vx = (Math.random() - 0.5) * 0.34;
           this.vy = (Math.random() - 0.5) * 0.34;
           this.r = Math.random() * 1.5 + 0.9;
+          // A slice of the field carries the logo's warm ribbon.
+          this.warm = Math.random() < palette.warmShare;
         }
 
         Particle.prototype.step = function () {
@@ -1289,7 +1365,12 @@
             p = particles[i];
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(" + palette.dot + "," + palette.dotA + ")";
+            ctx.fillStyle =
+              "rgba(" +
+              (p.warm ? palette.warm : palette.dot) +
+              "," +
+              palette.dotA +
+              ")";
             ctx.fill();
           }
 
@@ -1332,7 +1413,12 @@
             var pp = particles[k];
             ctx.beginPath();
             ctx.arc(pp.x, pp.y, pp.r, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(" + palette.dot + "," + palette.dotA + ")";
+            ctx.fillStyle =
+              "rgba(" +
+              (pp.warm ? palette.warm : palette.dot) +
+              "," +
+              palette.dotA +
+              ")";
             ctx.fill();
           }
         }
