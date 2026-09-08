@@ -161,6 +161,7 @@ const defaults = {
   hotkey: isMac ? "Shift+Command+Space" : "Ctrl+Shift+Space",
   theme: "dark",
   appleReminders: false,
+  captureSelection: true,
   calendarSync: false,
   escToHide: true,
   apiEnabled: true,
@@ -617,7 +618,7 @@ function registerHotkey(accelerator) {
   }
   let ok = false;
   try {
-    ok = globalShortcut.register(accelerator, toggleWindow);
+    ok = globalShortcut.register(accelerator, toggleWindowFromHotkey);
   } catch {
     ok = false;
   }
@@ -653,6 +654,39 @@ function applyTheme(theme) {
 
 // --------------- Window toggle ---------------
 
+/**
+ * What is selected in whatever app is in front, on the way to showing the
+ * window. macOS has no way to read another app's selection, so this copies it
+ * — and puts the clipboard back the way it was, because taking someone's
+ * clipboard to be helpful is not a fair trade.
+ *
+ * Returns null when nothing is selected, when the copy changed nothing, or on
+ * any refusal at all: this must never be the reason the window fails to open.
+ */
+async function grabSelectedText() {
+  if (!isMac || !loadSettings().captureSelection) return null;
+  const before = clipboard.readText();
+  const beforeImage = clipboard.readImage();
+  try {
+    const res = await runAppleScript(
+      'tell application "System Events" to keystroke "c" using command down',
+    );
+    if (!res.ok) return null;
+    // The copy lands asynchronously; give the front app a moment to serve it.
+    await new Promise((r) => setTimeout(r, 140));
+    const after = clipboard.readText();
+    if (!after || after === before) return null;
+    const text = after.trim();
+    // Restore what was there. An image clipboard survives too.
+    if (before) clipboard.writeText(before);
+    else if (!beforeImage.isEmpty()) clipboard.writeImage(beforeImage);
+    else clipboard.clear();
+    return text.length > 5000 ? text.slice(0, 5000) : text;
+  } catch {
+    return null;
+  }
+}
+
 function showWindow() {
   if (!mainWindow) createWindow();
   if (!mainWindow) return;
@@ -670,8 +704,22 @@ function hideWindow() {
 
 function toggleWindow() {
   if (!mainWindow) return createWindow();
-  if (mainWindow.isVisible() && mainWindow.isFocused()) hideWindow();
-  else showWindow();
+  if (mainWindow.isVisible() && mainWindow.isFocused()) return hideWindow();
+  return showWindow();
+}
+
+/**
+ * The hotkey specifically: take whatever is selected with us, so the thought
+ * you were reading is already in the box.
+ */
+async function toggleWindowFromHotkey() {
+  if (!mainWindow) return createWindow();
+  if (mainWindow.isVisible() && mainWindow.isFocused()) return hideWindow();
+  const selected = await grabSelectedText();
+  showWindow();
+  if (selected && mainWindow && !mainWindow.isDestroyed())
+    mainWindow.webContents.send("captured-selection", selected);
+  return undefined;
 }
 
 // --------------- macOS application menu ---------------
@@ -1351,6 +1399,7 @@ function setupIPC() {
       "hotkey",
       "theme",
       "appleReminders",
+      "captureSelection",
       "calendarSync",
       "escToHide",
       "apiEnabled",
@@ -2048,7 +2097,8 @@ function startAPIServer() {
       req.on("end", () => {
         if (tooBig) return send(413, { error: "Body too large" });
         try {
-          const { title } = JSON.parse(body || "{}");
+          const payload = JSON.parse(body || "{}");
+          const title = payload.title;
           if (!title || typeof title !== "string")
             return send(400, { error: "title required" });
           const data = loadAppData();
@@ -2056,7 +2106,22 @@ function startAPIServer() {
             id: String(Date.now()),
             text: title,
             completed: false,
-            priority: false,
+            priority: !!payload.priority,
+            ...(Array.isArray(payload.projects) && payload.projects.length
+              ? {
+                  projects: payload.projects.filter(
+                    (x) => typeof x === "string",
+                  ),
+                }
+              : {}),
+            ...(typeof payload.dueDate === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)
+              ? { dueDate: payload.dueDate }
+              : {}),
+            ...(typeof payload.reminder === "string" &&
+            /^\d{1,2}:\d{2}$/.test(payload.reminder)
+              ? { reminder: payload.reminder }
+              : {}),
           });
           saveAppData({ tasks: [...data.tasks, newTask] });
           flushAppData();
@@ -2067,6 +2132,75 @@ function startAPIServer() {
         }
       });
       return undefined;
+    }
+
+    if (method === "PATCH" && url.startsWith("/api/tasks/")) {
+      const id = decodeURIComponent(url.slice("/api/tasks/".length));
+      let body = "";
+      req.on("data", (c) => {
+        body += c;
+        if (body.length > 100_000) req.destroy();
+      });
+      req.on("end", () => {
+        try {
+          const patch = JSON.parse(body || "{}");
+          const data = loadAppData();
+          let found = false;
+          const tasks = data.tasks.map((t) => {
+            if (t.id !== id) return t;
+            found = true;
+            return sanitizeTask({
+              ...t,
+              ...(typeof patch.completed === "boolean"
+                ? { completed: patch.completed }
+                : {}),
+              ...(typeof patch.priority === "boolean"
+                ? { priority: patch.priority }
+                : {}),
+              ...(typeof patch.text === "string" && patch.text.trim()
+                ? { text: patch.text.trim() }
+                : {}),
+            });
+          });
+          if (!found) return send(404, { error: "Task not found" });
+          saveAppData({ tasks });
+          flushAppData();
+          broadcastData();
+          return send(
+            200,
+            tasks.find((t) => t.id === id),
+          );
+        } catch {
+          return send(400, { error: "Invalid JSON" });
+        }
+      });
+      return undefined;
+    }
+
+    if (method === "GET" && url.startsWith("/api/history")) {
+      const days = Math.min(
+        Number(new URL(url, "http://127.0.0.1").searchParams.get("days")) || 7,
+        60,
+      );
+      const data = loadAppData();
+      // The stored order is whatever the file grew into; "recent" has to mean
+      // recent by date, so sort before taking a slice.
+      const recent = [...(data.history || [])]
+        .filter((d) => d && typeof d.ymd === "string")
+        .sort((a, b) => (a.ymd < b.ymd ? 1 : -1))
+        .slice(0, days);
+      return send(
+        200,
+        recent.map((d) => ({
+          date: d.ymd,
+          tasks: (d.tasks || []).map((t) => ({
+            id: t.id,
+            text: t.text,
+            completed: !!t.completed,
+            projects: t.projects || [],
+          })),
+        })),
+      );
     }
 
     if (method === "DELETE" && url.startsWith("/api/tasks/")) {

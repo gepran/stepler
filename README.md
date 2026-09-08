@@ -38,12 +38,12 @@ npm run build:mac    # or build:win / build:linux
 
 ## 💾 Where your data lives
 
-| File | What it is |
-| --- | --- |
-| `stepler-data.json` | Tasks, history and trash |
+| File                       | What it is                                                  |
+| -------------------------- | ----------------------------------------------------------- |
+| `stepler-data.json`        | Tasks, history and trash                                    |
 | `stepler-data.backup.json` | The previous good copy, refreshed at every successful start |
-| `attachments/` | Every image and file you attached |
-| `stepler-settings.json` | Preferences, including the local API token |
+| `attachments/`             | Every image and file you attached                           |
+| `stepler-settings.json`    | Preferences, including the local API token                  |
 
 On macOS these sit in `~/Library/Application Support/stepler`, on Windows in `%APPDATA%\stepler`, and on Linux in `~/.config/stepler`.
 
@@ -63,6 +63,30 @@ node stepler-cli.mjs            # interactive
 ```
 
 `STEPLER_URL` and `STEPLER_TOKEN` override the auto-detected connection.
+
+## 🤖 Use it from Claude Code, Codex or Cursor
+
+Stepler ships an MCP server, so a coding agent can read and write your list
+without you leaving the terminal. It is a thin front for the local API above,
+has no dependencies, and needs nothing but `node`.
+
+```bash
+claude mcp add stepler -- node /path/to/stepler-mcp.mjs
+```
+
+For Codex or Cursor, point their MCP config at the same command.
+
+| Tool            | What it does                                                    |
+| --------------- | --------------------------------------------------------------- |
+| `list_tasks`    | Today's list, with projects, dates and reminders                |
+| `add_task`      | Write a task down — optionally with a project, a day and a time |
+| `complete_task` | Tick one off, or put it back                                    |
+| `delete_task`   | Send one to the trash                                           |
+| `recent_days`   | What was on the list on previous days                           |
+
+Requires the app to be running with **Settings → Integrations → Command line
+access** on, since that is what serves the local API. Everything stays on
+127.0.0.1.
 
 ## 🔌 Integrations
 

@@ -107,6 +107,16 @@ const TaskInput = forwardRef(function TaskInput(
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
+    /** Text arriving from outside — the selection the hotkey brought along. */
+    insertText: (text) => {
+      setValue((prev) => (prev ? `${prev}\n${text}` : text));
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    },
   }));
 
   // Recompute the day strip if the app is left open across midnight.

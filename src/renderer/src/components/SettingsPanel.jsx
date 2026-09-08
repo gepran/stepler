@@ -360,6 +360,30 @@ export default function SettingsPanel({
                 <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
                   Behaviour
                 </label>
+                {isMac && (
+                  <div className="mb-4 flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
+                    <div>
+                      <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">
+                        Bring the selection with you
+                      </div>
+                      <div className="text-sm text-neutral-500">
+                        Text selected in another app lands in the composer when
+                        you open Stepler with the shortcut. Your clipboard is
+                        put back afterwards.
+                      </div>
+                    </div>
+                    <Toggle
+                      on={settings.captureSelection !== false}
+                      label="Bring the selection with you"
+                      onClick={() =>
+                        updateSetting({
+                          captureSelection: settings.captureSelection === false,
+                        })
+                      }
+                    />
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
                   <div>
                     <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">

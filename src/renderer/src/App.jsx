@@ -364,6 +364,17 @@ export default function App() {
     availableProjects,
   ]);
 
+  // --- Text that came in with the hotkey ---
+  useEffect(() => {
+    if (!ipc) return undefined;
+    const onCaptured = (_e, text) => {
+      if (typeof text !== "string" || !text.trim()) return;
+      inputRef.current?.insertText?.(text.trim());
+    };
+    ipc.on("captured-selection", onCaptured);
+    return () => ipc.removeAllListeners("captured-selection");
+  }, []);
+
   // --- Update availability, surfaced as a pill in the header ---
   useEffect(() => {
     if (!ipc) return undefined;
