@@ -610,7 +610,7 @@ export default function App() {
             dateString: dueDate,
           })
           .then((res) => {
-            if (res?.success)
+            if (res?.success) {
               setTasks((prev) =>
                 prev.map((t) =>
                   t.id === taskId
@@ -618,8 +618,18 @@ export default function App() {
                     : t,
                 ),
               );
+              return;
+            }
+            // Silence here is what makes calendar sync look broken: the task
+            // appears, no event does, and nothing says why.
+            toast(
+              res?.error || "Could not add this to Google Calendar",
+              "error",
+            );
           })
-          .catch(() => {});
+          .catch((err) =>
+            toast(err?.message || "Could not reach Google Calendar", "error"),
+          );
       }
       if (dueDate && settingsRef.current.appleReminders) {
         ipc

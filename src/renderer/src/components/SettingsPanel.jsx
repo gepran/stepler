@@ -104,6 +104,13 @@ export default function SettingsPanel({
   const [activeTab, setActiveTab] = useState("general");
   const recorderRef = useRef(null);
 
+  // The connect callback fires from a mount-only effect, so read the latest
+  // handler through a ref instead of widening that effect's deps.
+  const onSettingsUpdateRef = useRef(onSettingsUpdate);
+  useEffect(() => {
+    onSettingsUpdateRef.current = onSettingsUpdate;
+  }, [onSettingsUpdate]);
+
   const [gcalStatus, setGcalStatus] = useState({
     configured: false,
     connected: false,
@@ -118,8 +125,17 @@ export default function SettingsPanel({
     ipc?.invoke("google-calendar-status").then((s) => s && setGcalStatus(s));
     ipc?.invoke("jira-status").then((s) => s && setJiraStatus(s));
 
-    const refreshGcal = () =>
+    const refreshGcal = () => {
       ipc?.invoke("google-calendar-status").then(setGcalStatus);
+      // Connecting flips calendarSync on in the main process. Pull the
+      // settings back so both this panel and the task list see it without a
+      // restart — the create path reads calendarSync from the app's copy.
+      ipc?.invoke("get-settings").then((s) => {
+        if (!s) return;
+        setSettings(s);
+        onSettingsUpdateRef.current?.(s);
+      });
+    };
     const refreshJira = () => ipc?.invoke("jira-status").then(setJiraStatus);
     ipc?.on("google-calendar-connected", refreshGcal);
     ipc?.on("jira-connected", refreshJira);

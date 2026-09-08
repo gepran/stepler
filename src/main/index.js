@@ -1907,6 +1907,9 @@ async function handleGoogleCallback(url, send) {
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
     saveSecret(GCAL_TOKEN_PATH, tokens);
+    // Connecting the account is the whole point of connecting it, so start
+    // mirroring straight away rather than making people find a second switch.
+    saveSettings({ calendarSync: true });
     mainWindow?.webContents.send("google-calendar-connected", true);
     return send(
       200,
