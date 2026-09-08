@@ -536,7 +536,7 @@ export default function SettingsPanel({
                         </div>
                         <div className="text-sm text-neutral-500">
                           {!gcalStatus.configured
-                            ? "Not set up on this machine — see the README to add credentials."
+                            ? "Needs your own Google OAuth credentials."
                             : gcalStatus.connected
                               ? gcalStatus.email || "Connected"
                               : "Create an event for tasks that have a date."}
@@ -579,6 +579,38 @@ export default function SettingsPanel({
                       </button>
                     )}
                   </div>
+                  {!gcalStatus.configured && (
+                    <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
+                      <div className="text-sm text-neutral-500">
+                        No credentials ship inside Stepler, so nobody borrows
+                        anyone else&apos;s. Register your own OAuth app, then
+                        put the id and secret in{" "}
+                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] dark:bg-neutral-800">
+                          stepler-integrations.json
+                        </code>{" "}
+                        in the data folder.
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => ipc?.invoke("open-data-folder")}
+                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        >
+                          Open data folder
+                        </button>
+                        <button
+                          onClick={() =>
+                            ipc?.invoke(
+                              "open-external",
+                              "https://github.com/gepran/stepler#-integrations",
+                            )
+                          }
+                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        >
+                          Setup guide
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {gcalStatus.connected && (
                     <div className="mt-5 flex items-center justify-between border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
                       <div>
@@ -615,7 +647,7 @@ export default function SettingsPanel({
                         </div>
                         <div className="text-sm text-neutral-500">
                           {!jiraStatus.configured
-                            ? "Not set up on this machine — see the README to add credentials."
+                            ? "Needs your own Jira OAuth credentials."
                             : jiraStatus.connected
                               ? "Connected"
                               : "Create Jira issues straight from a note."}
@@ -654,6 +686,38 @@ export default function SettingsPanel({
                       </button>
                     )}
                   </div>
+                  {!jiraStatus.configured && (
+                    <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
+                      <div className="text-sm text-neutral-500">
+                        No credentials ship inside Stepler, so nobody borrows
+                        anyone else&apos;s. Register your own OAuth app, then
+                        put the id and secret in{" "}
+                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] dark:bg-neutral-800">
+                          stepler-integrations.json
+                        </code>{" "}
+                        in the data folder.
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => ipc?.invoke("open-data-folder")}
+                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        >
+                          Open data folder
+                        </button>
+                        <button
+                          onClick={() =>
+                            ipc?.invoke(
+                              "open-external",
+                              "https://github.com/gepran/stepler#-integrations",
+                            )
+                          }
+                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        >
+                          Setup guide
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Apple Reminders */}

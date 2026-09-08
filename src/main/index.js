@@ -109,6 +109,10 @@ function escapeAppleScript(value) {
 }
 
 const REMINDER_ID_RE = /^x-apple-reminder:\/\/[0-9A-Fa-f-]{10,60}$/;
+
+/** Stepler keeps its mirrored tasks in its own list rather than the default
+ * one, so a user's existing reminders never get mixed in with ours. */
+const REMINDER_LIST = "Stepler";
 const ATTACH_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 function attachmentPath(id) {
@@ -1129,7 +1133,10 @@ set hours of targetDate to ${date.getHours()}
 set minutes of targetDate to ${date.getMinutes()}
 set seconds of targetDate to 0
 tell application "Reminders"
-set newRem to make new reminder with properties {name:"${escapeAppleScript(text)}", remind me date:targetDate}
+if not (exists list "${REMINDER_LIST}") then
+make new list with properties {name:"${REMINDER_LIST}"}
+end if
+set newRem to make new reminder at end of list "${REMINDER_LIST}" with properties {name:"${escapeAppleScript(text)}", remind me date:targetDate}
 return id of newRem
 end tell`;
   const res = await runAppleScript(script);
@@ -1355,6 +1362,12 @@ function setupIPC() {
     if (!isSafeExternalUrl(url)) return { success: false, error: "unsafe url" };
     shell.openExternal(url);
     return { success: true };
+  });
+
+  /** Reveal the data folder, so "put your credentials here" is one click. */
+  ipcMain.handle("open-data-folder", async () => {
+    const err = await shell.openPath(USER_DATA);
+    return err ? { success: false, error: err } : { success: true };
   });
 
   // ---- misc ----
