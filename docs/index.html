@@ -9,7 +9,7 @@
       content="Stepler keeps today's work at the bottom of the screen, next to the box you type in. Finished days roll up into history. Free, local-first, for macOS and Windows."
     />
     <link rel="icon" href="icon.png" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="light" />
 
     <meta property="og:title" content="Stepler — a fast daily task timeline" />
     <meta
@@ -55,26 +55,6 @@
         --maxw: 1120px;
         --pointer-x: 50vw;
         --pointer-y: 40vh;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #08080c;
-          --bg-elevated: rgba(20, 20, 27, 0.7);
-          --bg-card: rgba(24, 24, 32, 0.55);
-          --text: #f4f4f7;
-          --text-muted: #9a9aa6;
-          --text-faint: #6d6d79;
-          --line: rgba(255, 255, 255, 0.1);
-          --line-strong: rgba(255, 255, 255, 0.16);
-
-          --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-          --shadow-md: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
-          --shadow-xl: 0 48px 110px -30px rgba(0, 0, 0, 0.9);
-
-          --particle-alpha: 0.62;
-          --link-alpha: 0.26;
-        }
       }
 
       /* ---------------------------------------------------------------
@@ -861,18 +841,12 @@
               <span class="dot g"></span>
               <span class="name">Stepler</span>
             </div>
-            <picture>
-              <source
-                srcset="screenshot-dark.png"
-                media="(prefers-color-scheme: dark)"
-              />
-              <img
-                src="screenshot-light.png"
-                width="1400"
-                height="940"
-                alt="Stepler showing today's timeline: completed tasks struck through, a task with subtasks, a task due tomorrow with a 09:30 reminder, and a starred task with a 17:00 reminder, above the composer."
-              />
-            </picture>
+            <img
+              src="screenshot-light.png"
+              width="1400"
+              height="940"
+              alt="Stepler showing today's timeline: completed tasks struck through, a task with subtasks, a task due tomorrow with a 09:30 reminder, and a starred task with a 17:00 reminder, above the composer."
+            />
           </div>
           <p class="caption">
             The whole app: projects on the left, the day's timeline in the
@@ -1343,12 +1317,6 @@
         document.addEventListener("visibilitychange", function () {
           document.hidden ? stop() : start();
         });
-
-        var darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-        if (darkQuery.addEventListener)
-          darkQuery.addEventListener("change", function () {
-            palette = colors();
-          });
 
         if (reduced) {
           // One still frame: the texture, none of the motion.
