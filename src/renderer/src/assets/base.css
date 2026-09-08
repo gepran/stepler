@@ -160,3 +160,70 @@
   border-left: 1px solid var(--tree-line);
   border-bottom-left-radius: 8px;
 }
+
+/* --------------------------------------------------------------------------
+   Composer focus ring: a highlight that travels clockwise around the border.
+   The conic gradient is masked down to the padding area, which leaves just
+   the ring; @property is what makes the angle animatable at all.
+   -------------------------------------------------------------------------- */
+@property --shine-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.shine-ring {
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 25.5px;
+  padding: 1.5px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--shine-angle),
+    transparent 0turn,
+    transparent 0.55turn,
+    rgba(65, 161, 255, 0) 0.6turn,
+    #41a1ff 0.74turn,
+    #9b6aff 0.84turn,
+    rgba(155, 106, 255, 0) 0.92turn,
+    transparent 1turn
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: shine-spin 2.6s linear infinite;
+}
+
+/* A blurred copy underneath turns the line into an actual glow. */
+.shine-ring::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(7px);
+  opacity: 0.55;
+}
+
+@keyframes shine-spin {
+  to {
+    --shine-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shine-ring {
+    animation: none;
+    background: linear-gradient(90deg, #41a1ff, #9b6aff);
+    opacity: 0.5;
+  }
+
+  .shine-ring::after {
+    display: none;
+  }
+}

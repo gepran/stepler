@@ -230,6 +230,8 @@ const TaskInput = forwardRef(function TaskInput(
               !isExpanded && showControls ? "pb-2" : ""
             }`}
           >
+            {isFocused && <span aria-hidden="true" className="shine-ring" />}
+
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className={`btn-tactile absolute right-4 z-10 rounded-md text-neutral-400 transition-colors hover:text-neutral-600 dark:hover:text-neutral-200 ${
