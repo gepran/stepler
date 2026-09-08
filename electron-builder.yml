@@ -20,11 +20,18 @@ nsis:
   createDesktopShortcut: always
 mac:
   entitlementsInherit: build/entitlements.mac.plist
+  # A mapping, not a list. As a list electron-builder writes each entry under a
+  # numeric key ("0", "1", ...) and macOS, which looks at the top level, never
+  # sees any of them.
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSCameraUsageDescription: Application requests access to the device's camera.
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    # Required to drive the Reminders app over Apple Events. Without it macOS
+    # cannot show the Automation prompt and the integration fails with -1743
+    # the moment the build is properly signed.
+    NSAppleEventsUsageDescription: Stepler mirrors your dated tasks into the Reminders app.
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
