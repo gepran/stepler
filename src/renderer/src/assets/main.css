@@ -1,2 +1,11 @@
 @import "tailwindcss";
 @import "./base.css";
+
+/* Tailwind's `font-sans` utility sits on the app's root element, so redefining
+   the token is what actually changes the app's type — a rule on `body` alone
+   gets overridden the moment that utility appears. */
+@theme {
+  --font-sans:
+    "BPG Mrgvlovani Caps", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Helvetica Neue", sans-serif;
+}
