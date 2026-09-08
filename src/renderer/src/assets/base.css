@@ -1,3 +1,10 @@
+@font-face {
+  font-family: "BPG Mrgvlovani Caps";
+  src: url("./fonts/BPGMrgvlovaniCaps2010.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 @layer base {
   html,
   body,
@@ -7,8 +14,15 @@
   }
 
   body {
+    /* The system stack stays behind it: BPG covers Latin, Cyrillic, digits
+       and modern Mkhedruli, but nothing else — emoji and the rest fall
+       through. */
     font-family:
-      -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+      "BPG Mrgvlovani Caps",
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Text",
+      "Helvetica Neue",
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

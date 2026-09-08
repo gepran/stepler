@@ -59,6 +59,15 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow = null;
 let tray = null;
+let autoUpdater = null;
+/** What the header pill is showing right now, replayed to a fresh window. */
+let updateState = { status: "idle" };
+
+function sendUpdateState(next) {
+  updateState = { ...next };
+  if (mainWindow && !mainWindow.isDestroyed())
+    mainWindow.webContents.send("update-state", updateState);
+}
 
 const isMac = process.platform === "darwin";
 const USER_DATA = app.getPath("userData");
@@ -1364,6 +1373,17 @@ function setupIPC() {
     return { success: true };
   });
 
+  ipcMain.handle("get-update-state", () => updateState);
+
+  /** Relaunch into the downloaded build. Only meaningful once it is ready. */
+  ipcMain.handle("install-update", () => {
+    if (!autoUpdater || updateState.status !== "ready")
+      return { success: false, error: "No update is ready yet." };
+    app.isQuitting = true;
+    setImmediate(() => autoUpdater.quitAndInstall());
+    return { success: true };
+  });
+
   /** Reveal the data folder, so "put your credentials here" is one click. */
   ipcMain.handle("open-data-folder", async () => {
     const err = await shell.openPath(USER_DATA);
@@ -2045,33 +2065,45 @@ if (!app.requestSingleInstanceLock()) {
       // shows up under `default`. Read both and skip quietly if neither is
       // there, rather than throwing an unhandled rejection at startup.
       const updaterModule = await import("electron-updater").catch(() => null);
-      const autoUpdater =
+      const found =
         updaterModule?.autoUpdater || updaterModule?.default?.autoUpdater;
-      if (!autoUpdater) {
+      if (!found) {
         console.warn("Updater unavailable — skipping the update check.");
       } else {
+        autoUpdater = found;
         const feedUrl = process.env.STEPLER_UPDATE_URL;
         if (feedUrl)
           autoUpdater.setFeedURL({ provider: "generic", url: feedUrl });
-        // A missing or unreachable feed must never surface as a dialog.
-        autoUpdater.on("error", (err) => console.warn("Updater:", err.message));
-        autoUpdater.on("update-downloaded", () => {
-          dialog
-            .showMessageBox({
-              type: "info",
-              title: "Update Available",
-              message:
-                "A new version of Stepler has been downloaded. Restart to apply it.",
-              buttons: ["Restart", "Later"],
-            })
-            .then(({ response }) => {
-              if (response === 0) {
-                app.isQuitting = true;
-                autoUpdater.quitAndInstall();
-              }
-            });
+
+        // The window owns the update UI now: a pill in the header rather than
+        // a modal that interrupts whatever the person was typing.
+        autoUpdater.on("checking-for-update", () =>
+          sendUpdateState({ status: "checking" }),
+        );
+        autoUpdater.on("update-not-available", () =>
+          sendUpdateState({ status: "idle" }),
+        );
+        autoUpdater.on("update-available", (info) =>
+          sendUpdateState({ status: "downloading", version: info?.version }),
+        );
+        autoUpdater.on("download-progress", (p) =>
+          sendUpdateState({
+            status: "downloading",
+            percent: Math.round(p?.percent || 0),
+          }),
+        );
+        autoUpdater.on("update-downloaded", (info) =>
+          sendUpdateState({ status: "ready", version: info?.version }),
+        );
+        autoUpdater.on("error", (err) => {
+          console.warn("Updater:", err.message);
+          sendUpdateState({ status: "error", error: err.message });
         });
-        autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+
+        const check = () => autoUpdater.checkForUpdates().catch(() => {});
+        check();
+        // Long-running windows should still notice a release that lands later.
+        setInterval(check, 6 * 60 * 60 * 1000);
       }
     }
 

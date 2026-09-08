@@ -8,6 +8,7 @@ import {
 } from "react";
 import PropTypes from "prop-types";
 import Sidebar from "./components/Sidebar";
+import UpdatePill from "./components/UpdatePill";
 import ParticleCanvas from "./components/ParticleCanvas";
 import SettingsPanel from "./components/SettingsPanel";
 import FullScreenSearch from "./components/FullScreenSearch";
@@ -130,6 +131,7 @@ export default function App() {
   const [previewFile, setPreviewFile] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [updateState, setUpdateState] = useState({ status: "idle" });
   const [deleteTrigger, setDeleteTrigger] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -363,6 +365,15 @@ export default function App() {
     settings.projects,
     availableProjects,
   ]);
+
+  // --- Update availability, surfaced as a pill in the header ---
+  useEffect(() => {
+    if (!ipc) return undefined;
+    ipc.invoke("get-update-state").then((s) => s && setUpdateState(s));
+    const onUpdate = (_e, next) => next && setUpdateState(next);
+    ipc.on("update-state", onUpdate);
+    return () => ipc.removeAllListeners("update-state");
+  }, []);
 
   // --- Persist (the main process batches this into one atomic write) ---
   useEffect(() => {
@@ -1324,6 +1335,10 @@ export default function App() {
               style={{ WebkitAppRegion: "no-drag" }}
               className="flex items-center gap-3"
             >
+              <UpdatePill
+                state={updateState}
+                onInstall={() => ipc?.invoke("install-update")}
+              />
               <button
                 onClick={() => setShowCompleted((v) => !v)}
                 className="flex items-center gap-2 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
