@@ -31,7 +31,7 @@ import {
   closeSync,
 } from "fs";
 import { tmpdir } from "os";
-import { randomUUID, randomBytes, timingSafeEqual } from "crypto";
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from "crypto";
 import { execFile } from "child_process";
 import http from "http";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
@@ -960,9 +960,111 @@ async function initGoogleAuth() {
 // --------------- Jira ---------------
 
 const JIRA_TOKEN_PATH = join(USER_DATA, "step-jira-token.json");
+const JIRA_BASIC_PATH = join(USER_DATA, "step-jira-basic.json");
 let jiraAuthToken = null;
+/** { siteUrl, email, token } when signed in with an Atlassian API token. */
+let jiraBasic = null;
+
+/** Accepts "acme", "acme.atlassian.net" or a full URL; returns the origin. */
+function parseJiraSite(value) {
+  let raw = String(value || "").trim();
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw))
+    raw = `https://${raw.includes(".") ? raw : `${raw}.atlassian.net`}`;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return null;
+    if (!/^[a-z0-9.-]+$/i.test(u.hostname)) return null;
+    return `https://${u.hostname}`;
+  } catch {
+    return null;
+  }
+}
+
+function jiraFetch(creds, path, init = {}) {
+  const auth = Buffer.from(`${creds.email}:${creds.token}`).toString("base64");
+  return fetch(`${creds.siteUrl}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Basic ${auth}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+}
+
+/**
+ * One way in for every Jira call, whichever sign-in is in play. Basic auth
+ * talks to the site directly; OAuth goes through api.atlassian.com and needs
+ * the cloud id first.
+ */
+async function jiraApi(path, init = {}) {
+  if (jiraBasic) {
+    const res = await jiraFetch(jiraBasic, path, init);
+    const body = await res.json().catch(() => null);
+    return {
+      ok: res.ok,
+      status: res.status,
+      body,
+      error: res.ok ? null : jiraHttpError(res.status, body),
+    };
+  }
+
+  const token = await getJiraAccessToken();
+  if (!token)
+    return { ok: false, status: 0, body: null, error: "Not connected" };
+  const sites = await fetch(
+    "https://api.atlassian.com/oauth/token/accessible-resources",
+    { headers: { Authorization: `Bearer ${token}` } },
+  ).then((r) => r.json());
+  if (!Array.isArray(sites) || !sites.length)
+    return {
+      ok: false,
+      status: 0,
+      body: null,
+      error: "No accessible Jira sites",
+    };
+  const cloudId = sites[0].id;
+  const res = await fetch(
+    `https://api.atlassian.com/ex/jira/${cloudId}${path}`,
+    {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    },
+  );
+  const body = await res.json().catch(() => null);
+  return {
+    ok: res.ok,
+    status: res.status,
+    body,
+    cloudId,
+    error: res.ok ? null : jiraHttpError(res.status, body),
+  };
+}
+
+/** Jira's own message when it gives one, and something actionable when not. */
+function jiraHttpError(status, body) {
+  const said =
+    body?.errorMessages?.join(", ") ||
+    Object.values(body?.errors || {}).join(", ") ||
+    "";
+  if (said) return said;
+  if (status === 401)
+    return "Jira rejected the sign-in. Reconnect in Settings.";
+  if (status === 403) return "Your Jira account is not allowed to do that.";
+  if (status === 404)
+    return "Jira could not find that. Is the site address right?";
+  return `Jira answered ${status}.`;
+}
 
 function initJiraAuth() {
+  jiraBasic = loadSecret(JIRA_BASIC_PATH);
   if (!integrationConfig.jiraClientId || !integrationConfig.jiraClientSecret)
     return;
   jiraAuthToken = loadSecret(JIRA_TOKEN_PATH);
@@ -1038,6 +1140,12 @@ function jiraAuthUrl() {
     "read:jira-work",
     "write:jira-work",
     "read:jira-user",
+    // Boards and sprints live behind their own scopes; without these the
+    // agile endpoints answer with an insufficient-scope error.
+    "read:project:jira",
+    "read:board-scope:jira-software",
+    "read:sprint:jira-software",
+    "write:sprint:jira-software",
     "offline_access",
   ].join(" ");
   const state = newOAuthState("jira");
@@ -1048,12 +1156,25 @@ function jiraAuthUrl() {
   )}&state=${state}&response_type=code&prompt=consent`;
 }
 
+/**
+ * PKCE, one verifier per authorization attempt. Google documents that an
+ * installed app "cannot keep secrets", so the proof is what actually ties the
+ * code back to this process rather than a client secret on disk.
+ */
+let googleCodeVerifier = null;
+
 function googleAuthUrl() {
   if (!oAuth2Client) return null;
+  googleCodeVerifier = randomBytes(48).toString("base64url").slice(0, 128);
+  const challenge = createHash("sha256")
+    .update(googleCodeVerifier)
+    .digest("base64url");
   return oAuth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     state: newOAuthState("google"),
+    code_challenge: challenge,
+    code_challenge_method: "S256",
     scope: [
       "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/userinfo.email",
@@ -1670,10 +1791,16 @@ function setupIPC() {
   // ---- Jira ----
 
   ipcMain.handle("jira-status", () => ({
-    configured: !!(
+    // OAuth needs credentials this machine may not have; an API token needs
+    // nothing but the token, so the card is never "not set up" for it.
+    configured: true,
+    oauthConfigured: !!(
       integrationConfig.jiraClientId && integrationConfig.jiraClientSecret
     ),
-    connected: !!jiraAuthToken?.access_token,
+    connected: !!(jiraBasic || jiraAuthToken?.access_token),
+    mode: jiraBasic ? "token" : jiraAuthToken?.access_token ? "oauth" : null,
+    site: jiraBasic?.siteUrl || null,
+    email: jiraBasic?.email || null,
   }));
 
   ipcMain.handle("jira-auth", () => {
@@ -1681,46 +1808,68 @@ function setupIPC() {
     if (!url)
       return {
         success: false,
-        error: "Jira is not configured on this machine.",
+        error: "Jira OAuth is not configured on this machine.",
       };
     shell.openExternal(url);
     return { success: true };
   });
 
+  /**
+   * Sign in with an Atlassian API token instead of OAuth. Atlassian has no
+   * public-client OAuth flow, so a distributed copy of Stepler cannot ship a
+   * usable client secret; a token the person makes themselves is the honest
+   * way in. Verified against /myself before it is stored.
+   */
+  ipcMain.handle("jira-connect-token", async (_, payload) => {
+    const parsed = parseJiraSite(payload?.siteUrl);
+    if (!parsed)
+      return {
+        success: false,
+        error: "That does not look like a Jira site address.",
+      };
+    const email = String(payload?.email || "").trim();
+    const token = String(payload?.token || "").trim();
+    if (!email.includes("@"))
+      return {
+        success: false,
+        error: "Enter the email of your Atlassian account.",
+      };
+    if (!token) return { success: false, error: "Paste your API token." };
+
+    const candidate = { siteUrl: parsed, email, token };
+    try {
+      const res = await jiraFetch(candidate, "/rest/api/3/myself");
+      if (res.status === 401 || res.status === 403)
+        return {
+          success: false,
+          error: "Atlassian refused that email and token.",
+        };
+      if (!res.ok)
+        return { success: false, error: `Jira answered ${res.status}.` };
+      const me = await res.json();
+      jiraBasic = candidate;
+      saveSecret(JIRA_BASIC_PATH, candidate);
+      return { success: true, displayName: me?.displayName || email };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle("jira-disconnect", () => {
     jiraAuthToken = null;
+    jiraBasic = null;
     clearSecret(JIRA_TOKEN_PATH);
+    clearSecret(JIRA_BASIC_PATH);
     return { success: true };
   });
 
-  // Renderer used to call this under a different name than the handler; keep
-  // both spellings registered so neither side can drift again.
   const jiraProjects = async () => {
-    const token = await getJiraAccessToken();
-    if (!token) return { success: false, error: "Not connected" };
     try {
-      const resRes = await fetch(
-        "https://api.atlassian.com/oauth/token/accessible-resources",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const resources = await resRes.json();
-      if (!Array.isArray(resources) || !resources.length)
-        return { success: false, error: "No accessible Jira sites" };
-      const cloudId = resources[0].id;
-      const projRes = await fetch(
-        `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project/search?maxResults=100`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-      );
-      const body = await projRes.json();
-      const projects = Array.isArray(body) ? body : body.values || [];
-      return { success: true, projects, cloudId };
+      const res = await jiraApi("/rest/api/3/project/search?maxResults=100");
+      if (!res.ok) return { success: false, error: res.error };
+      const body = res.body;
+      const projects = Array.isArray(body) ? body : body?.values || [];
+      return { success: true, projects, cloudId: res.cloudId || "" };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -1728,43 +1877,80 @@ function setupIPC() {
   ipcMain.handle("jira-get-projects", jiraProjects);
   ipcMain.handle("jira-fetch-projects", jiraProjects);
 
+  /** Boards a project has, so the sprint list has something to hang off. */
+  ipcMain.handle("jira-get-boards", async (_, { projectKey }) => {
+    if (!projectKey) return { success: false, error: "No project" };
+    try {
+      const res = await jiraApi(
+        `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}&maxResults=50`,
+      );
+      if (!res.ok) return { success: false, error: res.error };
+      return { success: true, boards: res.body?.values || [] };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  /** Only sprints you can still put work into. */
+  ipcMain.handle("jira-get-sprints", async (_, { boardId }) => {
+    if (!boardId) return { success: false, error: "No board" };
+    try {
+      const res = await jiraApi(
+        `/rest/agile/1.0/board/${encodeURIComponent(boardId)}/sprint?state=active,future&maxResults=50`,
+      );
+      if (!res.ok) return { success: false, error: res.error };
+      return { success: true, sprints: res.body?.values || [] };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle(
     "jira-create-issue",
-    async (_, { text, cloudId, projectKey }) => {
-      const token = await getJiraAccessToken();
-      if (!token) return { success: false, error: "Not connected" };
-      if (!/^[A-Za-z0-9-]{1,60}$/.test(String(cloudId || "")))
-        return { success: false, error: "Bad site id" };
+    async (_, { text, projectKey, sprintId }) => {
+      if (!projectKey) return { success: false, error: "No project" };
       try {
-        const res = await fetch(
-          `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/issue`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
+        const res = await jiraApi("/rest/api/3/issue", {
+          method: "POST",
+          body: JSON.stringify({
+            fields: {
+              project: { key: projectKey },
+              summary: String(text || "").slice(0, 250),
+              issuetype: { name: "Task" },
             },
-            body: JSON.stringify({
-              fields: {
-                project: { key: projectKey },
-                summary: String(text || "").slice(0, 250),
-                issuetype: { name: "Task" },
-              },
-            }),
-          },
-        );
-        const data = await res.json();
-        if (data.key) {
-          const site = String(data.self || "").split("/")[2];
+          }),
+        });
+        const data = res.body;
+        if (!data?.key)
           return {
-            success: true,
-            key: data.key,
-            link: site ? `https://${site}/browse/${data.key}` : null,
+            success: false,
+            error:
+              data?.errorMessages?.join(", ") ||
+              Object.values(data?.errors || {}).join(", ") ||
+              res.error ||
+              "Failed to create issue",
           };
+
+        // The sprint is a second call: creating an issue cannot set it
+        // directly without knowing the site's sprint custom field id.
+        let sprintError = null;
+        if (sprintId) {
+          const moved = await jiraApi(
+            `/rest/agile/1.0/sprint/${encodeURIComponent(sprintId)}/issue`,
+            { method: "POST", body: JSON.stringify({ issues: [data.key] }) },
+          );
+          if (!moved.ok)
+            sprintError = moved.error || "could not add it to the sprint";
         }
+
+        const site =
+          jiraBasic?.siteUrl ||
+          `https://${String(data.self || "").split("/")[2]}`;
         return {
-          success: false,
-          error: data.errorMessages?.join(", ") || "Failed to create issue",
+          success: true,
+          key: data.key,
+          link: site ? `${site}/browse/${data.key}` : null,
+          sprintError,
         };
       } catch (err) {
         return { success: false, error: err.message };
@@ -1937,7 +2123,11 @@ async function handleGoogleCallback(url, send) {
   if (!code || !oAuth2Client)
     return send(400, "<h1>No code provided</h1>", "text/html");
   try {
-    const { tokens } = await oAuth2Client.getToken(code);
+    const { tokens } = await oAuth2Client.getToken({
+      code,
+      ...(googleCodeVerifier ? { codeVerifier: googleCodeVerifier } : {}),
+    });
+    googleCodeVerifier = null;
     oAuth2Client.setCredentials(tokens);
     saveSecret(GCAL_TOKEN_PATH, tokens);
     // Connecting the account is the whole point of connecting it, so start

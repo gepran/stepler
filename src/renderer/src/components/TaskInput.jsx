@@ -15,6 +15,7 @@ import {
   attachmentSrc,
 } from "../lib/attachments";
 import { localYMD, ymdToDate } from "../lib/format";
+import { ipc } from "../lib/attachments";
 import {
   X,
   Plus,
@@ -73,11 +74,36 @@ const TaskInput = forwardRef(function TaskInput(
   const fileInputRef = useRef(null);
   const [value, setValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+
   const [draftProjects, setDraftProjects] = useState([]);
   const [draftDate, setDraftDate] = useState(null);
   const [pending, setPending] = useState(null);
   const [jiraProjectKey, setJiraProjectKey] = useState("");
+  const [jiraSprints, setJiraSprints] = useState([]);
+  const [jiraSprintId, setJiraSprintId] = useState("");
   const [newProjectDraft, setNewProjectDraft] = useState("");
+
+  // Sprints hang off boards, so a project needs two hops to reach them.
+  // Clearing the old pick happens where the project changes, not here, so the
+  // effect only ever writes state from its own async result.
+  useEffect(() => {
+    if (!jiraProjectKey || !ipc) return undefined;
+    let cancelled = false;
+    ipc
+      .invoke("jira-get-boards", { projectKey: jiraProjectKey })
+      .then((res) => {
+        const board = res?.boards?.[0];
+        if (cancelled || !board) return null;
+        return ipc.invoke("jira-get-sprints", { boardId: board.id });
+      })
+      .then((res) => {
+        if (!cancelled) setJiraSprints(res?.success ? res.sprints || [] : []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [jiraProjectKey]);
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -134,12 +160,14 @@ const TaskInput = forwardRef(function TaskInput(
       dueDate: draftDate,
       attachment: pending,
       jiraProjectKey,
+      jiraSprintId,
     });
     setValue("");
     setPending(null); // ownership passes to App, which persists it
     setDraftProjects([]);
     setDraftDate(null);
     setJiraProjectKey("");
+    setJiraSprintId("");
     setNewProjectDraft("");
     setIsExpanded(false);
   };
@@ -404,7 +432,11 @@ const TaskInput = forwardRef(function TaskInput(
                     <div className="flex items-center gap-1 border-l border-neutral-100 pl-2 dark:border-neutral-800/50">
                       <select
                         value={jiraProjectKey}
-                        onChange={(e) => setJiraProjectKey(e.target.value)}
+                        onChange={(e) => {
+                          setJiraProjectKey(e.target.value);
+                          setJiraSprintId("");
+                          setJiraSprints([]);
+                        }}
                         className="cursor-pointer bg-transparent text-xs font-medium text-neutral-600 outline-none dark:text-neutral-400"
                       >
                         <option value="">Jira Project</option>
@@ -414,6 +446,21 @@ const TaskInput = forwardRef(function TaskInput(
                           </option>
                         ))}
                       </select>
+                      {jiraProjectKey && jiraSprints.length > 0 && (
+                        <select
+                          value={jiraSprintId}
+                          onChange={(e) => setJiraSprintId(e.target.value)}
+                          className="cursor-pointer bg-transparent text-xs font-medium text-neutral-600 outline-none dark:text-neutral-400"
+                        >
+                          <option value="">Backlog</option>
+                          {jiraSprints.map((sp) => (
+                            <option key={sp.id} value={sp.id}>
+                              {sp.name}
+                              {sp.state === "active" ? " · active" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       {jiraProjectKey && (
                         <button
                           onClick={() => setJiraProjectKey("")}

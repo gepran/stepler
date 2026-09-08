@@ -119,6 +119,12 @@ export default function SettingsPanel({
     configured: false,
     connected: false,
   });
+  const [jiraForm, setJiraForm] = useState({
+    siteUrl: "",
+    email: "",
+    token: "",
+  });
+  const [jiraBusy, setJiraBusy] = useState(false);
 
   useEffect(() => {
     ipc?.invoke("get-settings").then((s) => s && setSettings(s));
@@ -662,11 +668,11 @@ export default function SettingsPanel({
                           Jira
                         </div>
                         <div className="text-sm text-neutral-500">
-                          {!jiraStatus.configured
-                            ? "Needs your own Jira OAuth credentials."
-                            : jiraStatus.connected
-                              ? "Connected"
-                              : "Create Jira issues straight from a note."}
+                          {jiraStatus.connected
+                            ? jiraStatus.site
+                              ? `${jiraStatus.email} at ${jiraStatus.site.replace(/^https:\/\//, "")}`
+                              : "Connected"
+                            : "Create Jira issues straight from a note, in the sprint you pick."}
                         </div>
                       </div>
                     </div>
@@ -674,63 +680,126 @@ export default function SettingsPanel({
                       <button
                         onClick={async () => {
                           await ipc?.invoke("jira-disconnect");
-                          setJiraStatus((p) => ({ ...p, connected: false }));
+                          setJiraStatus((p) => ({
+                            ...p,
+                            connected: false,
+                            site: null,
+                            email: null,
+                          }));
                           onToast?.("Disconnected from Jira");
                         }}
                         className="rounded-xl px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400"
                       >
                         Disconnect
                       </button>
-                    ) : (
-                      <button
-                        onClick={async () => {
-                          const res = await ipc?.invoke("jira-auth");
-                          if (!res?.success)
-                            onToast?.(
-                              res?.error || "Could not start sign-in",
-                              "error",
-                            );
-                        }}
-                        disabled={!jiraStatus.configured}
-                        className={`rounded-xl px-6 py-2.5 text-sm font-bold shadow-sm transition-all ${
-                          jiraStatus.configured
-                            ? "bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black"
-                            : "cursor-not-allowed bg-neutral-200 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-600"
-                        }`}
-                      >
-                        Connect
-                      </button>
-                    )}
+                    ) : null}
                   </div>
-                  {!jiraStatus.configured && (
+
+                  {!jiraStatus.connected && (
                     <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
                       <div className="text-sm text-neutral-500">
-                        No credentials ship inside Stepler, so nobody borrows
-                        anyone else&apos;s. Register your own OAuth app, then
-                        put the id and secret in{" "}
-                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] dark:bg-neutral-800">
-                          stepler-integrations.json
-                        </code>{" "}
-                        in the data folder.
+                        Atlassian has no sign-in that a downloadable app can
+                        ship, so Stepler uses an API token you make yourself. It
+                        is stored encrypted on this machine and goes nowhere
+                        else.
                       </div>
-                      <div className="mt-3 flex gap-2">
+
+                      <div className="mt-4 grid gap-2">
+                        <input
+                          value={jiraForm.siteUrl}
+                          onChange={(e) =>
+                            setJiraForm((f) => ({
+                              ...f,
+                              siteUrl: e.target.value,
+                            }))
+                          }
+                          placeholder="your-team.atlassian.net"
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                        />
+                        <input
+                          value={jiraForm.email}
+                          onChange={(e) =>
+                            setJiraForm((f) => ({
+                              ...f,
+                              email: e.target.value,
+                            }))
+                          }
+                          placeholder="Your Atlassian account email"
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                        />
+                        <input
+                          type="password"
+                          value={jiraForm.token}
+                          onChange={(e) =>
+                            setJiraForm((f) => ({
+                              ...f,
+                              token: e.target.value,
+                            }))
+                          }
+                          placeholder="API token"
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                        />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
                         <button
-                          onClick={() => ipc?.invoke("open-data-folder")}
-                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                          onClick={async () => {
+                            setJiraBusy(true);
+                            const res = await ipc?.invoke(
+                              "jira-connect-token",
+                              jiraForm,
+                            );
+                            setJiraBusy(false);
+                            if (res?.success) {
+                              setJiraForm({
+                                siteUrl: "",
+                                email: "",
+                                token: "",
+                              });
+                              ipc
+                                ?.invoke("jira-status")
+                                .then((st) => st && setJiraStatus(st));
+                              onToast?.(
+                                `Connected to Jira as ${res.displayName}`,
+                              );
+                            } else {
+                              onToast?.(
+                                res?.error || "Could not connect",
+                                "error",
+                              );
+                            }
+                          }}
+                          disabled={jiraBusy}
+                          className="rounded-xl bg-black px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 dark:bg-white dark:text-black dark:disabled:bg-neutral-700"
                         >
-                          Open data folder
+                          {jiraBusy ? "Checking…" : "Connect"}
                         </button>
                         <button
                           onClick={() =>
                             ipc?.invoke(
                               "open-external",
-                              "https://github.com/gepran/stepler#-integrations",
+                              "https://id.atlassian.com/manage-profile/security/api-tokens",
                             )
                           }
                           className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                         >
-                          Setup guide
+                          Create a token
                         </button>
+                        {jiraStatus.oauthConfigured && (
+                          <button
+                            onClick={async () => {
+                              const res = await ipc?.invoke("jira-auth");
+                              if (!res?.success)
+                                onToast?.(
+                                  res?.error || "Could not start sign-in",
+                                  "error",
+                                );
+                            }}
+                            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                          >
+                            Use OAuth instead
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

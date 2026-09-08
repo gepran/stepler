@@ -150,7 +150,6 @@ export default function App() {
     connected: false,
   });
   const [jiraProjects, setJiraProjects] = useState([]);
-  const [jiraCloudId, setJiraCloudId] = useState("");
 
   const inputRef = useRef(null);
   const mainScrollRef = useRef(null);
@@ -320,7 +319,6 @@ export default function App() {
         ipc.invoke("jira-fetch-projects").then((res) => {
           if (res?.success) {
             setJiraProjects(res.projects || []);
-            setJiraCloudId(res.cloudId);
           }
         });
       }
@@ -485,7 +483,6 @@ export default function App() {
           ipc.invoke("jira-fetch-projects").then((res) => {
             if (res?.success) {
               setJiraProjects(res.projects || []);
-              setJiraCloudId(res.cloudId);
             }
           });
       });
@@ -580,7 +577,14 @@ export default function App() {
   }, []);
 
   const addTask = useCallback(
-    async ({ text, projects, dueDate, attachment, jiraProjectKey }) => {
+    async ({
+      text,
+      projects,
+      dueDate,
+      attachment,
+      jiraProjectKey,
+      jiraSprintId,
+    }) => {
       const stored = attachment ? await persistAttachment(attachment) : null;
       if (attachment && !stored)
         toast("Could not save that attachment", "error");
@@ -660,15 +664,15 @@ export default function App() {
           })
           .catch(() => {});
       }
-      if (jiraProjectKey && jiraCloudId) {
+      if (jiraProjectKey) {
         ipc
           .invoke("jira-create-issue", {
             text: body,
-            cloudId: jiraCloudId,
             projectKey: jiraProjectKey,
+            sprintId: jiraSprintId || null,
           })
           .then((res) => {
-            if (res?.success)
+            if (res?.success) {
               setTasks((prev) =>
                 prev.map((t) =>
                   t.id === taskId
@@ -676,13 +680,16 @@ export default function App() {
                     : t,
                 ),
               );
-            else
+              // The issue exists either way; say so if only the sprint failed.
+              if (res.sprintError)
+                toast(`${res.key} created, but ${res.sprintError}`, "error");
+            } else
               toast(`Jira: ${res?.error || "could not create issue"}`, "error");
           })
           .catch(() => {});
       }
     },
-    [jiraCloudId, toast, rememberProjects],
+    [toast, rememberProjects],
   );
 
   const saveEdit = useCallback((id, nextText) => {
