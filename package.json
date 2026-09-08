@@ -1,7 +1,7 @@
 {
   "name": "stepler",
-  "version": "1.2.1",
-  "description": "Stepler — a fast daily task timeline for macOS and Windows",
+  "version": "1.2.2",
+  "description": "Stepler \u2014 a fast daily task timeline for macOS and Windows",
   "main": "./out/main/index.js",
   "bin": {
     "stepler": "./stepler-cli.mjs"
