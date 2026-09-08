@@ -1523,6 +1523,19 @@ function setupIPC() {
     return { success: true };
   });
 
+  /**
+   * Google's API errors are written for developers. Say what the person should
+   * actually do instead of handing them the raw string.
+   */
+  function friendlyGcalError(error) {
+    const msg = error?.message || "";
+    if (/insufficient authentication scopes|insufficient permission/i.test(msg))
+      return "Stepler was not given access to your calendar. In Settings, disconnect Google Calendar, connect again, and tick the calendar permission on Google's consent screen.";
+    if (/invalid_grant|token has been expired|revoked/i.test(msg))
+      return "Your Google sign-in has expired. Disconnect and connect again in Settings.";
+    return msg || "Could not add this to Google Calendar.";
+  }
+
   const gcalReady = () =>
     !!(
       oAuth2Client &&
@@ -1567,7 +1580,7 @@ function setupIPC() {
         return { success: true, link: res.data.htmlLink, eventId: res.data.id };
       } catch (error) {
         console.error("GCal event creation error:", error.message);
-        return { success: false, error: error.message };
+        return { success: false, error: friendlyGcalError(error) };
       }
     },
   );
@@ -1604,7 +1617,7 @@ function setupIPC() {
         });
         return { success: true, link: res.data.htmlLink };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: friendlyGcalError(error) };
       }
     },
   );
