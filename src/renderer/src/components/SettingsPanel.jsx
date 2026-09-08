@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
+import GuideTab from "./GuideTab";
 import {
+  BookOpen,
   X,
   SunMedium,
   Moon,
@@ -228,6 +230,7 @@ export default function SettingsPanel({
     { id: "general", label: "General", Icon: SunMedium },
     { id: "projects", label: "Projects", Icon: Hash },
     { id: "integrations", label: "Integrations", Icon: Calendar },
+    { id: "guide", label: "Guide", Icon: BookOpen },
     { id: "data", label: "Data", Icon: Download },
   ];
 
@@ -887,6 +890,8 @@ export default function SettingsPanel({
               </div>
             </div>
           )}
+
+          {activeTab === "guide" && <GuideTab />}
 
           {activeTab === "data" && (
             <div>
