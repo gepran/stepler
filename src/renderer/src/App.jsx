@@ -371,9 +371,14 @@ export default function App() {
       if (typeof text !== "string" || !text.trim()) return;
       inputRef.current?.insertText?.(text.trim());
     };
+    const onNeedsAccess = (_e, message) => toast(message, "error");
     ipc.on("captured-selection", onCaptured);
-    return () => ipc.removeAllListeners("captured-selection");
-  }, []);
+    ipc.on("needs-accessibility", onNeedsAccess);
+    return () => {
+      ipc.removeAllListeners("captured-selection");
+      ipc.removeAllListeners("needs-accessibility");
+    };
+  }, [toast]);
 
   // --- Update availability, surfaced as a pill in the header ---
   useEffect(() => {

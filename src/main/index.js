@@ -11,6 +11,7 @@ import {
   protocol,
   net,
   clipboard,
+  systemPreferences,
   nativeImage,
   safeStorage,
   Tray,
@@ -663,28 +664,101 @@ function applyTheme(theme) {
  * Returns null when nothing is selected, when the copy changed nothing, or on
  * any refusal at all: this must never be the reason the window fails to open.
  */
-async function grabSelectedText() {
-  if (!isMac || !loadSettings().captureSelection) return null;
+/**
+ * Copying from another app means synthesising a keystroke, and macOS only
+ * lets an app do that once it is ticked in Privacy & Security →
+ * Accessibility. Ask the first time, then stay quiet: nagging on every
+ * hotkey press would be worse than the feature being off.
+ */
+let accessibilityAsked = false;
+
+function canSendKeystrokes() {
+  if (!isMac) return false;
+  if (systemPreferences.isTrustedAccessibilityClient(false)) return true;
+  if (!accessibilityAsked) {
+    accessibilityAsked = true;
+    // `true` puts up the system dialog with the button that opens the pane.
+    systemPreferences.isTrustedAccessibilityClient(true);
+    if (mainWindow && !mainWindow.isDestroyed())
+      mainWindow.webContents.send(
+        "needs-accessibility",
+        "To bring selected text with you, tick Stepler in System Settings → Privacy & Security → Accessibility, then try again.",
+      );
+  }
+  return false;
+}
+
+/**
+ * Ask the frontmost app what is selected, through the accessibility API. No
+ * keystroke, no clipboard, nothing to put back — most native apps answer
+ * this directly.
+ */
+async function readSelectionDirectly() {
+  const res = await runAppleScript(`
+tell application "System Events"
+try
+set frontApp to first application process whose frontmost is true
+set el to value of attribute "AXFocusedUIElement" of frontApp
+set sel to value of attribute "AXSelectedText" of el
+if sel is missing value then return ""
+return sel
+on error
+return ""
+end try
+end tell`);
+  return res.ok ? res.out : "";
+}
+
+/**
+ * The fallback for apps that do not publish their selection: copy it, then
+ * put the clipboard back exactly as it was, images included.
+ */
+async function copySelectionViaClipboard() {
   const before = clipboard.readText();
   const beforeImage = clipboard.readImage();
   try {
+    // Comparing before with after cannot tell "copied the same words again"
+    // from "copied nothing", so start from empty.
+    clipboard.clear();
+    // The shortcut that got us here still has its modifiers down; Cmd+C on
+    // top of Shift+Cmd is Shift+Cmd+C, which copies nothing.
+    await new Promise((r) => setTimeout(r, 200));
     const res = await runAppleScript(
       'tell application "System Events" to keystroke "c" using command down',
     );
-    if (!res.ok) return null;
-    // The copy lands asynchronously; give the front app a moment to serve it.
-    await new Promise((r) => setTimeout(r, 140));
-    const after = clipboard.readText();
-    if (!after || after === before) return null;
-    const text = after.trim();
-    // Restore what was there. An image clipboard survives too.
+    if (!res.ok) {
+      console.warn("Selection capture: copy refused —", res.error);
+      return null;
+    }
+    let after = "";
+    for (let i = 0; i < 12; i += 1) {
+      await new Promise((r) => setTimeout(r, 50));
+      after = clipboard.readText();
+      if (after) break;
+    }
+    return after || null;
+  } catch (err) {
+    console.warn("Selection capture failed:", err.message);
+    return null;
+  } finally {
     if (before) clipboard.writeText(before);
     else if (!beforeImage.isEmpty()) clipboard.writeImage(beforeImage);
     else clipboard.clear();
-    return text.length > 5000 ? text.slice(0, 5000) : text;
-  } catch {
+  }
+}
+
+async function grabSelectedText() {
+  if (!isMac || !loadSettings().captureSelection) return null;
+  if (!canSendKeystrokes()) return null;
+  let text = await readSelectionDirectly();
+  if (!text) text = (await copySelectionViaClipboard()) || "";
+  text = text.trim();
+  if (!text) {
+    console.warn("Selection capture: nothing was selected.");
     return null;
   }
+  console.log("Selection capture: got", text.length, "characters");
+  return text.length > 5000 ? text.slice(0, 5000) : text;
 }
 
 function showWindow() {
@@ -1570,6 +1644,12 @@ function setupIPC() {
 
   ipcMain.handle("start-dictation", async () => {
     if (!isMac) return { success: false, error: "macOS only" };
+    if (!canSendKeystrokes())
+      return {
+        success: false,
+        error:
+          "Tick Stepler in System Settings → Privacy & Security → Accessibility first.",
+      };
     const res = await runAppleScript(
       'tell application "System Events"\nkey code 63\ndelay 0.05\nkey code 63\nend tell',
     );

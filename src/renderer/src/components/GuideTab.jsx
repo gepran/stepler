@@ -63,6 +63,7 @@ const SECTIONS = [
             {
               title: "Bring the selection with you",
               steps: [
+                "The first time, macOS asks to let Stepler read what is selected: tick Stepler under System Settings → Privacy & Security → Accessibility. Without that it cannot work.",
                 "Select some text anywhere — an email, a page, a chat.",
                 `Press ${hotkey}.`,
                 "The text is already in the box, waiting. Add to it or press Enter.",
