@@ -71,7 +71,11 @@ without you leaving the terminal. It is a thin front for the local API above,
 has no dependencies, and needs nothing but `node`.
 
 ```bash
-claude mcp add stepler -- node /path/to/stepler-mcp.mjs
+# Installed the app:
+claude mcp add stepler -- node "/Applications/Stepler.app/Contents/Resources/app.asar.unpacked/stepler-mcp.mjs"
+
+# Working from a clone:
+claude mcp add stepler -- node "$(pwd)/stepler-mcp.mjs"
 ```
 
 For Codex or Cursor, point their MCP config at the same command.

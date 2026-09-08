@@ -11,6 +11,9 @@ files:
   - "!{build_icon.js,gen-icons.mjs,logo.svg,docs,dist}"
 asarUnpack:
   - resources/**
+  # A plain `node` cannot run a file from inside an asar, and pointing a
+  # coding agent at this one is the whole point of shipping it.
+  - stepler-mcp.mjs
 win:
   target: nsis
 nsis:
