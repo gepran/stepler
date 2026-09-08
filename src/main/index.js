@@ -2251,10 +2251,26 @@ if (!app.requestSingleInstanceLock()) {
         `Global shortcut ${settings.hotkey} is unavailable — another app owns it.`,
       );
     }
-    initJiraAuth();
-    initGoogleAuth().catch((err) =>
-      console.error("Google init failed:", err.message),
-    );
+    // Reading a saved token goes through safeStorage, and safeStorage is
+    // synchronous: if macOS decides to ask permission for the keychain item —
+    // which it does whenever the app's signature changes — the main thread
+    // stops until someone answers. Do it after the window is on screen, so a
+    // prompt lands over a running app instead of freezing a blank launch.
+    const initSecrets = () => {
+      try {
+        initJiraAuth();
+      } catch (err) {
+        console.error("Jira init failed:", err.message);
+      }
+      initGoogleAuth().catch((err) =>
+        console.error("Google init failed:", err.message),
+      );
+    };
+    if (mainWindow && !mainWindow.isDestroyed())
+      mainWindow.webContents.once("did-finish-load", () =>
+        setTimeout(initSecrets, 250),
+      );
+    else setTimeout(initSecrets, 1500);
 
     if (!is.dev) {
       // electron-updater is CommonJS; once bundled, the named export only
