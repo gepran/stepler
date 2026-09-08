@@ -19,13 +19,17 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
-    "cli": "node stepler-cli.mjs"
+    "cli": "node stepler-cli.mjs",
+    "dev:web": "vite --config vite.web.config.mjs",
+    "build:web": "vite build --config vite.web.config.mjs",
+    "deploy:web": "npm run build:web && firebase deploy --only hosting:web"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "dotenv": "^17.3.1",
     "electron-updater": "^6.8.3",
+    "firebase": "^12.18.0",
     "googleapis": "^171.4.0",
     "lucide-react": "^0.575.0",
     "prop-types": "^15.8.1",

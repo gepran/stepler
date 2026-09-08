@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* The web build's Vite root is this folder, so Tailwind would only scan
+   src/web and miss the renderer components and helpers this app reuses —
+   their classes would be silently absent from the stylesheet. */
+@source "../web";
+@source "../renderer/src";
+
+@import "../renderer/src/assets/base.css";
+
+/* Same token the desktop app sets: Tailwind's `font-sans` utility is what
+   actually decides the app's type, so redefining the token is the only rule
+   that survives. */
+@theme {
+  --font-sans:
+    "BPG Mrgvlovani Caps", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Helvetica Neue", sans-serif;
+}

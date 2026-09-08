@@ -48,3 +48,6 @@ firestore-debug.log
 
 # Personal agent permissions, not shared
 .claude/settings.local.json
+
+# Lint cache
+.eslintcache

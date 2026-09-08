@@ -9,6 +9,32 @@
  */
 
 const en = {
+  auth: {
+    tagline: "Your day, on every device.",
+    signIn: "Sign in",
+    signUp: "Create account",
+    email: "Email",
+    password: "Password",
+    google: "Continue with Google",
+    or: "or",
+    toSignUp: "No account yet? Create one",
+    toSignIn: "Already have an account? Sign in",
+    signOut: "Sign out",
+    working: "One moment…",
+    syncing: "Syncing…",
+    synced: "Synced",
+    offline: "Offline — saved here, will sync later",
+    errors: {
+      invalidEmail: "That does not look like an email address.",
+      wrongPassword: "Wrong email or password.",
+      emailInUse: "That email already has an account. Try signing in.",
+      weakPassword: "Use at least six characters.",
+      tooMany: "Too many attempts. Wait a minute and try again.",
+      popupClosed: "The Google window closed before sign-in finished.",
+      network: "No connection to the server.",
+      generic: "Sign-in failed. Please try again.",
+    },
+  },
   menu: {
     about: "About Stepler",
     settings: "Settings…",
@@ -463,6 +489,32 @@ const en = {
 };
 
 const ka = {
+  auth: {
+    tagline: "შენი დღე — ყველა მოწყობილობაზე.",
+    signIn: "შესვლა",
+    signUp: "ანგარიშის შექმნა",
+    email: "ელფოსტა",
+    password: "პაროლი",
+    google: "Google-ით გაგრძელება",
+    or: "ან",
+    toSignUp: "ჯერ არ გაქვს ანგარიში? შექმენი",
+    toSignIn: "უკვე გაქვს ანგარიში? შედი",
+    signOut: "გასვლა",
+    working: "ერთი წამი…",
+    syncing: "სინქრონიზაცია…",
+    synced: "დასინქრონიზდა",
+    offline: "ქსელი არ არის — შენახულია, მოგვიანებით დასინქრონდება",
+    errors: {
+      invalidEmail: "ეს ელფოსტის მისამართს არ ჯგავს.",
+      wrongPassword: "არასწორი ელფოსტა ან პაროლი.",
+      emailInUse: "ამ ელფოსტაზე ანგარიში უკვე არსებობს. სცადე შესვლა.",
+      weakPassword: "საჭიროა მინიმუმ 6 სიმბოლო.",
+      tooMany: "ზედმეტი მცდელობა. დაელოდე წუთი.",
+      popupClosed: "Google-ის ფანჯარა დაიხურა შესვლამდე.",
+      network: "სერვერთან კავშირი არ არის.",
+      generic: "შესვლა ვერ მოხერხდა. სცადე თავიდან.",
+    },
+  },
   dates: {
     months: [
       "იანვარი",
@@ -960,6 +1012,32 @@ const ka = {
 };
 
 const ru = {
+  auth: {
+    tagline: "Твой день — на каждом устройстве.",
+    signIn: "Войти",
+    signUp: "Создать аккаунт",
+    email: "Почта",
+    password: "Пароль",
+    google: "Продолжить с Google",
+    or: "или",
+    toSignUp: "Ещё нет аккаунта? Создать",
+    toSignIn: "Уже есть аккаунт? Войти",
+    signOut: "Выйти",
+    working: "Секунду…",
+    syncing: "Синхронизация…",
+    synced: "Синхронизировано",
+    offline: "Нет сети — сохранено, синхронизируется позже",
+    errors: {
+      invalidEmail: "Это не похоже на адрес почты.",
+      wrongPassword: "Неверная почта или пароль.",
+      emailInUse: "На эту почту аккаунт уже есть. Попробуй войти.",
+      weakPassword: "Нужно хотя бы шесть символов.",
+      tooMany: "Слишком много попыток. Подожди минуту.",
+      popupClosed: "Окно Google закрылось раньше, чем вход завершился.",
+      network: "Нет связи с сервером.",
+      generic: "Войти не удалось. Попробуй ещё раз.",
+    },
+  },
   menu: {
     about: "О Stepler",
     settings: "Настройки…",

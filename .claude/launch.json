@@ -42,6 +42,15 @@
         "out/renderer"
       ],
       "port": 4174
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:web"
+      ],
+      "port": 5174
     }
   ]
 }
