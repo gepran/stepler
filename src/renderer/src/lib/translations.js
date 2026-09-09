@@ -201,6 +201,20 @@ const en = {
   },
 
   settings: {
+    sync: {
+      title: "Account and sync",
+      blurb:
+        "Sign in and your tasks follow you — to the web app and to your other computers.",
+      browserNote: "Google sign-in opens in your browser.",
+      offBlurb: "Not signed in. Tasks stay on this computer only.",
+      states: {
+        off: "Not syncing",
+        "signing-in": "Signing in…",
+        syncing: "Syncing…",
+        synced: "Everything is synced",
+        error: "Sync problem",
+      },
+    },
     title: "Settings",
     tabs: {
       general: "General",
@@ -722,6 +736,20 @@ const ka = {
   },
 
   settings: {
+    sync: {
+      title: "ანგარიში და სინქრონიზაცია",
+      blurb:
+        "შედი და შენი დავალებები გეყოლება — ვებზეც და სხვა კომპიუტერებზეც.",
+      browserNote: "Google-ით შესვლა ბრაუზერში გაიხსნება.",
+      offBlurb: "არ ხარ შესული. დავალებები მხოლოდ ამ კომპიუტერში რჩება.",
+      states: {
+        off: "არ სინქრონიზდება",
+        "signing-in": "შესვლა…",
+        syncing: "სინქრონიზაცია…",
+        synced: "ყველაფერი დასინქრონიზდა",
+        error: "სინქრონიზაციის პრობლემა",
+      },
+    },
     title: "პარამეტრები",
     tabs: {
       general: "ზოგადი",
@@ -1212,6 +1240,20 @@ const ru = {
   },
 
   settings: {
+    sync: {
+      title: "Аккаунт и синхронизация",
+      blurb:
+        "Войди — и задачи будут с тобой и в вебе, и на других компьютерах.",
+      browserNote: "Вход через Google откроется в браузере.",
+      offBlurb: "Вход не выполнен. Задачи остаются только на этом компьютере.",
+      states: {
+        off: "Без синхронизации",
+        "signing-in": "Вход…",
+        syncing: "Синхронизация…",
+        synced: "Всё синхронизировано",
+        error: "Проблема с синхронизацией",
+      },
+    },
     title: "Настройки",
     tabs: {
       general: "Общие",

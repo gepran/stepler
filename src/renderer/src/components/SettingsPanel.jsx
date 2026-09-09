@@ -19,6 +19,9 @@ import {
   Star,
   Keyboard,
   Languages,
+  Cloud,
+  CloudOff,
+  LogOut,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -89,6 +92,182 @@ Toggle.propTypes = {
   on: PropTypes.bool,
   onClick: PropTypes.func,
   label: PropTypes.string,
+};
+
+/**
+ * Signing in is what turns one computer's task list into the same list
+ * everywhere. Google opens in the real browser rather than an embedded window:
+ * Google refuses to sign people in inside an embedded view, and it is also the
+ * only way the person can see the address bar they are typing a password into.
+ */
+function SyncSection() {
+  const t = useT();
+  const [status, setStatus] = useState({ signedIn: false, state: "off" });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    ipc?.invoke("sync-status").then((s) => s && setStatus(s));
+    const onStatus = (_, s) => s && setStatus(s);
+    ipc?.on("sync-status", onStatus);
+    return () => ipc?.removeAllListeners("sync-status");
+  }, []);
+
+  const withBusy = async (run) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await run();
+      if (res && res.success === false) setError(res.error || "");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dot =
+    status.state === "synced"
+      ? "bg-emerald-500"
+      : status.state === "error"
+        ? "bg-red-500"
+        : status.state === "off"
+          ? "bg-neutral-300 dark:bg-neutral-600"
+          : "bg-amber-400";
+
+  return (
+    <section className="mb-10">
+      <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
+        {t("settings.sync.title")}
+      </label>
+
+      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-700">
+        {status.signedIn ? (
+          <>
+            <div className="flex items-center gap-3">
+              <Cloud size={18} className="shrink-0 text-orange-500" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                  {status.email || t("settings.sync.title")}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`}
+                  />
+                  {t(`settings.sync.states.${status.state}`)}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => withBusy(() => ipc?.invoke("sync-signout"))}
+                title={t("auth.signOut")}
+                className="btn-tactile shrink-0 cursor-pointer rounded-xl border border-neutral-200 p-2 text-neutral-500 hover:text-neutral-800 disabled:opacity-50 dark:border-neutral-700 dark:hover:text-neutral-200"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+            {status.error && (
+              <p className="mt-3 text-xs leading-snug text-red-600 dark:text-red-400">
+                {status.error}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="mb-4 flex items-start gap-3">
+              <CloudOff
+                size={18}
+                className="mt-0.5 shrink-0 text-neutral-400 dark:text-neutral-500"
+              />
+              <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+                {t("settings.sync.blurb")}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => withBusy(() => ipc?.invoke("sync-signin-google"))}
+              className="btn-tactile mb-3 w-full cursor-pointer rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+            >
+              {t("auth.google")}
+            </button>
+            <p className="mb-4 text-center text-[11px] text-neutral-400">
+              {t("settings.sync.browserNote")}
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("auth.email")}
+                className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("auth.password")}
+                className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              />
+              <button
+                type="button"
+                disabled={busy || !email.trim() || password.length < 6}
+                onClick={() =>
+                  withBusy(() =>
+                    ipc?.invoke("sync-signin-email", {
+                      email,
+                      password,
+                      create: creating,
+                    }),
+                  )
+                }
+                className="btn-tactile shrink-0 cursor-pointer rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 dark:bg-orange-500"
+              >
+                {busy
+                  ? t("auth.working")
+                  : creating
+                    ? t("auth.signUp")
+                    : t("auth.signIn")}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(!creating);
+                setError(null);
+              }}
+              className="mt-3 w-full cursor-pointer text-center text-xs text-neutral-500 hover:text-orange-500"
+            >
+              {creating ? t("auth.toSignIn") : t("auth.toSignUp")}
+            </button>
+
+            {error && (
+              <p className="mt-3 text-center text-xs leading-snug text-red-600 dark:text-red-400">
+                {t(`auth.errors.${ERROR_KEYS[error] || "generic"}`)}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Firebase reports failures as machine codes; people need sentences. */
+const ERROR_KEYS = {
+  "auth/invalid-email": "invalidEmail",
+  "auth/invalid-credential": "wrongPassword",
+  "auth/wrong-password": "wrongPassword",
+  "auth/user-not-found": "wrongPassword",
+  "auth/email-already-in-use": "emailInUse",
+  "auth/weak-password": "weakPassword",
+  "auth/too-many-requests": "tooMany",
+  "auth/network-request-failed": "network",
 };
 
 export default function SettingsPanel({
@@ -293,6 +472,8 @@ export default function SettingsPanel({
               <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
                 {t("settings.general.title")}
               </h3>
+
+              <SyncSection />
 
               <section className="mb-10">
                 <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">

@@ -36,6 +36,7 @@ import { tmpdir } from "os";
 import { randomUUID, randomBytes, createHash, timingSafeEqual } from "crypto";
 import { execFile } from "child_process";
 import http from "http";
+import * as sync from "./sync";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 
@@ -79,6 +80,13 @@ const settingsPath = join(USER_DATA, "stepler-settings.json");
 const dataPath = join(USER_DATA, "stepler-data.json");
 const backupPath = join(USER_DATA, "stepler-data.backup.json");
 const apiInfoPath = join(USER_DATA, "stepler-api.json");
+// Who is signed in for cloud sync, plus the shadow of what this machine has
+// already pushed. Kept out of the settings file because it holds a token.
+const syncSessionPath = join(USER_DATA, "stepler-sync.json");
+// The Firebase session itself. Separate from the file above because that one is
+// bookkeeping we own, while this is the SDK's own store and its shape is not
+// ours to reason about.
+const syncAuthPath = join(USER_DATA, "stepler-sync-auth.json");
 const attachDir = join(USER_DATA, "attachments");
 
 // --------------- small helpers ---------------
@@ -281,15 +289,88 @@ function broadcastData() {
   });
 }
 
+/** Everything in a stored blob as one flat list, keyed by id. */
+function indexTasks(data) {
+  const m = new Map();
+  const add = (t) => t && t.id != null && m.set(String(t.id), t);
+  (data?.tasks || []).forEach(add);
+  (data?.history || []).forEach((d) => (d?.tasks || []).forEach(add));
+  (data?.deletedTasks || []).forEach(add);
+  return m;
+}
+
+/**
+ * Sort object keys all the way down. A task that came back from the cloud
+ * carries its nested objects in whatever key order the server chose, so a plain
+ * JSON compare would call it changed the moment the window re-saved it — and
+ * that would stamp a new time and push it straight back up again.
+ */
+function canonicalise(v) {
+  if (Array.isArray(v)) return v.map(canonicalise);
+  if (v && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = canonicalise(v[k]);
+    return out;
+  }
+  return v;
+}
+
+/** What a task looks like ignoring the sync bookkeeping itself. */
+function taskFingerprint(t) {
+  const { updatedAt, ...rest } = t; // eslint-disable-line no-unused-vars
+  return JSON.stringify(canonicalise(rest));
+}
+
+/**
+ * Stamp `updatedAt` on tasks that actually changed.
+ *
+ * Every writer — the window, the CLI, the MCP server, the local HTTP API —
+ * funnels through saveAppData, and the window re-sends the whole dataset on
+ * every keystroke-sized edit. So this is the one place that can tell an edit
+ * from a re-save, and the only honest moment to record when a task changed.
+ *
+ * Without it, an edit made here but not yet pushed would carry whatever time it
+ * was last pulled with, and a concurrent edit on another device would win a
+ * last-write-wins comparison it should have lost — losing this machine's work.
+ */
+function stampChangedTasks(prev, next, now) {
+  const before = indexTasks(prev);
+  let stamped = 0;
+  const walk = (list) => {
+    if (!Array.isArray(list)) return;
+    for (let i = 0; i < list.length; i += 1) {
+      const t = list[i];
+      if (!t || t.id == null) continue;
+      const old = before.get(String(t.id));
+      if (old && taskFingerprint(old) === taskFingerprint(t)) {
+        // Unchanged: keep whatever time it already carried.
+        if (old.updatedAt !== undefined && t.updatedAt === undefined)
+          list[i] = { ...t, updatedAt: old.updatedAt };
+        continue;
+      }
+      list[i] = { ...t, updatedAt: now };
+      stamped += 1;
+    }
+  };
+  walk(next.tasks);
+  (next.history || []).forEach((d) => walk(d?.tasks));
+  walk(next.deletedTasks);
+  return stamped;
+}
+
 /**
  * Merge a partial update into the in-memory cache and schedule one atomic
  * write. The old code re-read, re-parsed and rewrote the whole file on every
  * keystroke-sized change; this keeps a single copy in memory instead.
  */
-function saveAppData(partial) {
-  dataCache = { ...loadAppData(), ...partial };
+function saveAppData(partial, opts = {}) {
+  const prev = loadAppData();
+  const merged = { ...prev, ...partial };
+  if (!opts.fromCloud) stampChangedTasks(prev, merged, Date.now());
+  dataCache = merged;
   dirty = true;
   if (!saveTimer) saveTimer = setTimeout(flushAppData, 400);
+  if (!opts.fromCloud) sync.notifyLocalChange();
   return dataCache;
 }
 
@@ -484,6 +565,9 @@ function sanitizeTask(t) {
     completed: !!t.completed,
     priority: !!t.priority,
   };
+  // Sync bookkeeping. This function is a whitelist, so anything not named here
+  // is dropped — and it runs on every write from the CLI and the MCP server.
+  if (typeof t.updatedAt === "number") out.updatedAt = t.updatedAt;
   // Normalise the legacy singular `project` into the `projects` array so search
   // and the sidebar stop disagreeing about which tasks belong to a project.
   const projects = Array.isArray(t.projects)
@@ -1267,6 +1351,13 @@ function newOAuthState(kind) {
   return state;
 }
 
+/** Which flow a pending state belongs to, without consuming it. */
+function oauthKindOf(state) {
+  const entry = pendingOAuthStates.get(state);
+  if (!entry || entry.expires < Date.now()) return null;
+  return entry.kind;
+}
+
 function consumeOAuthState(state, kind) {
   const entry = pendingOAuthStates.get(state);
   if (!entry || entry.kind !== kind || entry.expires < Date.now()) return false;
@@ -1516,6 +1607,36 @@ function setupIPC() {
     }
     return { ...publicSettings(settings), hotkeyOk };
   });
+
+  // ---- cloud sync ----
+
+  ipcMain.handle("sync-status", () => sync.publicStatus());
+
+  ipcMain.handle("sync-signin-google", () => {
+    if (!oAuth2Client)
+      return {
+        success: false,
+        error: "Google is not configured on this machine.",
+      };
+    if (!apiInfo.port)
+      return { success: false, error: "Local callback server is not running." };
+    const url = firebaseAuthUrl();
+    if (!url)
+      return { success: false, error: "Could not build the sign-in URL." };
+    shell.openExternal(url);
+    return { success: true };
+  });
+
+  ipcMain.handle(
+    "sync-signin-email",
+    async (_, { email, password, create }) => {
+      if (typeof email !== "string" || typeof password !== "string")
+        return { success: false, error: "auth/invalid-email" };
+      return sync.signInEmail(email.trim(), password, !!create);
+    },
+  );
+
+  ipcMain.handle("sync-signout", () => sync.signOutSync());
 
   ipcMain.handle("hide-window", () => {
     hideWindow();
@@ -2174,8 +2295,14 @@ function startAPIServer() {
 
     // OAuth callbacks are the only unauthenticated routes; they are protected
     // by the one-time `state` value instead.
-    if (method === "GET" && url.startsWith("/oauth2callback"))
-      return handleGoogleCallback(url, send);
+    if (method === "GET" && url.startsWith("/oauth2callback")) {
+      // Calendar and sync share the one redirect URI registered with Google;
+      // the state says which of the two is coming back.
+      const st = new URL(url, "http://127.0.0.1").searchParams.get("state");
+      return oauthKindOf(st) === "firebase"
+        ? handleFirebaseCallback(url, send)
+        : handleGoogleCallback(url, send);
+    }
     if (method === "GET" && url.startsWith("/jira-callback"))
       return handleJiraCallback(url, send);
 
@@ -2447,6 +2574,87 @@ async function handleJiraCallback(url, send) {
   }
 }
 
+// --------------- Cloud sync ---------------
+
+/**
+ * Signing in to sync is a separate consent from connecting Calendar: it asks
+ * only for identity, and it asks for `openid` — without that scope Google
+ * returns no id_token at all and Firebase has nothing to accept.
+ */
+function firebaseAuthUrl() {
+  if (!oAuth2Client) return null;
+  return oAuth2Client.generateAuthUrl({
+    prompt: "select_account",
+    state: newOAuthState("firebase"),
+    scope: ["openid", "email", "profile"],
+  });
+}
+
+async function handleFirebaseCallback(url, send) {
+  const urlObj = new URL(url, "http://127.0.0.1");
+  const code = urlObj.searchParams.get("code");
+  const state = urlObj.searchParams.get("state");
+  if (!consumeOAuthState(state, "firebase"))
+    return send(
+      400,
+      "<h1>Sign-in failed</h1><p>Invalid or expired request.</p>",
+      "text/html",
+    );
+  if (!code || !oAuth2Client)
+    return send(400, "<h1>No code provided</h1>", "text/html");
+  try {
+    const { tokens } = await oAuth2Client.getToken({ code });
+    if (!tokens.id_token)
+      return send(
+        500,
+        "<h1>Sign-in failed</h1><p>Google returned no identity token.</p>",
+        "text/html",
+      );
+    const res = await sync.signInGoogleIdToken(tokens.id_token);
+    if (!res.success)
+      return send(
+        500,
+        `<h1>Sign-in failed</h1><p>${String(res.error || "")}</p>`,
+        "text/html",
+      );
+    return send(
+      200,
+      "<h1>Signed in to Stepler</h1><p>You can close this tab and return to the app.</p>",
+      "text/html",
+    );
+  } catch (err) {
+    console.error("Firebase sign-in error:", err.message);
+    return send(500, "<h1>Sign-in error</h1>", "text/html");
+  }
+}
+
+/**
+ * Bring the engine up. It is handed the two doors to the data layer rather than
+ * the file itself, so cloud writes land through exactly the same funnel every
+ * other writer uses — and `fromCloud` keeps an incoming change from being
+ * re-stamped and bounced straight back.
+ */
+function startSync() {
+  sync.initSync({
+    getData: () => loadAppData(),
+    applyRemote: (next) => {
+      saveAppData(next, { fromCloud: true });
+      flushAppData(); // a change from another device is worth an immediate write
+      broadcastData();
+    },
+    onStatus: (s) => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        mainWindow.webContents.send("sync-status", s);
+    },
+    readToken: async () => loadSecret(syncSessionPath),
+    writeToken: async (obj) =>
+      obj ? saveSecret(syncSessionPath, obj) : clearSecret(syncSessionPath),
+    readAuth: async () => loadSecret(syncAuthPath) || {},
+    writeAuth: async (blob) => saveSecret(syncAuthPath, blob),
+    todayYMD: () => localYMD(new Date()),
+  });
+}
+
 // --------------- App lifecycle ---------------
 
 if (!app.requestSingleInstanceLock()) {
@@ -2502,6 +2710,7 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     setupIPC();
     startAPIServer();
+    startSync();
     createWindow();
     buildTray();
     if (!registerHotkey(settings.hotkey)) {
