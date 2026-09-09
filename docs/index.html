@@ -958,15 +958,28 @@
           <details class="firstrun">
             <summary>Opening it the first time on macOS</summary>
             <p>
-              macOS may say <b>“Stepler is damaged and can’t be opened”</b>, or
-              simply do nothing. It is not damaged — anything downloaded from a
-              browser is quarantined, and Stepler is signed ad-hoc rather than
-              with a paid Apple certificate.
+              macOS blocks it the first time. On macOS 15 and later the dialog
+              says <b>“Apple could not verify Stepler is free of malware”</b>
+              and offers only <i>Move to Trash</i> and <i>Done</i>; older
+              versions say <b>“Stepler is damaged”</b>. It is not damaged —
+              anything downloaded from a browser is quarantined, and Stepler is
+              signed ad-hoc rather than with a paid Apple certificate.
             </p>
             <p>
-              Right-click Stepler in Applications, choose <b>Open</b>, then
-              <b>Open</b> again. Once only: updates installed from inside the
-              app are never quarantined.
+              <b>macOS 15 (Sequoia) and later:</b> click <b>Done</b>, then open
+              <b>System&nbsp;Settings → Privacy&nbsp;&amp;&nbsp;Security</b>,
+              scroll to <b>Security</b>, and click <b>Open Anyway</b> next to
+              the message about Stepler. Apple removed the old right-click
+              shortcut in this version.
+            </p>
+            <p>
+              <b>macOS 14 and earlier:</b> right-click Stepler in Applications,
+              choose <b>Open</b>, then <b>Open</b> again.
+            </p>
+            <p>
+              Once only, either way: updates installed from inside the app are
+              never quarantined. From a terminal, on any version:
+              <code>xattr -dr com.apple.quarantine /Applications/Stepler.app</code>
             </p>
           </details>
           <details class="firstrun">

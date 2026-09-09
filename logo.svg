@@ -10,14 +10,14 @@
   <defs>
     <!-- Ribbon top gradient: Vibrant Blue to Purple -->
     <linearGradient id="steplerRibbonTop" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stopColor="#41A1FF" />
-      <stop offset="100%" stopColor="#9B6AFF" />
+      <stop offset="0%" stop-color="#41A1FF" />
+      <stop offset="100%" stop-color="#9B6AFF" />
     </linearGradient>
     
     <!-- Ribbon bottom gradient: Vibrant Orange to Red -->
     <linearGradient id="steplerRibbonBottom" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stopColor="#FF9A00" />
-      <stop offset="100%" stopColor="#FF3B30" />
+      <stop offset="0%" stop-color="#FF9A00" />
+      <stop offset="100%" stop-color="#FF3B30" />
     </linearGradient>
   </defs>
 

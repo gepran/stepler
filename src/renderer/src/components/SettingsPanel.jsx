@@ -31,6 +31,9 @@ import {
   CloudOff,
   LogOut,
   Users,
+  ArrowUpCircle,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -282,6 +285,116 @@ const ERROR_KEYS = {
   "auth/network-request-failed": "network",
 };
 
+/**
+ * Version, and the state of the updater, in the corner of the settings window.
+ *
+ * It subscribes to the same `update-state` channel the header pill uses rather
+ * than keeping a second idea of what is happening — the two are looking at one
+ * download, and the moment they disagree one of them is lying.
+ */
+function UpdateCorner() {
+  const t = useT();
+  const [version, setVersion] = useState("");
+  const [state, setState] = useState({ status: "idle" });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!ipc) return undefined;
+    ipc.invoke("get-app-version").then((v) => v && setVersion(v));
+    ipc.invoke("get-update-state").then((s) => s && setState(s));
+    const onState = (_, s) => {
+      if (!s) return;
+      setState(s);
+      // The engine has answered; the button belongs to the person again.
+      if (s.status !== "checking") setBusy(false);
+    };
+    ipc.on("update-state", onState);
+    // removeListener, not removeAllListeners: the header pill is listening on
+    // this same channel, and tearing the channel down when this panel closes
+    // would leave the pill deaf for the rest of the session.
+    return () => ipc.removeListener("update-state", onState);
+  }, []);
+
+  const status = state.status;
+  const checking = busy || status === "checking";
+  const downloading = status === "downloading";
+  const ready = status === "ready";
+  const failed = status === "error";
+
+  const [unavailable, setUnavailable] = useState(false);
+
+  const check = async () => {
+    setBusy(true);
+    const res = await ipc?.invoke("check-for-update");
+    if (res?.unavailable) setUnavailable(true);
+    if (!res?.success) setBusy(false);
+  };
+
+  const line = unavailable
+    ? t("update.unavailable")
+    : failed
+      ? state.error || t("update.unknownError")
+      : downloading
+        ? typeof state.percent === "number"
+          ? `${t("update.downloading")} — ${state.percent}%`
+          : t("update.downloading")
+        : ready
+          ? t("update.restartTo", {
+              version: state.version || t("update.theNewVersion"),
+            })
+          : checking
+            ? t("update.checking")
+            : state.checkedAt
+              ? t("update.upToDate")
+              : t("update.neverChecked");
+
+  // The settings sidebar is 256px wide, so this stacks rather than sitting in
+  // a row: side by side, the version truncated to three letters and the button
+  // took the rest.
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white/60 px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/40">
+      <p className="truncate text-[12.5px] font-semibold text-neutral-700 dark:text-neutral-200">
+        {version ? t("update.version", { version }) : "Stepler"}
+      </p>
+      <p
+        className={`mb-2 line-clamp-2 text-[11px] leading-snug ${
+          failed || unavailable
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-neutral-400 dark:text-neutral-500"
+        }`}
+      >
+        {line}
+      </p>
+
+      {/* Once a build is downloaded the only useful button is the one that
+          restarts into it — offering "check again" beside it would be
+          offering to look for something already sitting on the disk. */}
+      {ready ? (
+        <button
+          onClick={() => ipc?.invoke("install-update")}
+          className="btn-tactile flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-blue-600"
+        >
+          <ArrowUpCircle size={14} />
+          {t("update.update")}
+        </button>
+      ) : (
+        <button
+          onClick={check}
+          disabled={checking || downloading || unavailable}
+          className="btn-tactile flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[12px] font-semibold text-neutral-600 transition-colors hover:bg-neutral-50 disabled:cursor-default disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+        >
+          {checking || downloading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          {t("update.checkNow")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPanel({
   settings: initialSettings,
   onClose,
@@ -491,7 +604,12 @@ export default function SettingsPanel({
             ))}
           </nav>
 
-          <div className="absolute bottom-6 left-6">
+          {/* The corner: which build this is, whether there is a newer one,
+              and the way out. The version is worth having here rather than
+              buried in an About box — it is the first thing anybody is asked
+              for when something goes wrong. */}
+          <div className="absolute bottom-6 left-6 right-6 space-y-2.5">
+            <UpdateCorner />
             <button
               onClick={onClose}
               className="btn-tactile flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400"

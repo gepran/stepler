@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import { LogOut, Monitor, Moon, RotateCcw, SunMedium, X } from "lucide-react";
+import {
+  ArrowUpCircle,
+  LogOut,
+  Monitor,
+  Moon,
+  RefreshCw,
+  RotateCcw,
+  SunMedium,
+  X,
+} from "lucide-react";
 import { restoreTask, subscribeTasks } from "./store";
 import CollaborationPanel from "../renderer/src/components/CollaborationPanel";
 import {
@@ -10,6 +19,7 @@ import {
   sendInvite,
 } from "./collab";
 import { THEMES, setTheme, useTheme } from "./theme";
+import { applyUpdate, checkForUpdate } from "./update";
 import {
   LANGUAGES,
   setLanguage,
@@ -39,6 +49,8 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
   const theme = useTheme();
   const [deleted, setDeleted] = useState([]);
   const [notice, setNotice] = useState(null);
+  // idle → checking → current | available | failed
+  const [update, setUpdate] = useState("idle");
 
   // `me` is the card other people are shown when this account invites them,
   // so it carries the handle as well as the account.
@@ -253,9 +265,71 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
             )}
           </section>
 
-          <p className="pt-1 text-center text-[11px] text-neutral-400 dark:text-neutral-600">
-            Stepler {import.meta.env.VITE_APP_VERSION} · {t("auth.tagline")}
-          </p>
+          {/* Which build this tab is running, and whether the server has a
+              newer one. A browser tab has no updater, so the check is a real
+              comparison rather than a Reload button wearing a hopeful label —
+              see update.js. */}
+          <div className="flex items-center gap-3 rounded-xl border border-neutral-200 px-3.5 py-2.5 dark:border-neutral-800">
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-neutral-700 dark:text-neutral-200">
+                {t("update.version", {
+                  version: import.meta.env.VITE_APP_VERSION,
+                })}
+              </p>
+              <p
+                className={`truncate text-[11.5px] ${
+                  update === "available"
+                    ? "font-medium text-orange-600 dark:text-orange-400"
+                    : "text-neutral-400 dark:text-neutral-500"
+                }`}
+              >
+                {update === "checking"
+                  ? t("update.checking")
+                  : update === "available"
+                    ? t("update.newAvailable")
+                    : update === "current"
+                      ? t("update.upToDate")
+                      : update === "failed"
+                        ? t("update.unknownError")
+                        : t("auth.tagline")}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={update === "checking"}
+              onClick={
+                update === "available"
+                  ? applyUpdate
+                  : async () => {
+                      setUpdate("checking");
+                      try {
+                        const { available } = await checkForUpdate();
+                        setUpdate(available ? "available" : "current");
+                      } catch (err) {
+                        console.warn("Update check failed:", err.message);
+                        setUpdate("failed");
+                      }
+                    }
+              }
+              className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors disabled:cursor-default disabled:opacity-60 ${
+                update === "available"
+                  ? "bg-neutral-900 text-white hover:bg-neutral-700 dark:bg-orange-500 dark:hover:bg-orange-400"
+                  : "border border-neutral-200 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              }`}
+            >
+              {update === "available" ? (
+                <ArrowUpCircle size={14} />
+              ) : (
+                <RefreshCw
+                  size={14}
+                  className={update === "checking" ? "animate-spin" : ""}
+                />
+              )}
+              {update === "available"
+                ? t("update.update")
+                : t("update.checkNow")}
+            </button>
+          </div>
         </div>
       </div>
     </div>

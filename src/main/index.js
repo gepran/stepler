@@ -1857,6 +1857,39 @@ function setupIPC() {
 
   ipcMain.handle("get-update-state", () => updateState);
 
+  ipcMain.handle("get-app-version", () => app.getVersion());
+
+  /**
+   * Check now, because somebody asked.
+   *
+   * The engine already checks on launch and every six hours, but "is there a
+   * new one?" is a question people ask on their own schedule, and a button
+   * that answers it is the difference between trusting the updater and
+   * wondering about it. The result arrives through the same update-state
+   * channel the automatic checks use, so there is one path to keep working.
+   */
+  ipcMain.handle("check-for-update", async () => {
+    // No updater at all: a dev run, or a build where the module is missing.
+    if (!autoUpdater) return { success: false, unavailable: true };
+    // Already downloading or ready — asking again would only restart a
+    // download that is going to finish on its own.
+    if (updateState.status === "downloading" || updateState.status === "ready")
+      return { success: true };
+    try {
+      await autoUpdater.checkForUpdates();
+      return { success: true };
+    } catch (err) {
+      // An unpacked app refuses to check, and says so at some length. That is
+      // a fact about how it was started, not a failure worth alarming anybody
+      // with, so it is reported as "not available here" rather than as an
+      // error the updater hit.
+      if (/not packed|dev-app-update|isPackaged/i.test(err.message || ""))
+        return { success: false, unavailable: true };
+      sendUpdateState({ status: "error", error: err.message, version: null });
+      return { success: false, error: err.message };
+    }
+  });
+
   /** Relaunch into the downloaded build. Only meaningful once it is ready. */
   ipcMain.handle("install-update", () => {
     if (!autoUpdater || updateState.status !== "ready")
@@ -2895,8 +2928,11 @@ if (!app.requestSingleInstanceLock()) {
         autoUpdater.on("checking-for-update", () =>
           sendUpdateState({ status: "checking" }),
         );
+        // `checkedAt` is what lets the settings window say "up to date"
+        // rather than falling silent: without it, a check that found nothing
+        // looks exactly like a check that never happened.
         autoUpdater.on("update-not-available", () =>
-          sendUpdateState({ status: "idle" }),
+          sendUpdateState({ status: "idle", checkedAt: Date.now() }),
         );
         autoUpdater.on("update-available", (info) =>
           sendUpdateState({ status: "downloading", version: info?.version }),

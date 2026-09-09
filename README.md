@@ -26,11 +26,19 @@
 
 ## 📥 Installing on macOS
 
-The first launch after downloading shows **“Stepler is damaged and can’t be opened”**, or nothing happens at all. The app is not damaged: macOS quarantines anything downloaded from a browser, and Gatekeeper refuses to run it because Stepler is signed ad-hoc rather than with a paid Apple Developer certificate.
+The first launch after downloading is blocked. On macOS 15 and later the dialog says **“Apple could not verify Stepler is free of malware”** and offers only *Move to Trash* and *Done*; older versions say **“Stepler is damaged and can’t be opened”**. The app is not damaged and there is nothing wrong with it: macOS quarantines anything downloaded from a browser, and Gatekeeper refuses to run it because Stepler is signed ad-hoc rather than with a paid Apple Developer certificate.
 
-Right-click the app in Applications and choose **Open**, then **Open** again in the dialog. You only do this once. Updates installed from inside the app are never quarantined, so this never comes up again.
+**On macOS 15 (Sequoia) and later** — the right-click trick no longer works, Apple removed it:
 
-If you would rather do it from a terminal: `xattr -dr com.apple.quarantine /Applications/Stepler.app`
+1. Click **Done**.
+2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
+3. Next to *“Stepler was blocked to protect your Mac”*, click **Open Anyway**, then authenticate.
+
+**On macOS 14 (Sonoma) and earlier** — right-click the app in Applications, choose **Open**, then **Open** again.
+
+Either way you only do this once. Updates installed from inside the app are never quarantined, so it never comes up again.
+
+If you would rather do it from a terminal, this works on every version: `xattr -dr com.apple.quarantine /Applications/Stepler.app`
 
 ## 📥 Installing on Windows
 

@@ -190,6 +190,13 @@ const en = {
   },
 
   update: {
+    checkNow: "Check for updates",
+    newAvailable: "A new version is ready",
+    checking: "Checking…",
+    upToDate: "You are on the latest version",
+    neverChecked: "Not checked yet",
+    unavailable: "Updates are not available in this build",
+    version: "Version {version}",
     downloading: "Downloading the new version",
     updating: "Updating…",
     update: "Update",
@@ -787,6 +794,13 @@ const ka = {
   },
 
   update: {
+    checkNow: "განახლების შემოწმება",
+    newAvailable: "ახალი ვერსია მზადია",
+    checking: "მოწმება…",
+    upToDate: "გაქვთ უახლესი ვერსია",
+    neverChecked: "ჯერ არ შემოწმებულა",
+    unavailable: "ამ ასლში განახლებები მიუწვდომელია",
+    version: "ვერსია {version}",
     downloading: "ახალი ვერსია იწერება",
     updating: "განახლება…",
     update: "განახლება",
@@ -1369,6 +1383,13 @@ const ru = {
   },
 
   update: {
+    checkNow: "Проверить обновления",
+    newAvailable: "Готова новая версия",
+    checking: "Проверяем…",
+    upToDate: "У вас последняя версия",
+    neverChecked: "Ещё не проверяли",
+    unavailable: "В этой сборке обновления недоступны",
+    version: "Версия {version}",
     downloading: "Загружается новая версия",
     updating: "Обновление…",
     update: "Обновить",
