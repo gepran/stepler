@@ -27,6 +27,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getFirestore,
   onSnapshot,
@@ -83,6 +84,7 @@ let pushAgain = false;
 let applyingRemote = false;
 let filesTimer = null;
 let filesRunning = false;
+let repairingEchoes = false;
 let filesPending = false;
 
 // Collaboration. The window renders all three of these and owns none of them:
@@ -204,9 +206,11 @@ function taskToDoc(t) {
     updatedAt: serverTimestamp(),
   };
   for (const k of CARRIED) {
-    // Firestore rejects undefined outright, and writing null would erase a
-    // value the other device may still have.
-    if (t[k] !== undefined && t[k] !== null) out[k] = t[k];
+    // A field that is gone has to be written as a deletion, not simply left
+    // out. A merge write that omits a key does not clear it — it only bumps
+    // updatedAt — so clearing a due date used to be undone a second later by
+    // the pull that found the old value carrying a newer server stamp.
+    out[k] = t[k] === undefined || t[k] === null ? deleteField() : t[k];
   }
   return out;
 }
@@ -278,24 +282,36 @@ function signature(t) {
  * replacing it, so a field only this machine knows about — an attachment id,
  * say — survives a device that never had it.
  */
-export function mergeRemote(localFlat, remoteTasks) {
+export function mergeRemote(localFlat, remoteTasks, shadow = {}) {
   const byId = new Map(localFlat.map((t) => [t.id, t]));
+  const applied = [];
   let changed = 0;
   for (const r of remoteTasks) {
     const local = byId.get(r.id);
     if (!local) {
       byId.set(r.id, r);
+      applied.push(r);
       changed += 1;
       continue;
     }
-    const localAt = Number(local.updatedAt) || 0;
-    const remoteAt = Number(r.updatedAt) || 0;
-    if (remoteAt > localAt) {
-      byId.set(r.id, { ...local, ...r });
-      changed += 1;
-    }
+    // Does this machine hold an edit it has not sent yet?
+    //
+    // That question used to be asked by comparing `local.updatedAt`, stamped
+    // by this laptop's clock, against `r.updatedAt`, stamped by the server.
+    // The two are never comparable: on a machine running thirty seconds slow
+    // every remote echo looked newer than the edit just made on it, and the
+    // text reverted under the cursor with no conflict and no error. The shadow
+    // already records what was last sent, and answers the question exactly.
+    if (shadow[r.id] !== signature(local)) continue;
+    const next = { ...local, ...r };
+    // An echo of our own write carries no news. Applying it anyway would
+    // rewrite the file and start another push on every snapshot.
+    if (signature(next) === signature(local)) continue;
+    byId.set(r.id, next);
+    applied.push(r);
+    changed += 1;
   }
-  return { merged: [...byId.values()], changed };
+  return { merged: [...byId.values()], changed, applied };
 }
 
 // --------------------------------------------------------------------------
@@ -504,7 +520,9 @@ function startListening() {
     (snap) => {
       const remote = [];
       snap.forEach((d) => remote.push(docToTask({ ...d.data(), id: d.id })));
-      applyRemoteTasks(remote);
+      applyRemoteTasks(remote).catch((err) =>
+        console.warn("Applying a pull reported:", err.code || "", err.message),
+      );
     },
     (err) => {
       console.error("Sync listener failed:", err.code, err.message);
@@ -513,11 +531,14 @@ function startListening() {
   );
 }
 
-function applyRemoteTasks(remote) {
+async function applyRemoteTasks(remote) {
   const today = deps.todayYMD();
-  const data = deps.getData();
-  const localFlat = flattenLocal(data, today);
-  const { merged, changed } = mergeRemote(localFlat, remote);
+  const uid = currentUid;
+  const saved = (await deps.readToken()) || {};
+  const shadow = saved.uid === uid && saved.shadow ? saved.shadow : {};
+  const localFlat = flattenLocal(deps.getData(), today);
+  const { merged, changed, applied } = mergeRemote(localFlat, remote, shadow);
+  if (uid !== currentUid) return;
   if (changed > 0) {
     applyingRemote = true;
     try {
@@ -525,6 +546,15 @@ function applyRemoteTasks(remote) {
     } finally {
       applyingRemote = false;
     }
+  }
+  // Write down what the cloud is now known to hold. Without this the shadow
+  // never learns about a task that arrived from another device: the next push
+  // would send the whole history back up, and the merge above could not tell a
+  // stale local copy from one carrying an edit that has not gone up yet.
+  if (applied.length) {
+    const nextShadow = { ...shadow };
+    for (const r of applied) nextShadow[r.id] = signature(r);
+    await deps.writeToken({ ...saved, uid, shadow: nextShadow });
   }
   setStatus({ state: "synced", error: null });
   // A pull can also bring back an echo another device has not cleaned up yet.
@@ -558,6 +588,30 @@ function schedulePush() {
   scheduleMentions();
 }
 
+/**
+ * Wait for a write, but not forever.
+ *
+ * Firestore does not settle a write until the server acknowledges it, so while
+ * the machine is offline the promise simply never resolves. Anything holding a
+ * latch across one of those waits stops for the lifetime of the process. The
+ * write itself stays queued in the SDK either way; the only thing given up
+ * here is our waiting on it.
+ */
+function settledWithin(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise.then(
+      () => true,
+      () => false,
+    ),
+    new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+const PUSH_ACK_MS = 15000;
+
 async function pushChanged() {
   if (!currentUid) return;
   if (pushing) {
@@ -565,11 +619,15 @@ async function pushChanged() {
     return;
   }
   pushing = true;
+  // Snapshotted, not read again below: a sign-out landing mid-push used to
+  // re-target the remaining batches and the shadow at whichever account signed
+  // in next. Every other async path in this file already does this.
+  const uid = currentUid;
   try {
     const today = deps.todayYMD();
     const flat = flattenLocal(deps.getData(), today);
     const saved = (await deps.readToken()) || {};
-    const shadow = saved.uid === currentUid && saved.shadow ? saved.shadow : {};
+    const shadow = saved.uid === uid && saved.shadow ? saved.shadow : {};
 
     const outgoing = flat.filter((t) => shadow[t.id] !== signature(t));
     if (!outgoing.length) {
@@ -585,15 +643,18 @@ async function pushChanged() {
       const slice = outgoing.slice(i, i + 400);
       const batch = writeBatch(db);
       for (const t of slice) {
-        batch.set(doc(db, "users", currentUid, "tasks", t.id), taskToDoc(t), {
+        batch.set(doc(db, "users", uid, "tasks", t.id), taskToDoc(t), {
           merge: true,
         });
       }
-      await batch.commit();
       // Only record what actually committed: a crash mid-import then resumes
-      // instead of believing it finished.
+      // instead of believing it finished. And stop waiting if the answer is
+      // not coming — the shadow simply does not advance, so the next push
+      // sends the same slice again, which a merge write is happy to take.
+      if (!(await settledWithin(batch.commit(), PUSH_ACK_MS))) return;
+      if (uid !== currentUid) return;
       for (const t of slice) nextShadow[t.id] = signature(t);
-      await deps.writeToken({ ...saved, uid: currentUid, shadow: nextShadow });
+      await deps.writeToken({ ...saved, uid, shadow: nextShadow });
     }
     setStatus({ state: "synced", error: null });
   } finally {
@@ -857,7 +918,7 @@ async function deliverMentions() {
  * into this account's own collection.
  */
 async function repairMentionEchoes() {
-  if (!currentUid || !mentions.length) return;
+  if (repairingEchoes || !currentUid || !mentions.length) return;
   const byId = new Map(
     mentions.map((m) => [String(m.taskId || m.id), String(m.text || "")]),
   );
@@ -873,29 +934,35 @@ async function repairMentionEchoes() {
   );
 
   const uid = currentUid;
-  await Promise.allSettled(
-    echoes.map((t) => deleteDoc(doc(db, "users", uid, "tasks", t.id))),
-  );
-  if (uid !== currentUid) return;
-
-  // Out of the file too, and out of the shadow — otherwise the next push
-  // would helpfully put them back.
   const ids = new Set(echoes.map((t) => t.id));
-  applyingRemote = true;
+  repairingEchoes = true;
   try {
-    deps.applyRemote(
-      rebuildLocal(
-        flattenLocal(deps.getData(), today).filter((t) => !ids.has(t.id)),
-        today,
-      ),
-    );
+    // The file first, and the shadow with it — otherwise the next push would
+    // helpfully put them back. This used to run after the cloud deletes were
+    // awaited, which offline meant it never ran at all: the echoes stayed in
+    // the file and every snapshot started another pass over the same rows.
+    applyingRemote = true;
+    try {
+      deps.applyRemote(
+        rebuildLocal(
+          flattenLocal(deps.getData(), today).filter((t) => !ids.has(t.id)),
+          today,
+        ),
+      );
+    } finally {
+      applyingRemote = false;
+    }
+    const saved = (await deps.readToken()) || {};
+    if (saved.uid === uid && saved.shadow) {
+      for (const id of ids) delete saved.shadow[id];
+      await deps.writeToken(saved);
+    }
+    // The cloud copies can go whenever the connection allows.
+    Promise.allSettled(
+      echoes.map((t) => deleteDoc(doc(db, "users", uid, "tasks", t.id))),
+    ).catch(() => {});
   } finally {
-    applyingRemote = false;
-  }
-  const saved = (await deps.readToken()) || {};
-  if (saved.uid === uid && saved.shadow) {
-    for (const id of ids) delete saved.shadow[id];
-    await deps.writeToken(saved);
+    repairingEchoes = false;
   }
 }
 
