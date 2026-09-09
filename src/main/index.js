@@ -18,6 +18,7 @@ import {
 } from "electron";
 import { join, basename, extname } from "path";
 import { translations } from "../renderer/src/lib/translations";
+import { newTaskId } from "../renderer/src/lib/ids";
 import { pathToFileURL } from "url";
 import {
   readFileSync,
@@ -266,7 +267,13 @@ const dataDefaults = {
 let dataCache = null;
 let saveTimer = null;
 let dirty = false;
-let loadedFromBackup = false;
+// Two different failures, and confusing them is what destroyed data before.
+// recoveredFromBackup means the backup held real tasks and they belong back in
+// the main file. loadBlocked means nothing loaded at all and the bytes are
+// still on disk unread, so this run must not write anything over them.
+let recoveredFromBackup = false;
+let loadBlocked = false;
+let unreadableDataPath = null;
 
 function readDataFile(path) {
   const raw = readFileSync(path, "utf-8");
@@ -276,23 +283,99 @@ function readDataFile(path) {
   return parsed;
 }
 
+/**
+ * Move an unreadable data file somewhere safe, and say whether that worked.
+ *
+ * A file that will not parse is not an empty file. A truncated write or an
+ * interrupted restore still holds nearly every task as readable text, and it
+ * can be repaired by hand — but only for as long as it exists. Overwriting it
+ * is the one step that cannot be undone, so it is renamed out of the way and
+ * the failure is reported instead.
+ */
+function keepUnreadableDataFile() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const kept = `${dataPath}.unreadable-${stamp}`;
+  try {
+    renameSync(dataPath, kept);
+    unreadableDataPath = kept;
+    console.error(
+      `Data file could not be read. The original is kept at ${kept}`,
+    );
+    return true;
+  } catch (err) {
+    console.error(
+      "Data file could not be read, and could not be moved aside:",
+      err.message,
+    );
+    return false;
+  }
+}
+
+/**
+ * Two tasks under one id. Ids used to be a bare `Date.now()`, so anything
+ * creating several inside one millisecond — a script, the CLI, the MCP server —
+ * produced them. The sync layer keeps only the first of each id and writes the
+ * shortened list back to disk, which is how the second one used to disappear.
+ * Repaired here instead, once, while both copies are still present.
+ *
+ * The replacement keeps the original millisecond at the front, so the task
+ * stays on the day it was written and in the order it was written.
+ */
+function dedupeTaskIds(data) {
+  const seen = new Set();
+  let fixed = 0;
+  const visit = (t) => {
+    if (!t || t.id == null) return;
+    const id = String(t.id);
+    if (!seen.has(id)) {
+      seen.add(id);
+      return;
+    }
+    const at = parseInt(id, 10);
+    t.id = newTaskId(at > 10000000000 ? at : undefined);
+    seen.add(t.id);
+    fixed += 1;
+  };
+  (data?.tasks || []).forEach(visit);
+  (data?.history || []).forEach((d) => (d?.tasks || []).forEach(visit));
+  (data?.deletedTasks || []).forEach(visit);
+  if (fixed)
+    console.warn(`Gave ${fixed} duplicate task id(s) an id of their own.`);
+  return fixed > 0;
+}
+
 function loadAppData() {
   if (dataCache) return dataCache;
   let parsed = null;
-  try {
-    parsed = readDataFile(dataPath);
-  } catch (err) {
-    console.warn("Data file unreadable:", err.message);
-    loadedFromBackup = true;
+  // A file that is not there yet is a first run, not a failure. A file that is
+  // there and will not parse holds the only copy of the tasks. Telling those
+  // two apart is the whole job of this branch: the first may be replaced with
+  // an empty list, the second must never be.
+  if (existsSync(dataPath)) {
     try {
-      parsed = readDataFile(backupPath);
-      console.warn("Recovered tasks from the backup file.");
-    } catch {
-      parsed = null;
-      console.warn("No usable backup either — starting empty.");
+      parsed = readDataFile(dataPath);
+    } catch (err) {
+      console.warn("Data file unreadable:", err.message);
+      try {
+        parsed = readDataFile(backupPath);
+        recoveredFromBackup = true;
+        console.warn("Recovered tasks from the backup file.");
+      } catch {
+        parsed = null;
+        // Neither file could be read. Keep the bytes that are left, and if even
+        // that fails, run without saving rather than writing an empty list over
+        // the last copy of somebody's history.
+        loadBlocked = !keepUnreadableDataFile();
+      }
     }
   }
   dataCache = { ...dataDefaults, ...(parsed || {}) };
+  // Before anything reads it. A duplicate id left in place is a task the sync
+  // layer will drop from the file the next time the cloud answers.
+  if (dedupeTaskIds(dataCache)) {
+    dirty = true;
+    if (!saveTimer) saveTimer = setTimeout(flushAppData, 400);
+  }
   return dataCache;
 }
 
@@ -300,6 +383,9 @@ function flushAppData() {
   clearTimeout(saveTimer);
   saveTimer = null;
   if (!dirty || !dataCache) return;
+  // The tasks are still in a file this run could not read and could not move.
+  // Writing now would put an empty list exactly where they are.
+  if (loadBlocked) return;
   dirty = false;
   try {
     writeJsonAtomic(dataPath, dataCache);
@@ -448,57 +534,73 @@ function dimensionsFromHeader(path) {
   }
   if (head.length < 16) return null;
 
-  // PNG: IHDR always comes first.
-  if (
-    head
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-  ) {
-    return { w: head.readUInt32BE(16), h: head.readUInt32BE(20) };
-  }
-  // GIF
-  if (head.subarray(0, 3).toString("latin1") === "GIF") {
-    return { w: head.readUInt16LE(6), h: head.readUInt16LE(8) };
-  }
-  // WebP (VP8X / VP8 / VP8L)
-  if (
-    head.subarray(0, 4).toString("latin1") === "RIFF" &&
-    head.subarray(8, 12).toString("latin1") === "WEBP"
-  ) {
-    const chunk = head.subarray(12, 16).toString("latin1");
-    if (chunk === "VP8X")
-      return {
-        w: (head.readUIntLE(24, 3) & 0xffffff) + 1,
-        h: (head.readUIntLE(27, 3) & 0xffffff) + 1,
-      };
-    if (chunk === "VP8 " && head.length > 30)
-      return {
-        w: head.readUInt16LE(26) & 0x3fff,
-        h: head.readUInt16LE(28) & 0x3fff,
-      };
-  }
-  // JPEG: walk the segment chain to the frame header.
-  if (head[0] === 0xff && head[1] === 0xd8) {
-    let offset = 2;
-    while (offset + 9 < head.length) {
-      if (head[offset] !== 0xff) {
-        offset++;
-        continue;
-      }
-      const marker = head[offset + 1];
-      const length = head.readUInt16BE(offset + 2);
-      const isFrame =
-        marker >= 0xc0 &&
-        marker <= 0xcf &&
-        ![0xc4, 0xc8, 0xcc].includes(marker);
-      if (isFrame)
-        return {
-          h: head.readUInt16BE(offset + 5),
-          w: head.readUInt16BE(offset + 7),
-        };
-      if (length < 2) break;
-      offset += 2 + length;
+  // Every offset below indexes bytes this process did not write. A truncated
+  // file — a write cut short by a full disk, an interrupted restore, a copy
+  // that died halfway — still carries an intact signature, so matching one is
+  // no proof that the header behind it arrived. Each branch states how many
+  // bytes it needs, and the whole parse sits inside a try: a file that is not
+  // the shape its signature claims must read as "size unknown", never as an
+  // exception thrown at the caller. The caller is the startup migration, and
+  // an exception there is an app that never opens a window.
+  try {
+    // PNG: IHDR comes first, width at 16 and height at 20, so byte 23 is the
+    // last one touched.
+    if (
+      head.length >= 24 &&
+      head
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ) {
+      return { w: head.readUInt32BE(16), h: head.readUInt32BE(20) };
     }
+    // GIF: width at 6, height at 8 — inside the 16-byte floor above.
+    if (head.subarray(0, 3).toString("latin1") === "GIF") {
+      return { w: head.readUInt16LE(6), h: head.readUInt16LE(8) };
+    }
+    // WebP (VP8X / VP8 / VP8L)
+    if (
+      head.subarray(0, 4).toString("latin1") === "RIFF" &&
+      head.subarray(8, 12).toString("latin1") === "WEBP"
+    ) {
+      const chunk = head.subarray(12, 16).toString("latin1");
+      // VP8X takes three bytes at 24 and three at 27, so it needs 30.
+      if (chunk === "VP8X" && head.length >= 30)
+        return {
+          w: (head.readUIntLE(24, 3) & 0xffffff) + 1,
+          h: (head.readUIntLE(27, 3) & 0xffffff) + 1,
+        };
+      if (chunk === "VP8 " && head.length > 30)
+        return {
+          w: head.readUInt16LE(26) & 0x3fff,
+          h: head.readUInt16LE(28) & 0x3fff,
+        };
+    }
+    // JPEG: walk the segment chain to the frame header. The loop condition
+    // keeps every read below inside the buffer.
+    if (head[0] === 0xff && head[1] === 0xd8) {
+      let offset = 2;
+      while (offset + 9 < head.length) {
+        if (head[offset] !== 0xff) {
+          offset++;
+          continue;
+        }
+        const marker = head[offset + 1];
+        const length = head.readUInt16BE(offset + 2);
+        const isFrame =
+          marker >= 0xc0 &&
+          marker <= 0xcf &&
+          ![0xc4, 0xc8, 0xcc].includes(marker);
+        if (isFrame)
+          return {
+            h: head.readUInt16BE(offset + 5),
+            w: head.readUInt16BE(offset + 7),
+          };
+        if (length < 2) break;
+        offset += 2 + length;
+      }
+    }
+  } catch {
+    /* a header that did not hold what its signature promised */
   }
   return null;
 }
@@ -599,13 +701,29 @@ function sanitizeSubtask(st) {
   };
   const att = sanitizeAttachment(st.attachment);
   if (att) out.attachment = att;
+  // A task dragged into another becomes a subtask and brings its fields with
+  // it. They are kept rather than dropped here, because the two integration
+  // ids among them are the only handles the app has for removing the calendar
+  // event and the reminder it already created.
+  for (const k of [
+    "priority",
+    "dueDate",
+    "reminder",
+    "projects",
+    "gcalEventId",
+    "gcalLink",
+    "appleReminderId",
+    "jiraKey",
+    "jiraLink",
+  ])
+    if (st[k] !== undefined && st[k] !== null) out[k] = st[k];
   return out;
 }
 
 function sanitizeTask(t) {
   if (!t || typeof t !== "object") return null;
   const out = {
-    id: t.id != null ? String(t.id) : String(Date.now()),
+    id: t.id != null ? String(t.id) : newTaskId(),
     text:
       typeof t.text === "string"
         ? t.text.slice(0, 20000)
@@ -2519,7 +2637,7 @@ function startAPIServer() {
             return send(400, { error: "title required" });
           const data = loadAppData();
           const newTask = sanitizeTask({
-            id: String(Date.now()),
+            id: newTaskId(),
             text: title,
             completed: false,
             priority: !!payload.priority,
@@ -2818,7 +2936,10 @@ function startSync() {
   sync.initSync({
     getData: () => loadAppData(),
     applyRemote: (next) => {
-      saveAppData(next, { fromCloud: true });
+      // The one ingress carrying bytes another account wrote. Every other way
+      // into this file — the JSON import, the local HTTP API — runs the same
+      // whitelist first; this path used to spread the document in verbatim.
+      saveAppData(sanitizeDataShape(next), { fromCloud: true });
       flushAppData(); // a change from another device is worth an immediate write
       broadcastData();
     },
@@ -2904,10 +3025,13 @@ if (!app.requestSingleInstanceLock()) {
     // only when the file we just read actually parsed — otherwise a
     // half-written file would overwrite the only usable backup.
     loadAppData();
-    if (loadedFromBackup) {
+    if (recoveredFromBackup) {
       dirty = true;
       flushAppData(); // put the recovered copy back straight away
-    } else {
+    } else if (!loadBlocked) {
+      // Only ever back up a file that parsed. When the load was blocked, the
+      // file still on disk is the unreadable one, and copying it would take
+      // the backup down with it.
       try {
         if (existsSync(dataPath) && statSync(dataPath).size > 0)
           copyFileSync(dataPath, backupPath);
@@ -2915,7 +3039,26 @@ if (!app.requestSingleInstanceLock()) {
         /* not fatal */
       }
     }
-    migrateAppData();
+    // A console warning is invisible in a packaged app, and an empty window is
+    // exactly what losing everything would look like. Say which one this is.
+    if (unreadableDataPath)
+      dialog.showErrorBox(
+        "Stepler could not read its data file",
+        `The unreadable file has been kept at\n\n${unreadableDataPath}\n\nStepler has started with an empty list. Nothing was overwritten.`,
+      );
+    else if (loadBlocked)
+      dialog.showErrorBox(
+        "Stepler could not read its data file",
+        `Your tasks are still in\n\n${dataPath}\n\nStepler could not move that file aside, so it has started with an empty list and will not save anything this session.`,
+      );
+    try {
+      migrateAppData();
+    } catch (err) {
+      // A migration that cannot finish is a bad day. A window that never opens
+      // because of it is a lost app, on this launch and every one after, since
+      // nothing on disk changes in between. Carry on with the data as it is.
+      console.error("Attachment migration failed, continuing:", err.message);
+    }
 
     integrationConfig = loadIntegrationConfig();
 

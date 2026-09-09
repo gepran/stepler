@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { localYMD, taskTimestamp } from "../renderer/src/lib/format";
+import { newTaskId } from "../renderer/src/lib/ids";
 
 /**
  * One document per task under the signed-in user. The desktop app keeps every
@@ -75,7 +76,7 @@ function stamp(fields) {
  * word. The id is minted here, so nothing has to wait for it.
  */
 export function addTask(uid, text) {
-  const id = String(Date.now());
+  const id = newTaskId();
   const written = setDoc(
     taskRef(uid, id),
     stamp({

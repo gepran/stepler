@@ -18,6 +18,7 @@ import FilePreviewModal from "./components/FilePreviewModal";
 import Toasts from "./components/Toasts";
 import { PanelLeft, ChevronDown } from "lucide-react";
 import { localYMD, labelForYMD, taskTimestamp, ymdToDate } from "./lib/format";
+import { newTaskId } from "./lib/ids";
 import { ipc, persistAttachment } from "./lib/attachments";
 import { useCollab } from "./lib/collab-ipc";
 import { MentionBadge, MentionTaskItem } from "./components/MentionTaskItem";
@@ -82,12 +83,13 @@ function groupByDay(tasks, todayYMD) {
  * end of the list — which is the one place you look for it. The star is a mark
  * on a task now, not a place in the order.
  *
- * The id is the millisecond the task was written, so it sorts chronologically
- * on its own. A legacy id that is not a number falls back to 0 rather than
- * producing NaN, which a comparator treats as "equal to everything" and which
- * scrambles the whole list.
+ * The id starts with the millisecond the task was written, so it sorts
+ * chronologically on its own: parseInt reads that prefix and stops at the
+ * random tail that keeps ids unique. An id with no leading number falls back
+ * to 0 rather than producing NaN, which a comparator treats as "equal to
+ * everything" and which scrambles the whole list.
  */
-const writtenAt = (task) => Number(task.id) || 0;
+const writtenAt = (task) => parseInt(task.id, 10) || 0;
 
 const orderWithin = (list) =>
   [...list].sort((a, b) => {
@@ -721,7 +723,7 @@ export default function App() {
         (stored && stored.type !== "image" ? stored.name : "");
       if (!body && !stored) return;
 
-      const taskId = Date.now().toString();
+      const taskId = newTaskId();
       rememberProjects(projects);
       setTasks((prev) => [
         ...prev,
@@ -1018,7 +1020,7 @@ export default function App() {
               subtasks: [
                 ...(t.subtasks || []),
                 {
-                  id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  id: newTaskId(),
                   text: body,
                   completed: false,
                   ...(stored ? { attachment: stored } : {}),
@@ -1233,16 +1235,17 @@ export default function App() {
 
         // Nesting: a task dragged onto another keeps its own subtasks by
         // flattening them in, instead of silently dropping them.
+        // Everything the task carried comes with it, minus the subtasks that
+        // are flattened in alongside it. Rebuilding the row from four fields
+        // used to discard the due date, the reminder, the star and the
+        // projects — and with them the calendar and reminder ids, without
+        // which the mirrored event could never be updated or removed again.
+        const { subtasks: movedSubtasks, ...movedRest } = moved;
         const incoming =
           sourceType === "task"
             ? [
-                {
-                  id: moved.id,
-                  text: moved.text,
-                  completed: !!moved.completed,
-                  ...(moved.attachment ? { attachment: moved.attachment } : {}),
-                },
-                ...(moved.subtasks || []),
+                { ...movedRest, completed: !!moved.completed },
+                ...(movedSubtasks || []),
               ]
             : [moved];
         next[targetIndex] = {

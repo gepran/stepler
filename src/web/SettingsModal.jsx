@@ -98,7 +98,9 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
 
   // Newest first: the id is the millisecond the task was written, so it sorts
   // without a second field.
-  const trash = [...deleted].sort((a, b) => Number(b.id) - Number(a.id));
+  const trash = [...deleted].sort(
+    (a, b) => (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0),
+  );
 
   return (
     // `h-dvh`, not `inset-0`. On a phone the browser's toolbar covers the
