@@ -130,6 +130,35 @@ function detectLanguage(text) {
 
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
 
+/**
+ * `@handle`, but only where it starts a word — otherwise the local part of an
+ * email address would light up as a mention of whatever follows the `@`. Kept
+ * in step with MENTION_RE in collab.js, which is what actually decides who a
+ * task gets delivered to; this only decides what it looks like.
+ */
+const MENTION_RE = /((?:^|[^\w@/.-])@[a-z0-9._-]{2,24})/gi;
+
+function renderMentions(text, keyPrefix) {
+  return text.split(MENTION_RE).flatMap((part, i) => {
+    if (!part) return [];
+    if (i % 2 === 0) return [<span key={`${keyPrefix}-m${i}`}>{part}</span>];
+    // The captured group keeps whatever character preceded the `@` so the
+    // split does not eat it; only the handle itself is styled.
+    const at = part.indexOf("@");
+    return [
+      part.slice(0, at) && (
+        <span key={`${keyPrefix}-mp${i}`}>{part.slice(0, at)}</span>
+      ),
+      <span
+        key={`${keyPrefix}-mh${i}`}
+        className="rounded px-1 font-semibold text-orange-600 dark:text-orange-400"
+      >
+        {part.slice(at)}
+      </span>,
+    ].filter(Boolean);
+  });
+}
+
 function renderPlain(text, keyPrefix) {
   const out = [];
   const segments = text.split(URL_RE);
@@ -149,7 +178,7 @@ function renderPlain(text, keyPrefix) {
         </a>,
       );
     } else {
-      out.push(<span key={`${keyPrefix}-t${i}`}>{segment}</span>);
+      out.push(...renderMentions(segment, `${keyPrefix}-t${i}`));
     }
   });
   return out;

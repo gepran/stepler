@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Stepler</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Stepler — a fast daily task timeline that syncs across your devices."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Stepler" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta
+      name="theme-color"
+      content="#fafafa"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0a0a0a"
+      media="(prefers-color-scheme: dark)"
+    />
+    <!-- Unlike the desktop window, this page must reach the network — but only
+         the handful of Google hosts Firebase Auth, Firestore and Storage
+         actually use. `frame-src` carries the auth domain because Firebase
+         keeps a hidden iframe there for session handling; drop it and sign-in
+         stalls with no visible error. `img-src` names the Storage host
+         outright because an attachment is loaded as a picture rather than
+         fetched — `connect-src` already reaches it under *.googleapis.com,
+         which is what the upload and the getDownloadURL lookup travel on. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' https://apis.google.com https://www.gstatic.com;
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data: blob: https://*.googleusercontent.com https://www.gstatic.com https://firebasestorage.googleapis.com;
+               font-src 'self' data:;
+               connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com wss://*.firebaseio.com;
+               frame-src 'self' https://stepler-490308.firebaseapp.com https://accounts.google.com;
+               base-uri 'none';
+               form-action 'self';"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.jsx"></script>
+  </body>
+</html>

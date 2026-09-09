@@ -22,7 +22,8 @@
     "cli": "node stepler-cli.mjs",
     "dev:web": "vite --config vite.web.config.mjs",
     "build:web": "vite build --config vite.web.config.mjs",
-    "deploy:web": "npm run build:web && firebase deploy --only hosting:web"
+    "deploy:web": "npm run build:web && firebase deploy --only hosting:web",
+    "prebuild:web": "node scripts/sync-download-links.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

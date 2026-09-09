@@ -143,6 +143,11 @@ const REMINDER_ID_RE = /^x-apple-reminder:\/\/[0-9A-Fa-f-]{10,60}$/;
  * one, so a user's existing reminders never get mixed in with ours. */
 const REMINDER_LIST = "Stepler";
 const ATTACH_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
+/** Where an attachment's bytes live in Firebase Storage, when they live there
+ *  at all. Same last segment as the file's name on disk, so the two halves of
+ *  an attachment never need translating between machines. */
+const CLOUD_PATH_RE =
+  /^users\/[A-Za-z0-9_-]{1,128}\/attachments\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 function attachmentPath(id) {
   if (typeof id !== "string" || !ATTACH_ID_RE.test(id) || id.includes(".."))
@@ -528,8 +533,15 @@ function sanitizeAttachment(a) {
   if (!a || typeof a !== "object") return null;
   const name = sanitizeFileName(a.name || "attachment");
   const type = a.type === "image" ? "image" : "file";
+  // The cloud copy is the only thing that makes an attachment mean anything on
+  // a machine that never had the file, so it survives this whitelist even when
+  // the local id does not.
+  const cloud =
+    typeof a.storagePath === "string" && CLOUD_PATH_RE.test(a.storagePath)
+      ? { storagePath: a.storagePath }
+      : {};
   if (typeof a.id === "string" && ATTACH_ID_RE.test(a.id)) {
-    const base = { id: a.id, name, type };
+    const base = { id: a.id, name, type, ...cloud };
     if (Number.isFinite(a.w) && Number.isFinite(a.h))
       return { ...base, w: a.w, h: a.h };
     return withDimensions(base);
@@ -540,10 +552,19 @@ function sanitizeAttachment(a) {
         id: writeAttachmentFromDataUrl(a.url, name),
         name,
         type,
+        ...cloud,
       });
     } catch {
       return { name, type, missing: true };
     }
+  }
+  // An attachment made in the browser: no bytes on this disk yet, but the path
+  // is enough for the sync engine to go and fetch them.
+  if (cloud.storagePath) {
+    const base = { name, type, ...cloud };
+    return Number.isFinite(a.w) && Number.isFinite(a.h)
+      ? { ...base, w: a.w, h: a.h }
+      : base;
   }
   return { name, type, missing: true };
 }
@@ -1646,6 +1667,40 @@ function setupIPC() {
 
   ipcMain.handle("sync-signout", () => sync.signOutSync());
 
+  // ---- collaboration ----
+  //
+  // The window holds no Firestore session of its own, so every one of these is
+  // a thin pass-through to the engine that does.
+
+  ipcMain.handle("collab-snapshot", () => sync.collabSnapshot());
+
+  ipcMain.handle("collab-search", (_, term) =>
+    typeof term === "string" ? sync.collabSearch(term) : [],
+  );
+
+  ipcMain.handle("collab-invite", (_, person) =>
+    person?.uid
+      ? sync.collabInvite(person)
+      : { success: false, error: "no-target" },
+  );
+
+  ipcMain.handle("collab-accept", (_, person) =>
+    person?.uid
+      ? sync.collabAccept(person)
+      : { success: false, error: "no-target" },
+  );
+
+  ipcMain.handle("collab-remove", (_, uid) =>
+    typeof uid === "string"
+      ? sync.collabRemove(uid)
+      : { success: false, error: "no-target" },
+  );
+
+  // No id means "all of them", which is what opening the mention filter does.
+  ipcMain.handle("collab-mark-read", (_, id) =>
+    sync.collabMarkRead(typeof id === "string" ? id : null),
+  );
+
   ipcMain.handle("hide-window", () => {
     hideWindow();
     return true;
@@ -2669,11 +2724,43 @@ function startSync() {
       if (mainWindow && !mainWindow.isDestroyed())
         mainWindow.webContents.send("sync-status", s);
     },
+    onCollab: (snapshot) => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        mainWindow.webContents.send("collab-snapshot", snapshot);
+    },
     readToken: async () => loadSecret(syncSessionPath),
     writeToken: async (obj) =>
       obj ? saveSecret(syncSessionPath, obj) : clearSecret(syncSessionPath),
     readAuth: async () => loadSecret(syncAuthPath) || {},
     writeAuth: async (blob) => saveSecret(syncAuthPath, blob),
+    // The attachments folder, as three small doors, so the sync engine still
+    // never touches this machine's disk itself.
+    disk: {
+      has: (id) => {
+        const p = attachmentPath(id);
+        return !!p && existsSync(p);
+      },
+      read: (id) => {
+        const p = attachmentPath(id);
+        return p && existsSync(p) ? readFileSync(p) : null;
+      },
+      write: (id, bytes) => {
+        const p = attachmentPath(id);
+        if (!p) return false;
+        ensureAttachDir();
+        // Beside the target and then renamed, so a half-finished download is
+        // never served to the window as a truncated image.
+        const tmp = `${p}.part`;
+        try {
+          writeFileSync(tmp, Buffer.from(bytes));
+          renameSync(tmp, p);
+          return true;
+        } catch (err) {
+          if (existsSync(tmp)) unlinkSync(tmp);
+          throw err;
+        }
+      },
+    },
     todayYMD: () => localYMD(new Date()),
   });
 }

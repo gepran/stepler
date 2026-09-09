@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import FileTypeIcon from "./FileTypeIcon";
+import AttachmentImage from "./AttachmentImage";
 import AppleTimePicker from "./AppleTimePicker";
 import {
   formatTaskText,
@@ -10,7 +11,6 @@ import {
 import {
   attachmentSrc,
   isMissing,
-  imageBox,
   copyAttachmentImage,
   copyAttachmentFile,
   downloadAttachment,
@@ -412,12 +412,8 @@ function TaskItem({
                 </div>
               ) : attachment.type === "image" ? (
                 <div className="group/attachment relative inline-block">
-                  <img
-                    src={attachmentSrc(attachment)}
-                    alt={attachment.name}
-                    loading="lazy"
-                    decoding="async"
-                    {...imageBox(attachment)}
+                  <AttachmentImage
+                    att={attachment}
                     onClick={() => onPreview(attachment)}
                     className="max-h-32 cursor-pointer rounded-lg border border-neutral-200 object-cover transition-opacity group-hover/attachment:opacity-80 dark:border-neutral-800"
                   />
@@ -584,12 +580,8 @@ function TaskItem({
                       <div className="group/st relative mt-1.5 inline-block">
                         {st.attachment.type === "image" ? (
                           <>
-                            <img
-                              src={attachmentSrc(st.attachment)}
-                              alt={st.attachment.name}
-                              loading="lazy"
-                              decoding="async"
-                              {...imageBox(st.attachment)}
+                            <AttachmentImage
+                              att={st.attachment}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onPreview(st.attachment);

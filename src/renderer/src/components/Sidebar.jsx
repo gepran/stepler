@@ -1,15 +1,34 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
-import { Settings, Trash2, Layers } from "lucide-react";
+import { Settings, Layers } from "lucide-react";
 import { translatePlural as tPlural, useT } from "../lib/i18n";
 import SteplerLogo from "./SteplerLogo";
+
+/**
+ * Google hands out a profile photo, but this window can never fetch it: the
+ * renderer's CSP allows no remote images at all, on purpose — nothing here is
+ * meant to touch the network. The first letter of the email says who is signed
+ * in just as well.
+ */
+function AccountAvatar({ email }) {
+  const initial = (email || "?").trim()[0] || "?";
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-bold uppercase text-neutral-600 dark:bg-neutral-700 dark:text-neutral-200">
+      {initial}
+    </span>
+  );
+}
+
+AccountAvatar.propTypes = {
+  email: PropTypes.string,
+};
 
 export default function Sidebar({
   show,
   tasks,
   onSettingsClick,
+  account,
   deletedCount,
-  onTrashClick,
   availableProjects,
   selectedProject,
   onProjectClick,
@@ -104,25 +123,33 @@ export default function Sidebar({
             )}
           </div>
         </div>
+        {/* The trash used to sit here; it lives in Settings now, so the count
+            rides on the button that opens Settings rather than vanishing from
+            the window altogether. */}
         <div className="p-4 shrink-0 flex flex-col gap-1">
-          <button
-            onClick={onTrashClick}
-            className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors relative"
-          >
-            <Trash2 size={18} className="icon-rubbery" />
-            <span className="text-sm font-medium">Trash</span>
-            {deletedCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
-                {deletedCount > 99 ? "99+" : deletedCount}
+          {account?.signedIn && (
+            <button
+              onClick={onSettingsClick}
+              title={account.email || ""}
+              className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            >
+              <AccountAvatar email={account.email} />
+              <span className="truncate text-sm font-medium">
+                {account.email}
               </span>
-            )}
-          </button>
+            </button>
+          )}
           <button
             onClick={onSettingsClick}
             className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
           >
             <Settings size={18} className="icon-rubbery" />
-            <span className="text-sm font-medium">Settings</span>
+            <span className="text-sm font-medium">{t("common.settings")}</span>
+            {deletedCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
+                {deletedCount > 99 ? "99+" : deletedCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -180,24 +207,26 @@ export default function Sidebar({
           })}
         </div>
         <div className="p-3 shrink-0 flex flex-col items-center gap-2">
+          {account?.signedIn && (
+            <button
+              onClick={onSettingsClick}
+              className="btn-tactile p-2 rounded-full transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title={account.email || ""}
+            >
+              <AccountAvatar email={account.email} />
+            </button>
+          )}
           <button
-            onClick={onTrashClick}
+            onClick={onSettingsClick}
             className="btn-tactile relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            title={t("sidebar.trash")}
+            title={t("common.settings")}
           >
-            <Trash2 size={18} className="icon-rubbery" />
+            <Settings size={18} className="icon-rubbery" />
             {deletedCount > 0 && (
               <div className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900">
                 {deletedCount > 99 ? "99+" : deletedCount}
               </div>
             )}
-          </button>
-          <button
-            onClick={onSettingsClick}
-            className="btn-tactile p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            title={t("common.settings")}
-          >
-            <Settings size={18} className="icon-rubbery" />
           </button>
         </div>
       </div>
@@ -209,8 +238,11 @@ Sidebar.propTypes = {
   show: PropTypes.bool.isRequired,
   tasks: PropTypes.array.isRequired,
   onSettingsClick: PropTypes.func,
+  account: PropTypes.shape({
+    signedIn: PropTypes.bool,
+    email: PropTypes.string,
+  }),
   deletedCount: PropTypes.number,
-  onTrashClick: PropTypes.func,
   availableProjects: PropTypes.array.isRequired,
   selectedProject: PropTypes.string,
   onProjectClick: PropTypes.func,

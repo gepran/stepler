@@ -10,16 +10,35 @@
  */
 
 // Bumping this name is what evicts the previous shell.
-const CACHE = "stepler-shell-v1";
+const CACHE = "stepler-shell-v2";
+
+/**
+ * There are two pages on this origin now — the site at `/` and the app at
+ * `/app` — and they are not interchangeable. Serving the marketing page to
+ * somebody who opened the installed app offline would be a bug you only see
+ * on a train.
+ */
+const SITE = "/";
+const APP = "/app";
 
 const SHELL = [
-  "/",
+  SITE,
+  APP,
   "/manifest.webmanifest",
   "/favicon.svg",
   "/icon-192.png",
   "/icon-512.png",
   "/apple-touch-icon.png",
 ];
+
+/** Which of the two shells a navigation belongs to. */
+function shellFor(pathname) {
+  return pathname === APP ||
+    pathname.startsWith(`${APP}/`) ||
+    pathname === "/login"
+    ? APP
+    : SITE;
+}
 
 self.addEventListener("install", (event) => {
   // A single missing file must not fail the whole install, so each is added on
@@ -60,14 +79,15 @@ self.addEventListener("fetch", (event) => {
   // Navigations: network first, so a deploy is picked up immediately, with the
   // cached shell as the offline answer.
   if (request.mode === "navigate") {
+    const shell = shellFor(url.pathname);
     event.respondWith(
       fetch(request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("/", copy));
+          caches.open(CACHE).then((c) => c.put(shell, copy));
           return res;
         })
-        .catch(() => caches.match("/").then((r) => r || Response.error())),
+        .catch(() => caches.match(shell).then((r) => r || Response.error())),
     );
     return;
   }

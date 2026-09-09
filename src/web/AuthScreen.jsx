@@ -221,6 +221,15 @@ export default function AuthScreen() {
           </button>
         </div>
 
+        <p className="mt-5 text-center text-[12.5px] text-neutral-400 dark:text-neutral-500">
+          <a
+            href="/"
+            className="transition-colors hover:text-orange-500 hover:underline"
+          >
+            {t("auth.backToSite")}
+          </a>
+        </p>
+
         <div className="mt-6 flex items-center justify-center gap-1">
           {LANGUAGES.map((l) => (
             <button

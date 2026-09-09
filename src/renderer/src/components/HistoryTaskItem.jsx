@@ -1,18 +1,13 @@
 import { memo } from "react";
 import PropTypes from "prop-types";
 import FileTypeIcon from "./FileTypeIcon";
+import AttachmentImage from "./AttachmentImage";
 import {
   formatTaskText,
   formatTaskDateTime,
   dueDateLabel,
 } from "../lib/format";
-import {
-  attachmentSrc,
-  isMissing,
-  imageBox,
-  copyAttachmentImage,
-  copyTask,
-} from "../lib/attachments";
+import { isMissing, copyAttachmentImage, copyTask } from "../lib/attachments";
 import {
   CheckCircle2,
   Bell,
@@ -89,12 +84,8 @@ function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
               </div>
             ) : task.attachment.type === "image" ? (
               <div className="group/attachment relative inline-block">
-                <img
-                  src={attachmentSrc(task.attachment)}
-                  alt={task.attachment.name}
-                  loading="lazy"
-                  decoding="async"
-                  {...imageBox(task.attachment)}
+                <AttachmentImage
+                  att={task.attachment}
                   onClick={() => onPreview(task.attachment)}
                   className="max-h-24 cursor-pointer rounded-lg border border-neutral-200 object-cover dark:border-neutral-800"
                 />
@@ -158,12 +149,8 @@ function HistoryTaskItem({ task, onPreview, onReopen, onToast }) {
                   {st.attachment &&
                     !isMissing(st.attachment) &&
                     st.attachment.type === "image" && (
-                      <img
-                        src={attachmentSrc(st.attachment)}
-                        alt={st.attachment.name}
-                        loading="lazy"
-                        decoding="async"
-                        {...imageBox(st.attachment)}
+                      <AttachmentImage
+                        att={st.attachment}
                         onClick={(e) => {
                           e.stopPropagation();
                           onPreview(st.attachment);
