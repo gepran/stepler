@@ -1,0 +1,161 @@
+name: Release
+
+# Build both platforms and put them on one GitHub release.
+#
+# Two things this is deliberately arranged to prevent, both of which have
+# happened when releases were made by hand:
+#
+#   1. A build that quietly ships only the architecture of whatever machine
+#      ran it. Every electron-builder call below names its architectures.
+#   2. Two halves of a release racing to create it and leaving a pair of
+#      drafts behind. The build jobs publish nothing; a single job afterwards
+#      collects what they made and creates the release once.
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Run it by hand to add a platform to a release that is already out — which
+  # is exactly how a lagging Windows build gets caught up.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One release at a time. A second run for the same tag would be two jobs
+# uploading to one release with no idea about each other.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      # One platform failing must not throw away the other's build. A release
+      # with macOS in it and Windows to follow is worth having; neither is not.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (universal)
+            os: macos-latest
+            # Universal, not the runner's own arch: an Intel Mac and an Apple
+            # Silicon one download the same file.
+            args: --mac --universal
+            # The .app itself is not uploaded — only what a person installs
+            # and what the updater reads.
+            glob: |
+              dist/*.dmg
+              dist/*.dmg.blockmap
+              dist/*-mac.zip
+              dist/*-mac.zip.blockmap
+              dist/latest-mac.yml
+          - name: Windows (x64)
+            os: windows-latest
+            args: --win --x64
+            glob: |
+              dist/*-setup.exe
+              dist/*-setup.exe.blockmap
+              dist/latest.yml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The site builds its download URLs out of package.json, so a tag that
+      # disagrees with it produces a release whose files nobody can reach.
+      # Cheaper to find out here than from a 404 on the download button.
+      - name: Check the tag matches package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "package.json says $version"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" != "v$version" ]; then
+            echo "::error::Tag ${{ github.ref_name }} does not match package.json v$version."
+            exit 1
+          fi
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+
+      - name: Build the app
+        run: npm run build
+
+      - name: Package
+        run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # There is no Apple certificate here and none is wanted: Stepler is
+          # signed ad-hoc by build/afterSign.cjs, the same as the hand-made
+          # builds. Left on, electron-builder goes hunting for an identity in
+          # an empty keychain and fails the build over not finding one.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: ${{ matrix.glob }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish
+    needs: build
+    # `always()`, not a check on needs.build.result: a matrix job reports one
+    # combined result, which is 'failure' the moment either platform fails. The
+    # question worth asking is whether anything got built, and that is answered
+    # below by looking at what was actually uploaded — so a Windows failure
+    # still lets the macOS half reach people.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+        # A platform that failed left no artifact behind; that is a reason to
+        # publish less, not a reason to fail here.
+        continue-on-error: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+
+          shopt -s nullglob
+          files=(installers/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::Every platform failed to build — nothing to publish."
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+
+          # An existing release keeps the notes somebody wrote for it; only the
+          # files are replaced. A new one gets generated notes to start from.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Adding to the existing $tag."
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            echo "Creating $tag."
+            gh release create "$tag" "${files[@]}" \
+              --title "Stepler $version" \
+              --generate-notes
+          fi
+
+          echo "### Stepler $version" >> "$GITHUB_STEP_SUMMARY"
+          gh release view "$tag" --json assets \
+            --jq '.assets[] | "- \(.name)"' >> "$GITHUB_STEP_SUMMARY"
