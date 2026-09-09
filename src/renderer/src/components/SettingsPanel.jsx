@@ -25,7 +25,6 @@ import {
   Check,
   Plus,
   Star,
-  Keyboard,
   Languages,
   Cloud,
   CloudOff,
@@ -35,6 +34,10 @@ import {
   FolderOpen,
   Loader2,
   RefreshCw,
+  Bot,
+  Copy,
+  Terminal,
+  TextCursorInput,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -107,6 +110,237 @@ Toggle.propTypes = {
   label: PropTypes.string,
 };
 
+// ---------------------------------------------------------------------------
+// The panel's vocabulary.
+//
+// Every section used to invent its own padding, its own corner radius and its
+// own idea of how big a title is — a 24px icon here, a 56px one there, p-5
+// beside p-8. The result read as a pile of unrelated boxes, and finding a
+// setting meant scanning all of them. Four pieces below cover the whole
+// window, so anything built out of them lines up with everything else.
+// ---------------------------------------------------------------------------
+
+/** Primary action. One size, everywhere. */
+const BTN =
+  "btn-tactile inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200";
+
+/** Everything secondary: bordered, quiet, same height as the primary. */
+const BTN_GHOST =
+  "btn-tactile inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-neutral-600 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700";
+
+const INPUT =
+  "min-w-0 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[13px] text-neutral-800 outline-none transition-colors focus:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100";
+
+function SectionLabel({ children }) {
+  return (
+    <h4 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400 dark:text-neutral-500">
+      {children}
+    </h4>
+  );
+}
+
+SectionLabel.propTypes = { children: PropTypes.node };
+
+function Card({ className = "", children }) {
+  return (
+    <div
+      className={`rounded-xl border border-neutral-200/80 bg-neutral-50/60 dark:border-neutral-800 dark:bg-neutral-800/30 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+Card.propTypes = { className: PropTypes.string, children: PropTypes.node };
+
+/**
+ * A thing you can turn on or set: icon, name, one line saying what it does,
+ * and the control that operates it. `children` is for the detail a row grows
+ * once it is connected — a form, a sub-toggle, a command to copy.
+ */
+function Row({ icon, title, hint, action, children }) {
+  return (
+    <Card className="px-4 py-3.5">
+      <div className="flex items-center gap-3.5">
+        {icon && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200/70 dark:bg-neutral-900 dark:ring-neutral-700">
+            {icon}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold text-neutral-800 dark:text-neutral-100">
+            {title}
+          </div>
+          {hint && (
+            <div className="mt-0.5 text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+              {hint}
+            </div>
+          )}
+        </div>
+        {action}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+Row.propTypes = {
+  icon: PropTypes.node,
+  title: PropTypes.node,
+  hint: PropTypes.node,
+  action: PropTypes.node,
+  children: PropTypes.node,
+};
+
+/** One of a set — a theme, a language. Theme and language are the same kind
+ *  of choice, so they are the same size and shape. */
+function Choice({ selected, onClick, Icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`btn-tactile flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border py-3 transition-all ${
+        selected
+          ? "border-neutral-900 bg-neutral-900 text-white shadow-sm dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+          : "border-neutral-200/80 bg-neutral-50/60 text-neutral-500 hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30 dark:text-neutral-400 dark:hover:bg-neutral-800"
+      }`}
+    >
+      <Icon size={17} />
+      <span className="text-[12.5px] font-semibold">{label}</span>
+    </button>
+  );
+}
+
+Choice.propTypes = {
+  selected: PropTypes.bool,
+  onClick: PropTypes.func,
+  Icon: PropTypes.elementType,
+  label: PropTypes.node,
+};
+
+/**
+ * One keyboard shortcut: the keys, and what they do. Given an onClick it
+ * becomes a button — that is the global shortcut, the only one you can change.
+ */
+function KeyCard({ combo, caption, action, onClick }) {
+  const body = (
+    <>
+      <kbd className="inline-flex items-center rounded-lg border border-neutral-200 bg-white px-2.5 py-1 font-mono text-[13px] font-bold tracking-wider text-neutral-800 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+        {combo}
+      </kbd>
+      <span className="mt-2 block text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+        {caption}
+      </span>
+    </>
+  );
+
+  if (!onClick) return <Card className="px-4 py-3.5">{body}</Card>;
+
+  return (
+    <Card className="relative px-4 py-3.5 transition-colors hover:border-neutral-300 dark:hover:border-neutral-700">
+      <button
+        onClick={onClick}
+        className="absolute right-3 top-3 cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-200/70 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700/70 dark:hover:text-neutral-100"
+      >
+        {action}
+      </button>
+      {body}
+    </Card>
+  );
+}
+
+KeyCard.propTypes = {
+  combo: PropTypes.node,
+  caption: PropTypes.node,
+  action: PropTypes.node,
+  onClick: PropTypes.func,
+};
+
+/**
+ * Connecting a coding agent.
+ *
+ * The command is built in the main process, where the real path to the MCP
+ * server is known — inside an installed app it lives in app.asar.unpacked,
+ * from a clone it sits next to package.json, and asking a person to work that
+ * out was the reason this only ever existed in a README on GitHub.
+ */
+function AgentSetup({ enabled }) {
+  const t = useT();
+  const [info, setInfo] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    ipc?.invoke("agent-setup").then((r) => r && setInfo(r));
+    return () => clearTimeout(timer.current);
+  }, []);
+
+  const copy = async () => {
+    if (!info?.command) return;
+    await ipc?.invoke("copy-text", info.command);
+    setCopied(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <Row
+      icon={<Bot size={18} className="text-neutral-500" />}
+      title={t("settings.agents.title")}
+      hint={t("settings.agents.blurb")}
+    >
+      <div className="mt-3.5 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
+        {!enabled ? (
+          <p className="text-[12.5px] text-amber-600 dark:text-amber-400">
+            {t("settings.agents.needsApi")}
+          </p>
+        ) : (
+          <>
+            <p className="mb-2 text-[12.5px] text-neutral-500 dark:text-neutral-400">
+              {t("settings.agents.step")}
+            </p>
+            <div className="flex items-center gap-2">
+              {/* The command is long and the panel is not wide: it scrolls
+                  sideways rather than wrapping into something that looks like
+                  two commands. */}
+              <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-neutral-200 bg-white px-3 py-2 font-mono text-[12px] text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                {info?.command || "…"}
+              </code>
+              <button
+                onClick={copy}
+                disabled={!info?.command}
+                className={BTN_GHOST}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied
+                  ? t("settings.agents.copied")
+                  : t("settings.agents.copy")}
+              </button>
+            </div>
+            <div className="mt-2.5 flex items-start justify-between gap-3">
+              <p className="text-[12px] leading-snug text-neutral-400 dark:text-neutral-500">
+                {t("settings.agents.requires")}
+              </p>
+              <button
+                onClick={() =>
+                  ipc?.invoke(
+                    "open-external",
+                    "https://github.com/gepran/stepler#-use-it-from-claude-code-codex-or-cursor",
+                  )
+                }
+                className="shrink-0 cursor-pointer text-[12px] font-semibold text-neutral-500 underline-offset-2 hover:underline dark:text-neutral-400"
+              >
+                {t("settings.agents.docs")}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+AgentSetup.propTypes = { enabled: PropTypes.bool };
+
 /**
  * Signing in is what turns one computer's task list into the same list
  * everywhere. Google opens in the real browser rather than an embedded window:
@@ -153,12 +387,10 @@ function SyncSection() {
           : "bg-amber-400";
 
   return (
-    <section className="mb-10">
-      <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-        {t("settings.sync.title")}
-      </label>
+    <section className="mb-7">
+      <SectionLabel>{t("settings.sync.title")}</SectionLabel>
 
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-700">
+      <Card className="p-4">
         {status.signedIn ? (
           <>
             <div className="flex items-center gap-3">
@@ -269,7 +501,7 @@ function SyncSection() {
             )}
           </>
         )}
-      </div>
+      </Card>
     </section>
   );
 }
@@ -567,31 +799,67 @@ export default function SettingsPanel({
     setNewProjectName("");
   };
 
-  const tabs = [
-    { id: "general", label: t("settings.tabs.general"), Icon: SunMedium },
-    { id: "projects", label: t("settings.tabs.projects"), Icon: Hash },
-    {
-      id: "integrations",
+  const tabs = {
+    general: {
+      label: t("settings.tabs.general"),
+      Icon: SunMedium,
+      title: t("settings.general.title"),
+      subtitle: t("settings.subtitles.general"),
+    },
+    projects: {
+      label: t("settings.tabs.projects"),
+      Icon: Hash,
+      title: t("settings.projects.title"),
+      subtitle: t("settings.subtitles.projects"),
+    },
+    integrations: {
       label: t("settings.tabs.integrations"),
       Icon: Calendar,
+      title: t("settings.integrations.title"),
+      subtitle: t("settings.subtitles.integrations"),
     },
-    {
-      id: "collab",
+    collab: {
       label: t("settings.tabs.collab"),
       Icon: Users,
+      title: t("collab.title"),
+      subtitle: t("settings.subtitles.collab"),
       // Somebody waiting on an answer is the one thing in this window worth
       // interrupting for, so it carries the same badge the trash does.
       badge: collab.connections.filter((c) => c.status === "incoming").length,
     },
-    { id: "guide", label: t("settings.tabs.guide"), Icon: BookOpen },
-    { id: "data", label: t("settings.tabs.data"), Icon: Download },
-    {
-      id: "trash",
+    data: {
+      label: t("settings.tabs.data"),
+      Icon: Download,
+      title: t("settings.data.title"),
+      subtitle: t("settings.subtitles.data"),
+    },
+    trash: {
       label: t("settings.tabs.trash"),
       Icon: Trash2,
+      title: t("trash.title"),
+      subtitle: tPlural("trash.inTrash", deletedTasks.length),
       badge: deletedTasks.length,
     },
+    guide: {
+      label: t("settings.tabs.guide"),
+      Icon: BookOpen,
+      title: t("guide.heading"),
+      subtitle: t("settings.subtitles.guide"),
+    },
+  };
+
+  // Seven flat rows gave no answer to "where would that setting live?". Four
+  // named groups do — and they are ordered the way a person meets the app:
+  // how it looks and behaves, what it talks to, what it holds, where to read
+  // about it.
+  const navGroups = [
+    { label: t("settings.nav.app"), ids: ["general", "projects"] },
+    { label: t("settings.nav.connections"), ids: ["integrations", "collab"] },
+    { label: t("settings.nav.dataGroup"), ids: ["data", "trash"] },
+    { label: t("settings.nav.help"), ids: ["guide"] },
   ];
+
+  const current = tabs[activeTab] || tabs.general;
 
   return (
     <div
@@ -599,38 +867,53 @@ export default function SettingsPanel({
       onClick={onClose}
     >
       <div
-        className="flex h-[620px] w-full max-w-4xl overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-900"
+        className="flex h-[620px] max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative w-64 border-r border-neutral-200 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-900/50">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-black text-white dark:bg-white dark:text-black">
-              <SunMedium size={18} />
+        <div className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/60 dark:border-neutral-800 dark:bg-neutral-900/50">
+          <div className="flex items-center gap-2.5 px-4 pb-4 pt-5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black text-white dark:bg-white dark:text-black">
+              <SunMedium size={15} />
             </div>
-            <h2 className="text-xl font-bold text-neutral-800 dark:text-neutral-100">
+            <h2 className="text-[15px] font-bold text-neutral-800 dark:text-neutral-100">
               {t("settings.title")}
             </h2>
           </div>
 
-          <nav className="space-y-1.5">
-            {tabs.map(({ id, label, Icon, badge }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
-                  activeTab === id
-                    ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-white dark:ring-neutral-700"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                }`}
-              >
-                <Icon size={18} strokeWidth={activeTab === id ? 2.5 : 2} />
-                {label}
-                {badge > 0 && (
-                  <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </button>
+          <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+            {navGroups.map((group) => (
+              <div key={group.label} className="mb-3 last:mb-0">
+                <div className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-neutral-400 dark:text-neutral-500">
+                  {group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {group.ids.map((id) => {
+                    const { label, Icon, badge } = tabs[id];
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => setActiveTab(id)}
+                        className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                          activeTab === id
+                            ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-white dark:ring-neutral-700"
+                            : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                        }`}
+                      >
+                        <Icon
+                          size={15}
+                          strokeWidth={activeTab === id ? 2.5 : 2}
+                        />
+                        {label}
+                        {badge > 0 && (
+                          <span className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-100 px-1 text-[10.5px] font-semibold text-red-500 dark:bg-red-500/10">
+                            {badge > 99 ? "99+" : badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </nav>
 
@@ -638,234 +921,262 @@ export default function SettingsPanel({
               and the way out. The version is worth having here rather than
               buried in an About box — it is the first thing anybody is asked
               for when something goes wrong. */}
-          <div className="absolute bottom-6 left-6 right-6 space-y-2.5">
+          <div className="shrink-0 space-y-2 border-t border-neutral-200/70 p-3 dark:border-neutral-800">
             <UpdateCorner onRevealed={onToast} />
-            <button
-              onClick={onClose}
-              className="btn-tactile flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400"
-            >
-              <X size={16} />
+            <button onClick={onClose} className={`${BTN_GHOST} w-full`}>
+              <X size={14} />
               {t("common.close")}
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-10">
-          {activeTab === "general" && (
-            <div>
-              <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("settings.general.title")}
-              </h3>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Where you are stays on screen. Scrolling a long tab used to take
+              its own title away with it. */}
+          <header className="shrink-0 border-b border-neutral-200/70 px-7 py-4 dark:border-neutral-800">
+            <h3 className="text-[16px] font-bold text-neutral-800 dark:text-neutral-100">
+              {current.title}
+            </h3>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+              {current.subtitle}
+            </p>
+          </header>
 
-              <SyncSection />
+          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+            {activeTab === "general" && (
+              <div>
+                <SyncSection />
 
-              <section className="mb-10">
-                <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  {t("settings.general.appearance")}
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    {
-                      value: "light",
-                      label: t("settings.general.light"),
-                      Icon: SunMedium,
-                    },
-                    {
-                      value: "dark",
-                      label: t("settings.general.dark"),
-                      Icon: Moon,
-                    },
-                    {
-                      value: "system",
-                      label: t("settings.general.system"),
-                      Icon: Monitor,
-                    },
-                  ].map(({ value, label, Icon }) => (
-                    <button
-                      key={value}
-                      onClick={() => updateSetting({ theme: value })}
-                      className={`btn-tactile flex flex-col items-center justify-center gap-3 rounded-2xl border p-5 transition-all ${
-                        settings.theme === value
-                          ? "border-neutral-900 bg-neutral-900 text-white shadow-lg dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
-                          : "border-neutral-100 bg-neutral-50/50 text-neutral-500 hover:border-neutral-200 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30 dark:text-neutral-400"
-                      }`}
-                    >
-                      <Icon size={24} />
-                      <span className="text-sm font-semibold">{label}</span>
-                    </button>
-                  ))}
+                {/* Theme and language are the same kind of choice — three
+                    tiles, pick one — so they are drawn at the same size and
+                    sit side by side rather than stacked down the page. */}
+                <div className="mb-7 grid grid-cols-2 gap-5">
+                  <section>
+                    <SectionLabel>
+                      {t("settings.general.appearance")}
+                    </SectionLabel>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        {
+                          value: "light",
+                          label: t("settings.general.light"),
+                          Icon: SunMedium,
+                        },
+                        {
+                          value: "dark",
+                          label: t("settings.general.dark"),
+                          Icon: Moon,
+                        },
+                        {
+                          value: "system",
+                          label: t("settings.general.system"),
+                          Icon: Monitor,
+                        },
+                      ].map(({ value, label, Icon }) => (
+                        <Choice
+                          key={value}
+                          Icon={Icon}
+                          label={label}
+                          selected={settings.theme === value}
+                          onClick={() => updateSetting({ theme: value })}
+                        />
+                      ))}
+                    </div>
+                  </section>
+
+                  <section>
+                    <SectionLabel>
+                      {t("settings.general.language")}
+                    </SectionLabel>
+                    <div className="grid grid-cols-3 gap-2">
+                      {LANGUAGES.map(({ code, native }) => (
+                        <Choice
+                          key={code}
+                          Icon={Languages}
+                          label={native}
+                          selected={language === code}
+                          onClick={() => {
+                            setLanguage(code);
+                            updateSetting({ language: code });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 </div>
-              </section>
 
-              <section className="mb-10">
-                <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  {t("settings.general.language")}
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {LANGUAGES.map(({ code, native }) => (
-                    <button
-                      key={code}
-                      onClick={() => {
-                        setLanguage(code);
-                        updateSetting({ language: code });
-                      }}
-                      className={`btn-tactile flex flex-col items-center justify-center gap-3 rounded-2xl border p-5 transition-all ${
-                        language === code
-                          ? "border-neutral-900 bg-neutral-900 text-white shadow-lg dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
-                          : "border-neutral-100 bg-neutral-50/50 text-neutral-500 hover:border-neutral-200 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30 dark:text-neutral-400"
-                      }`}
-                    >
-                      <Languages size={24} />
-                      <span className="text-sm font-semibold">{native}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-3 text-sm text-neutral-500">
-                  {t("settings.general.languageHint")}
-                </p>
-              </section>
+                {/* Every key the app answers to, in one place. Only the first
+                    is yours to change; the other three are fixed, and a person
+                    who never opens a menu would otherwise never learn them. */}
+                <section className="mb-7">
+                  <SectionLabel>{t("settings.general.shortcut")}</SectionLabel>
 
-              <section className="mb-8">
-                <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  {t("settings.general.shortcut")}
-                </label>
-                <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
                   {recording ? (
                     <div
                       ref={recorderRef}
                       tabIndex={0}
                       onKeyDown={handleKeyCapture}
                       onBlur={() => setRecording(false)}
-                      className="flex h-14 items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-white text-sm text-neutral-500 outline-none ring-4 ring-neutral-100 dark:border-neutral-600 dark:bg-neutral-900 dark:ring-neutral-800/50"
+                      className="flex h-[92px] items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-white text-[13px] text-neutral-500 outline-none dark:border-neutral-600 dark:bg-neutral-900"
                     >
                       <span className="animate-pulse font-medium">
                         {t("settings.general.recording")}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-1 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-5 py-3.5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-                        <Keyboard size={16} className="text-neutral-400" />
-                        <span className="font-mono text-base font-bold tracking-widest text-neutral-800 dark:text-neutral-100">
-                          {formatAcceleratorForDisplay(settings.hotkey)}
-                        </span>
-                      </div>
-                      <button
+                    <div className="grid grid-cols-2 gap-2">
+                      <KeyCard
+                        combo={formatAcceleratorForDisplay(settings.hotkey)}
+                        caption={t("settings.general.keyGlobal")}
+                        action={t("settings.general.change")}
                         onClick={() => {
                           setRecordError("");
                           setRecording(true);
                         }}
-                        className="btn-tactile rounded-xl bg-neutral-900 px-6 py-3.5 text-sm font-bold text-white transition-all hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
-                      >
-                        {t("settings.general.change")}
-                      </button>
+                      />
+                      <KeyCard
+                        combo={formatAcceleratorForDisplay("CmdOrCtrl+N")}
+                        caption={t("settings.general.keyNew")}
+                      />
+                      <KeyCard
+                        combo={formatAcceleratorForDisplay("CmdOrCtrl+F")}
+                        caption={t("settings.general.keyFind")}
+                      />
+                      <KeyCard
+                        combo="Esc"
+                        caption={t("settings.general.keyEsc")}
+                      />
                     </div>
                   )}
-                  <p
-                    className={`mt-4 text-sm ${recordError ? "text-red-500" : "text-neutral-500 dark:text-neutral-400"}`}
-                  >
-                    {recordError || t("settings.general.shortcutHint")}
-                  </p>
-                </div>
-              </section>
 
-              <section>
-                <label className="mb-4 block text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  {t("settings.general.behaviour")}
-                </label>
-                {isMac && (
-                  <div className="mb-4 flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                    <div>
-                      <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                        {t("settings.general.captureSelection")}
-                      </div>
-                      <div className="text-sm text-neutral-500">
-                        {t("settings.general.captureSelectionHint")}
-                      </div>
-                    </div>
-                    <Toggle
-                      on={settings.captureSelection !== false}
-                      label={t("settings.general.captureSelection")}
-                      onClick={() =>
-                        updateSetting({
-                          captureSelection: settings.captureSelection === false,
-                        })
+                  {/* The one thing about the global shortcut nobody discovers
+                      on their own, and the reason it is worth having. */}
+                  {isMac && settings.captureSelection !== false && (
+                    <Card className="mt-2 flex items-start gap-2.5 px-4 py-3">
+                      <TextCursorInput
+                        size={15}
+                        className="mt-0.5 shrink-0 text-neutral-400"
+                      />
+                      <p className="text-[12.5px] leading-snug text-neutral-600 dark:text-neutral-300">
+                        {t("settings.general.keySelection")}
+                      </p>
+                    </Card>
+                  )}
+
+                  {/* Only when a recording went wrong. The cards already say
+                      what each key does, so there is nothing else to add. */}
+                  {recordError && (
+                    <p className="mt-2 text-[12.5px] leading-snug text-red-500">
+                      {recordError}
+                    </p>
+                  )}
+                </section>
+
+                <section>
+                  <SectionLabel>{t("settings.general.behaviour")}</SectionLabel>
+                  <div className="space-y-2">
+                    {isMac && (
+                      <Row
+                        title={t("settings.general.captureSelection")}
+                        hint={t("settings.general.captureSelectionHint")}
+                        action={
+                          <Toggle
+                            on={settings.captureSelection !== false}
+                            label={t("settings.general.captureSelection")}
+                            onClick={() =>
+                              updateSetting({
+                                captureSelection:
+                                  settings.captureSelection === false,
+                              })
+                            }
+                          />
+                        }
+                      />
+                    )}
+
+                    <Row
+                      title={t("settings.general.escToHide")}
+                      hint={t("settings.general.escToHideHint")}
+                      action={
+                        <Toggle
+                          on={!!settings.escToHide}
+                          label={t("settings.general.escToHide")}
+                          onClick={() =>
+                            updateSetting({ escToHide: !settings.escToHide })
+                          }
+                        />
                       }
                     />
                   </div>
-                )}
-
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                  <div>
-                    <div className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                      {t("settings.general.escToHide")}
-                    </div>
-                    <div className="text-sm text-neutral-500">
-                      {t("settings.general.escToHideHint")}
-                    </div>
-                  </div>
-                  <Toggle
-                    on={!!settings.escToHide}
-                    label={t("settings.general.escToHide")}
-                    onClick={() =>
-                      updateSetting({ escToHide: !settings.escToHide })
-                    }
-                  />
-                </div>
-              </section>
-            </div>
-          )}
-
-          {activeTab === "projects" && (
-            <div>
-              <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("settings.projects.title")}
-              </h3>
-              <div className="mb-8 flex gap-3">
-                <input
-                  type="text"
-                  placeholder={t("settings.projects.placeholder")}
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddProject()}
-                  className="w-full flex-1 rounded-2xl border border-neutral-200 bg-neutral-50/50 px-5 py-3.5 text-sm font-medium text-neutral-800 outline-none transition-all focus:border-neutral-400 focus:bg-white dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-100"
-                />
-                <button
-                  onClick={handleAddProject}
-                  disabled={!newProjectName.trim()}
-                  className="btn-tactile flex items-center justify-center rounded-2xl bg-black px-6 text-sm font-bold text-white transition-all hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
-                >
-                  <Plus size={20} />
-                </button>
+                </section>
               </div>
+            )}
 
-              <div className="space-y-3">
-                {projects.length === 0 && (
-                  <p className="text-sm text-neutral-400">
-                    {t("settings.projects.empty")}
-                  </p>
-                )}
-                {projects.map((project, idx) => {
-                  const name =
-                    typeof project === "string" ? project : project.name;
-                  const favorite =
-                    typeof project === "object" && project.isFavorite;
-                  return (
-                    <div
-                      key={`${name}-${idx}`}
-                      className="group flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/30 px-5 py-4 transition-all hover:border-neutral-200 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/20"
-                    >
-                      {editingProjectIdx === idx ? (
-                        <div className="flex flex-1 items-center gap-3">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editingProjectName}
-                            onChange={(e) =>
-                              setEditingProjectName(e.target.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+            {activeTab === "projects" && (
+              <div>
+                <div className="mb-5 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={t("settings.projects.placeholder")}
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddProject()}
+                    className={`${INPUT} flex-1`}
+                  />
+                  <button
+                    onClick={handleAddProject}
+                    disabled={!newProjectName.trim()}
+                    className={BTN}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {projects.length === 0 && (
+                    <p className="text-[13px] text-neutral-400">
+                      {t("settings.projects.empty")}
+                    </p>
+                  )}
+                  {projects.map((project, idx) => {
+                    const name =
+                      typeof project === "string" ? project : project.name;
+                    const favorite =
+                      typeof project === "object" && project.isFavorite;
+                    return (
+                      <div
+                        key={`${name}-${idx}`}
+                        className="group flex items-center justify-between rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3.5 py-2.5 transition-colors hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30"
+                      >
+                        {editingProjectIdx === idx ? (
+                          <div className="flex flex-1 items-center gap-2">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingProjectName}
+                              onChange={(e) =>
+                                setEditingProjectName(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const next = editingProjectName.trim();
+                                  if (next) {
+                                    const updated = [...projects];
+                                    updated[idx] = {
+                                      name: next,
+                                      isFavorite: !!favorite,
+                                    };
+                                    updateSetting({ projects: updated });
+                                  }
+                                  setEditingProjectIdx(null);
+                                }
+                                if (e.key === "Escape")
+                                  setEditingProjectIdx(null);
+                              }}
+                              className="flex-1 bg-transparent text-[13.5px] font-semibold text-neutral-800 outline-none dark:text-neutral-100"
+                            />
+                            <button
+                              onClick={() => {
                                 const next = editingProjectName.trim();
                                 if (next) {
                                   const updated = [...projects];
@@ -876,130 +1187,99 @@ export default function SettingsPanel({
                                   updateSetting({ projects: updated });
                                 }
                                 setEditingProjectIdx(null);
-                              }
-                              if (e.key === "Escape")
-                                setEditingProjectIdx(null);
-                            }}
-                            className="flex-1 bg-transparent text-base font-bold text-neutral-800 outline-none dark:text-neutral-100"
-                          />
-                          <button
-                            onClick={() => {
-                              const next = editingProjectName.trim();
-                              if (next) {
-                                const updated = [...projects];
-                                updated[idx] = {
-                                  name: next,
-                                  isFavorite: !!favorite,
-                                };
-                                updateSetting({ projects: updated });
-                              }
-                              setEditingProjectIdx(null);
-                            }}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30"
-                          >
-                            <Check size={18} />
-                          </button>
-                          <button
-                            onClick={() => setEditingProjectIdx(null)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 dark:bg-neutral-800"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-neutral-100 dark:bg-neutral-800 dark:ring-neutral-700">
-                              <Hash size={18} className="text-neutral-400" />
+                              }}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30"
+                            >
+                              <Check size={15} />
+                            </button>
+                            <button
+                              onClick={() => setEditingProjectIdx(null)}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 dark:bg-neutral-800"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200/70 dark:bg-neutral-900 dark:ring-neutral-700">
+                                <Hash size={15} className="text-neutral-400" />
+                              </div>
+                              <span className="text-[13.5px] font-semibold text-neutral-800 dark:text-neutral-100">
+                                {name}
+                              </span>
                             </div>
-                            <span className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                              {name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                            <button
-                              onClick={() => {
-                                const updated = [...projects];
-                                updated[idx] = { name, isFavorite: !favorite };
-                                updateSetting({ projects: updated });
-                              }}
-                              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
-                                favorite
-                                  ? "bg-amber-50 text-amber-500 dark:bg-amber-900/20"
-                                  : "text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              }`}
-                              title={t("settings.projects.pin")}
-                            >
-                              <Star
-                                size={18}
-                                fill={favorite ? "currentColor" : "none"}
-                              />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingProjectIdx(idx);
-                                setEditingProjectName(name);
-                              }}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              title={t("settings.projects.rename")}
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                            <button
-                              onClick={() =>
-                                updateSetting({
-                                  projects: projects.filter(
-                                    (_, i) => i !== idx,
-                                  ),
-                                })
-                              }
-                              className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                              title={t("settings.projects.removeSaved")}
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                onClick={() => {
+                                  const updated = [...projects];
+                                  updated[idx] = {
+                                    name,
+                                    isFavorite: !favorite,
+                                  };
+                                  updateSetting({ projects: updated });
+                                }}
+                                className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                                  favorite
+                                    ? "bg-amber-50 text-amber-500 dark:bg-amber-900/20"
+                                    : "text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                }`}
+                                title={t("settings.projects.pin")}
+                              >
+                                <Star
+                                  size={15}
+                                  fill={favorite ? "currentColor" : "none"}
+                                />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingProjectIdx(idx);
+                                  setEditingProjectName(name);
+                                }}
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                title={t("settings.projects.rename")}
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  updateSetting({
+                                    projects: projects.filter(
+                                      (_, i) => i !== idx,
+                                    ),
+                                  })
+                                }
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                                title={t("settings.projects.removeSaved")}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "integrations" && (
-            <div>
-              <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("settings.integrations.title")}
-              </h3>
-              <p className="mb-8 text-sm text-neutral-500">
-                {t("settings.integrations.blurb")}
-              </p>
-
-              <div className="space-y-4">
+            {activeTab === "integrations" && (
+              <div className="space-y-2">
                 {/* Google Calendar */}
-                <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-neutral-100 dark:bg-neutral-900 dark:ring-neutral-700">
-                        <Calendar size={24} className="text-[#4285F4]" />
-                      </div>
-                      <div>
-                        <div className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                          Google Calendar
-                        </div>
-                        <div className="text-sm text-neutral-500">
-                          {!gcalStatus.configured
-                            ? t("settings.integrations.gcalNeedsCreds")
-                            : gcalStatus.connected
-                              ? gcalStatus.email ||
-                                t("settings.integrations.gcalConnected")
-                              : t("settings.integrations.gcalBlurb")}
-                        </div>
-                      </div>
-                    </div>
-                    {gcalStatus.connected ? (
+                <Row
+                  icon={<Calendar size={18} className="text-[#4285F4]" />}
+                  title="Google Calendar"
+                  hint={
+                    !gcalStatus.configured
+                      ? t("settings.integrations.gcalNeedsCreds")
+                      : gcalStatus.connected
+                        ? gcalStatus.email ||
+                          t("settings.integrations.gcalConnected")
+                        : t("settings.integrations.gcalBlurb")
+                  }
+                  action={
+                    gcalStatus.connected ? (
                       <button
                         onClick={async () => {
                           await ipc?.invoke("google-calendar-disconnect");
@@ -1010,7 +1290,7 @@ export default function SettingsPanel({
                           }));
                           onToast?.(t("toast.gcalDisconnected"));
                         }}
-                        className="rounded-xl px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10"
+                        className="cursor-pointer rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10"
                       >
                         {t("common.disconnect")}
                       </button>
@@ -1026,29 +1306,26 @@ export default function SettingsPanel({
                             );
                         }}
                         disabled={!gcalStatus.configured}
-                        className={`rounded-xl px-6 py-2.5 text-sm font-bold shadow-sm transition-all ${
-                          gcalStatus.configured
-                            ? "bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black"
-                            : "cursor-not-allowed bg-neutral-200 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-600"
-                        }`}
+                        className={BTN}
                       >
                         {t("common.connect")}
                       </button>
-                    )}
-                  </div>
+                    )
+                  }
+                >
                   {!gcalStatus.configured && (
-                    <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
-                      <div className="text-sm text-neutral-500">
+                    <div className="mt-3.5 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
+                      <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
                         {t("settings.integrations.gcalCredsBefore")}{" "}
-                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] dark:bg-neutral-800">
+                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11.5px] dark:bg-neutral-800">
                           stepler-integrations.json
                         </code>{" "}
                         {t("settings.integrations.gcalCredsAfter")}
                       </div>
-                      <div className="mt-3 flex gap-2">
+                      <div className="mt-2.5 flex gap-2">
                         <button
                           onClick={() => ipc?.invoke("open-data-folder")}
-                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                          className={BTN_GHOST}
                         >
                           {t("settings.integrations.openDataFolder")}
                         </button>
@@ -1059,7 +1336,7 @@ export default function SettingsPanel({
                               "https://github.com/gepran/stepler#-integrations",
                             )
                           }
-                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                          className={BTN_GHOST}
                         >
                           {t("settings.integrations.setupGuide")}
                         </button>
@@ -1067,12 +1344,12 @@ export default function SettingsPanel({
                     </div>
                   )}
                   {gcalStatus.connected && (
-                    <div className="mt-5 flex items-center justify-between border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
-                      <div>
-                        <div className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
+                    <div className="mt-3.5 flex items-center justify-between gap-4 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">
                           {t("settings.integrations.autoEvents")}
                         </div>
-                        <div className="text-sm text-neutral-500">
+                        <div className="mt-0.5 text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
                           {t("settings.integrations.autoEventsHint")}
                         </div>
                       </div>
@@ -1087,29 +1364,25 @@ export default function SettingsPanel({
                       />
                     </div>
                   )}
-                </div>
+                </Row>
 
                 {/* Jira */}
-                <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0052CC] shadow-sm">
-                        <span className="text-lg font-black text-white">J</span>
-                      </div>
-                      <div>
-                        <div className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                          Jira
-                        </div>
-                        <div className="text-sm text-neutral-500">
-                          {jiraStatus.connected
-                            ? jiraStatus.site
-                              ? `${jiraStatus.email} at ${jiraStatus.site.replace(/^https:\/\//, "")}`
-                              : t("settings.integrations.gcalConnected")
-                            : t("settings.integrations.jiraBlurb")}
-                        </div>
-                      </div>
-                    </div>
-                    {jiraStatus.connected ? (
+                <Row
+                  icon={
+                    <span className="flex h-full w-full items-center justify-center rounded-lg bg-[#0052CC] text-[15px] font-black text-white">
+                      J
+                    </span>
+                  }
+                  title="Jira"
+                  hint={
+                    jiraStatus.connected
+                      ? jiraStatus.site
+                        ? `${jiraStatus.email} at ${jiraStatus.site.replace(/^https:\/\//, "")}`
+                        : t("settings.integrations.gcalConnected")
+                      : t("settings.integrations.jiraBlurb")
+                  }
+                  action={
+                    jiraStatus.connected ? (
                       <button
                         onClick={async () => {
                           await ipc?.invoke("jira-disconnect");
@@ -1121,20 +1394,20 @@ export default function SettingsPanel({
                           }));
                           onToast?.(t("toast.jiraDisconnected"));
                         }}
-                        className="rounded-xl px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400"
+                        className="cursor-pointer rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10"
                       >
                         {t("common.disconnect")}
                       </button>
-                    ) : null}
-                  </div>
-
+                    ) : null
+                  }
+                >
                   {!jiraStatus.connected && (
-                    <div className="mt-5 border-t border-neutral-200 pt-5 dark:border-neutral-700/50">
-                      <div className="text-sm text-neutral-500">
+                    <div className="mt-3.5 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
+                      <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
                         {t("settings.integrations.jiraNote")}
                       </div>
 
-                      <div className="mt-4 grid gap-2">
+                      <div className="mt-3 grid gap-2">
                         <input
                           value={jiraForm.siteUrl}
                           onChange={(e) =>
@@ -1144,7 +1417,7 @@ export default function SettingsPanel({
                             }))
                           }
                           placeholder="your-team.atlassian.net"
-                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                          className={INPUT}
                         />
                         <input
                           value={jiraForm.email}
@@ -1155,7 +1428,7 @@ export default function SettingsPanel({
                             }))
                           }
                           placeholder={t("settings.integrations.jiraEmail")}
-                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                          className={INPUT}
                         />
                         <input
                           type="password"
@@ -1167,11 +1440,11 @@ export default function SettingsPanel({
                             }))
                           }
                           placeholder={t("settings.integrations.jiraToken")}
-                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 dark:border-neutral-700 dark:bg-neutral-900"
+                          className={INPUT}
                         />
                       </div>
 
-                      <div className="mt-3 flex items-center gap-2">
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
                         <button
                           onClick={async () => {
                             setJiraBusy(true);
@@ -1203,7 +1476,7 @@ export default function SettingsPanel({
                             }
                           }}
                           disabled={jiraBusy}
-                          className="rounded-xl bg-black px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 dark:bg-white dark:text-black dark:disabled:bg-neutral-700"
+                          className={BTN}
                         >
                           {jiraBusy
                             ? t("settings.integrations.jiraChecking")
@@ -1216,7 +1489,7 @@ export default function SettingsPanel({
                               "https://id.atlassian.com/manage-profile/security/api-tokens",
                             )
                           }
-                          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                          className={BTN_GHOST}
                         >
                           {t("settings.integrations.jiraCreateToken")}
                         </button>
@@ -1231,7 +1504,7 @@ export default function SettingsPanel({
                                   "error",
                                 );
                             }}
-                            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                            className={BTN_GHOST}
                           >
                             {t("settings.integrations.jiraUseOauth")}
                           </button>
@@ -1239,147 +1512,117 @@ export default function SettingsPanel({
                       </div>
                     </div>
                   )}
-                </div>
+                </Row>
 
                 {/* Apple Reminders */}
                 {isMac && (
-                  <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-neutral-100 dark:bg-neutral-900 dark:ring-neutral-700">
-                        <Calendar size={24} className="text-[#FF3B30]" />
-                      </div>
-                      <div>
-                        <div className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                          Apple Reminders
-                        </div>
-                        <div className="text-sm text-neutral-500">
-                          {t("settings.integrations.remindersBlurb")}
-                        </div>
-                      </div>
-                    </div>
-                    <Toggle
-                      on={!!settings.appleReminders}
-                      label="Apple Reminders"
-                      onClick={() =>
-                        updateSetting({
-                          appleReminders: !settings.appleReminders,
-                        })
-                      }
-                    />
-                  </div>
+                  <Row
+                    icon={<Calendar size={18} className="text-[#FF3B30]" />}
+                    title="Apple Reminders"
+                    hint={t("settings.integrations.remindersBlurb")}
+                    action={
+                      <Toggle
+                        on={!!settings.appleReminders}
+                        label="Apple Reminders"
+                        onClick={() =>
+                          updateSetting({
+                            appleReminders: !settings.appleReminders,
+                          })
+                        }
+                      />
+                    }
+                  />
                 )}
 
-                {/* Local API */}
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50/50 p-6 dark:border-neutral-800 dark:bg-neutral-800/30">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-neutral-100 dark:bg-neutral-900 dark:ring-neutral-700">
-                      <span className="font-mono text-sm font-black text-neutral-500">
-                        {">_"}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                        {t("settings.integrations.cli")}
-                      </div>
-                      <div className="max-w-md text-sm text-neutral-500">
-                        {t("settings.integrations.cliBlurb")}
-                      </div>
-                    </div>
-                  </div>
-                  <Toggle
-                    on={!!settings.apiEnabled}
-                    label={t("settings.integrations.cli")}
-                    onClick={async () => {
-                      await updateSetting({ apiEnabled: !settings.apiEnabled });
-                      onToast?.(t("toast.restartToApply"));
-                    }}
+                {/* Local API, and the agents that live off it. The two sit next
+                  to each other because one is useless without the other. */}
+                <Row
+                  icon={<Terminal size={17} className="text-neutral-500" />}
+                  title={t("settings.integrations.cli")}
+                  hint={t("settings.integrations.cliBlurb")}
+                  action={
+                    <Toggle
+                      on={!!settings.apiEnabled}
+                      label={t("settings.integrations.cli")}
+                      onClick={async () => {
+                        await updateSetting({
+                          apiEnabled: !settings.apiEnabled,
+                        });
+                        onToast?.(t("toast.restartToApply"));
+                      }}
+                    />
+                  }
+                />
+
+                <AgentSetup enabled={!!settings.apiEnabled} />
+              </div>
+            )}
+
+            {activeTab === "collab" && (
+              <div>
+                <CollaborationPanel
+                  profile={collab.profile}
+                  connections={collab.connections}
+                  onSearch={collab.search}
+                  onInvite={collab.invite}
+                  onAccept={collab.accept}
+                  onRemove={collab.remove}
+                  onToast={onToast}
+                />
+              </div>
+            )}
+
+            {activeTab === "guide" && <GuideTab />}
+
+            {activeTab === "data" && (
+              <div>
+                <div className="space-y-2">
+                  <Row
+                    icon={<Download size={17} className="text-neutral-500" />}
+                    title={t("settings.data.export")}
+                    hint={t("settings.data.exportBlurb")}
+                    action={
+                      <button onClick={onExport} className={BTN}>
+                        {t("settings.data.export")}
+                      </button>
+                    }
+                  />
+                  <Row
+                    icon={<Upload size={17} className="text-neutral-500" />}
+                    title={t("settings.data.import")}
+                    hint={t("settings.data.importBlurb")}
+                    action={
+                      <button onClick={onImport} className={BTN_GHOST}>
+                        {t("settings.data.import")}
+                      </button>
+                    }
+                  />
+                  <Row
+                    icon={<FolderOpen size={17} className="text-neutral-500" />}
+                    title={t("settings.data.folder")}
+                    hint={t("settings.data.backupNote")}
+                    action={
+                      <button
+                        onClick={() => ipc?.invoke("open-data-folder")}
+                        className={BTN_GHOST}
+                      >
+                        {t("settings.integrations.openDataFolder")}
+                      </button>
+                    }
                   />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "collab" && (
-            <div>
-              <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("collab.title")}
-              </h3>
-              <p className="mb-8 text-sm text-neutral-500">
-                {t("collab.hint")}
-              </p>
-              <CollaborationPanel
-                profile={collab.profile}
-                connections={collab.connections}
-                onSearch={collab.search}
-                onInvite={collab.invite}
-                onAccept={collab.accept}
-                onRemove={collab.remove}
-                onToast={onToast}
-              />
-            </div>
-          )}
-
-          {activeTab === "guide" && <GuideTab />}
-
-          {activeTab === "data" && (
-            <div>
-              <h3 className="mb-8 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("settings.data.title")}
-              </h3>
-              <div className="grid grid-cols-2 gap-6">
-                <button
-                  onClick={onExport}
-                  className="group rounded-3xl border border-neutral-100 bg-neutral-50/50 p-8 text-left transition-all hover:border-neutral-900 hover:bg-neutral-900 dark:border-neutral-800 dark:bg-neutral-800/30 dark:hover:border-white dark:hover:bg-white"
-                >
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-neutral-900 shadow-sm transition-all group-hover:scale-110 dark:bg-neutral-900 dark:text-white">
-                    <Download size={28} />
-                  </div>
-                  <h4 className="mb-2 text-xl font-bold text-neutral-800 group-hover:text-white dark:text-neutral-100 dark:group-hover:text-neutral-900">
-                    {t("settings.data.export")}
-                  </h4>
-                  <p className="text-sm text-neutral-500 group-hover:text-neutral-400 dark:group-hover:text-neutral-500">
-                    {t("settings.data.exportBlurb")}
-                  </p>
-                </button>
-
-                <button
-                  onClick={onImport}
-                  className="group rounded-3xl border border-neutral-100 bg-neutral-50/50 p-8 text-left transition-all hover:border-neutral-900 hover:bg-neutral-900 dark:border-neutral-800 dark:bg-neutral-800/30 dark:hover:border-white dark:hover:bg-white"
-                >
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-neutral-900 shadow-sm transition-all group-hover:scale-110 dark:bg-neutral-900 dark:text-white">
-                    <Upload size={28} />
-                  </div>
-                  <h4 className="mb-2 text-xl font-bold text-neutral-800 group-hover:text-white dark:text-neutral-100 dark:group-hover:text-neutral-900">
-                    {t("settings.data.import")}
-                  </h4>
-                  <p className="text-sm text-neutral-500 group-hover:text-neutral-400 dark:group-hover:text-neutral-500">
-                    {t("settings.data.importBlurb")}
-                  </p>
-                </button>
-              </div>
-
-              <p className="mt-8 text-sm text-neutral-500">
-                {t("settings.data.backupNote")}
-              </p>
-            </div>
-          )}
-
-          {activeTab === "trash" && (
-            <div>
-              <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-                {t("trash.title")}
-              </h3>
-              <p className="mb-8 text-sm text-neutral-500 dark:text-neutral-400">
-                {tPlural("trash.inTrash", deletedTasks.length)}
-              </p>
+            {activeTab === "trash" && (
               <DeletedTasksList
                 deletedTasks={deletedTasks}
                 onRestore={onRestore}
                 onPermanentDelete={onPermanentDelete}
                 onClearAll={onClearAll}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
