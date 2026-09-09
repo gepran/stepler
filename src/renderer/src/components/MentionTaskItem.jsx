@@ -1,8 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import { AtSign, Check, Plus, Star, Trash2 } from "lucide-react";
+import {
+  AtSign,
+  Check,
+  CheckCircle2,
+  Circle,
+  Copy,
+  CornerDownRight,
+  Plus,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import { formatTaskText } from "../lib/format";
 import { useT } from "../lib/i18n";
+
+/** The desktop's action pill, copied from TaskItem so the two cannot drift. */
+const PILL =
+  "btn-tactile flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50";
+const PILL_LABEL = "text-[11px] font-medium leading-none";
 
 /**
  * A task somebody else wrote and addressed to you.
@@ -23,8 +39,11 @@ export function MentionTaskItem({
   onSubtaskToggle,
   onAddSubtask,
   onDismiss,
+  onCopy,
+  variant = "web",
 }) {
   const t = useT();
+  const desktop = variant === "desktop";
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef(null);
@@ -49,26 +68,57 @@ export function MentionTaskItem({
   };
 
   return (
-    // Deliberately the same box as a task you wrote yourself: a coloured bar
-    // and a tinted background made these read as a different kind of object,
-    // when the only thing that actually differs is that somebody else wrote
-    // it — which the line above the text already says.
-    <div className="group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50">
+    // Deliberately the same box as a task you wrote yourself, down to the
+    // padding and the hover: the only thing that differs is that somebody else
+    // wrote it, and the byline plus the hairline border say so without making
+    // it a different kind of object.
+    <div
+      className={`group relative flex items-start rounded-xl transition-all ${
+        desktop
+          ? "mention-frame p-2 hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40"
+          : "mention-frame gap-3 px-3 py-2.5 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50"
+      } ${mention.read ? "" : "mention-frame-unread"}`}
+    >
       {/* A real checkbox, not the dashed placeholder this used to be: ticking
           a task somebody asked you to do is the whole point of being told
           about it, and it travels back to them. */}
-      <button
-        type="button"
-        title={mention.completed ? t("task.markNotDone") : t("task.markDone")}
-        onClick={() => onToggle(mention, !mention.completed)}
-        className={`mt-[3px] flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded-md border transition-all ${
-          mention.completed
-            ? "border-orange-500 bg-orange-500 text-white"
-            : "border-neutral-300 hover:border-orange-400 dark:border-neutral-600"
-        }`}
-      >
-        {mention.completed && <Check size={12} strokeWidth={3.5} />}
-      </button>
+      {/* An ordinary task keeps a drag handle to the left of its checkbox, and
+          without the same gap here the two rows would sit on different
+          columns. A mention cannot be dragged — it is not in your list to
+          reorder — so the space is reserved rather than filled. */}
+      {desktop && (
+        <span aria-hidden="true" className="ml-1 mr-1 w-4 shrink-0" />
+      )}
+
+      {/* The desktop draws a circle and the web a square, because that is what
+          each already draws on a task of your own. */}
+      {desktop ? (
+        <button
+          type="button"
+          title={mention.completed ? t("task.markNotDone") : t("task.markDone")}
+          onClick={() => onToggle(mention, !mention.completed)}
+          className="btn-tactile mr-3 mt-1 shrink-0 text-neutral-400 transition-colors hover:text-yellow-500 focus:outline-none dark:text-neutral-500 dark:hover:text-yellow-400"
+        >
+          {mention.completed ? (
+            <CheckCircle2 size={18} className="icon-rubbery text-yellow-500" />
+          ) : (
+            <Circle size={18} className="icon-rubbery" />
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          title={mention.completed ? t("task.markNotDone") : t("task.markDone")}
+          onClick={() => onToggle(mention, !mention.completed)}
+          className={`mt-[3px] flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded-md border transition-all ${
+            mention.completed
+              ? "border-orange-500 bg-orange-500 text-white"
+              : "border-neutral-300 hover:border-orange-400 dark:border-neutral-600"
+          }`}
+        >
+          {mention.completed && <Check size={12} strokeWidth={3.5} />}
+        </button>
+      )}
 
       <div className="min-w-0 flex-1">
         {/* Who this came from. Unread is worth showing, but as a shade on
@@ -176,55 +226,120 @@ export function MentionTaskItem({
             className="mt-2 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-800 outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
           />
         ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mt-1.5 flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold text-neutral-400 opacity-0 transition-all hover:text-orange-500 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-500"
-          >
-            <Plus size={12} />
-            {t("task.addSubtask")}
-          </button>
+          !desktop && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="mt-1.5 flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold text-neutral-400 opacity-0 transition-all hover:text-orange-500 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-500"
+            >
+              <Plus size={12} />
+              {t("task.addSubtask")}
+            </button>
+          )
+        )}
+
+        {/* The desktop's action bar, mounted on hover in the same place and
+            the same pills an ordinary task uses. Project and Remind are absent
+            rather than dead: both write to fields of the task that belong to
+            the person who wrote it, and neither the rules nor the data model
+            let somebody mentioned in it set them. */}
+        {desktop && (
+          <div className="mt-2 flex items-center justify-between opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setAdding(true)} className={PILL}>
+                <CornerDownRight size={13} className="icon-rubbery" />
+                <span className={PILL_LABEL}>{t("task.subtask")}</span>
+              </button>
+
+              <button
+                onClick={() => onPriority(mention, !mention.priority)}
+                className={`btn-tactile flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
+                  mention.priority
+                    ? "border-amber-200/60 bg-amber-100 text-amber-600 dark:border-amber-900/50 dark:bg-amber-900/30 dark:text-amber-400"
+                    : "border-neutral-200/60 bg-white/60 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-neutral-700/50"
+                }`}
+              >
+                <Star
+                  size={13}
+                  fill={mention.priority ? "currentColor" : "none"}
+                  className="icon-rubbery"
+                />
+                <span className={PILL_LABEL}>{t("task.priority")}</span>
+              </button>
+
+              {onCopy && (
+                <button onClick={() => onCopy(mention)} className={PILL}>
+                  <Copy size={13} className="icon-rubbery" />
+                  <span className={PILL_LABEL}>{t("common.copy")}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => onMarkRead(mention.id)}
+                disabled={mention.read}
+                className={`btn-tactile flex items-center justify-center gap-1.5 rounded-full border px-2 py-1 shadow-sm backdrop-blur-md transition-colors ${
+                  mention.read
+                    ? "cursor-default border-neutral-200/60 bg-white/60 text-neutral-300 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-600"
+                    : "border-emerald-200/60 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-400"
+                }`}
+              >
+                <Check size={13} className="icon-rubbery" />
+                <span className={PILL_LABEL}>{t("collab.markRead")}</span>
+              </button>
+            </div>
+
+            {/* Delete, in the corner an ordinary task keeps it — but it takes
+                the task off YOUR list and leaves theirs alone, which is what
+                the title spells out. */}
+            <button
+              onClick={() => onDismiss(mention)}
+              title={`${t("collab.dismiss")} — ${t("collab.dismissHint")}`}
+              className="btn-tactile flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/60 bg-white/60 px-2 py-1 text-neutral-500 shadow-sm backdrop-blur-md transition-colors hover:border-red-200/60 hover:bg-red-50 hover:text-red-500 dark:border-neutral-700/60 dark:bg-neutral-800/60 dark:text-neutral-400 dark:hover:bg-red-900/30"
+            >
+              <X size={13} className="icon-rubbery" />
+              <span className={PILL_LABEL}>{t("common.delete")}</span>
+            </button>
+          </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <button
-          type="button"
-          title={t("task.priority")}
-          onClick={() => onPriority(mention, !mention.priority)}
-          className={`cursor-pointer rounded-lg p-1.5 transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
-            mention.priority
-              ? "text-orange-500"
-              : "text-neutral-400 dark:text-neutral-500"
-          }`}
-        >
-          <Star size={14} fill={mention.priority ? "currentColor" : "none"} />
-        </button>
-
-        {/* The bin takes it off YOUR list and leaves the author's task alone —
-            deleting somebody else's task is not yours to do, and the rules
-            refuse it anyway. The title says so, because a bin icon on its own
-            promises rather more than this does. */}
-        <button
-          type="button"
-          title={`${t("collab.dismiss")} — ${t("collab.dismissHint")}`}
-          aria-label={t("collab.dismiss")}
-          onClick={() => onDismiss(mention)}
-          className="cursor-pointer rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-neutral-500 dark:hover:bg-red-950/40"
-        >
-          <Trash2 size={14} />
-        </button>
-
-        {!mention.read && (
+      {/* Nothing here — the desktop's actions live in the bar below, the same
+          place an ordinary task keeps them. The web keeps them inline, which
+          is where an ordinary task keeps them there. */}
+      {variant === "web" && (
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <button
             type="button"
-            onClick={() => onMarkRead(mention.id)}
-            className="cursor-pointer rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
+            title={t("task.priority")}
+            onClick={() => onPriority(mention, !mention.priority)}
+            className={`cursor-pointer rounded-lg p-1.5 transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
+              mention.priority
+                ? "text-orange-500"
+                : "text-neutral-400 dark:text-neutral-500"
+            }`}
           >
-            {t("collab.markRead")}
+            <Star size={14} fill={mention.priority ? "currentColor" : "none"} />
           </button>
-        )}
-      </div>
+          <button
+            type="button"
+            title={`${t("collab.dismiss")} — ${t("collab.dismissHint")}`}
+            aria-label={t("collab.dismiss")}
+            onClick={() => onDismiss(mention)}
+            className="cursor-pointer rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-neutral-500 dark:hover:bg-red-950/40"
+          >
+            <Trash2 size={14} />
+          </button>
+          {!mention.read && (
+            <button
+              type="button"
+              onClick={() => onMarkRead(mention.id)}
+              className="cursor-pointer rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
+            >
+              {t("collab.markRead")}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -248,6 +363,10 @@ MentionTaskItem.propTypes = {
   onSubtaskToggle: PropTypes.func.isRequired,
   onAddSubtask: PropTypes.func.isRequired,
   onDismiss: PropTypes.func.isRequired,
+  onCopy: PropTypes.func,
+  /** "web" keeps the actions inline; "desktop" puts them in a bar underneath,
+      each matching where that app's own task rows keep theirs. */
+  variant: PropTypes.oneOf(["web", "desktop"]),
 };
 
 /**

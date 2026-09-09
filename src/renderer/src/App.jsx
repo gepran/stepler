@@ -1377,6 +1377,8 @@ export default function App() {
           }
           onAddSubtask={(m, text) => collab.addMentionSubtask(m, text)}
           onDismiss={(m) => collab.dismissMention(m)}
+          onCopy={(m) => ipc?.invoke("copy-task", { text: m.text })}
+          variant="desktop"
         />
       );
     const dragTarget =

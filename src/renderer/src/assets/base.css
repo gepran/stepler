@@ -169,6 +169,55 @@
   background-color: var(--tree-line);
 }
 
+/* --------------------------------------------------------------------------
+   A task somebody else addressed to you.
+
+   The row itself is an ordinary task — same box, same buttons — so the only
+   thing marking it is a hairline of the app's own two ribbon colours: the
+   orange the bottom capsule starts on, running into the purple the top one
+   ends on. Kept near half opacity so it registers as a tint you notice rather
+   than a warning you have to acknowledge.
+
+   Drawn as a masked pseudo-element rather than a background-clip sandwich,
+   because the row's background changes on hover and a gradient border built
+   out of background layers would have to know about that. This one paints the
+   ring and leaves the middle genuinely transparent.
+   -------------------------------------------------------------------------- */
+.mention-frame {
+  position: relative;
+}
+
+.mention-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    rgba(255, 154, 0, 0.38),
+    rgba(155, 106, 255, 0.45)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Unread is worth a touch more presence, but only a touch. */
+.mention-frame-unread::before {
+  background: linear-gradient(
+    105deg,
+    rgba(255, 154, 0, 0.62),
+    rgba(155, 106, 255, 0.72)
+  );
+}
+
 /* The last child turns a corner instead of meeting a T-junction, so it gets a
    rounded elbow rather than two square segments. */
 .tree-corner {
