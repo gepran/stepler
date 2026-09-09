@@ -453,7 +453,22 @@ function Timeline({ user, collab, onOpenSettings }) {
   const fileRef = useRef(null);
   const draftRef = useRef(null);
   const bottomRef = useRef(null);
-  const todayYMD = localYMD(new Date());
+  // State with a tick, not a render-time expression. Left open overnight the
+  // browser went on calling yesterday "Today", and groupByDay's clamp folded
+  // the new day's rows back into the stale bucket until the next snapshot
+  // happened to arrive. The desktop has had this for both of its lists.
+  const [todayYMD, setTodayYMD] = useState(() => localYMD(new Date()));
+  useEffect(() => {
+    const id = setInterval(
+      () =>
+        setTodayYMD((prev) => {
+          const now = localYMD(new Date());
+          return now === prev ? prev : now;
+        }),
+      30_000,
+    );
+    return () => clearInterval(id);
+  }, []);
   const { accepted, mentions, unread, deliver } = collab;
 
   useEffect(() => {

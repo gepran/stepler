@@ -218,8 +218,12 @@ export default function App() {
         month: "long",
         day: "numeric",
       }),
+    // todayYMD is not read inside, and that is the point: it is what changes at
+    // midnight. Without it the line under "Today" went on reading yesterday
+    // until the window was reloaded, while the section above it had already
+    // rolled over.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [language],
+    [language, todayYMD],
   );
 
   // --- Projects available across settings, tasks and history ---
@@ -480,8 +484,10 @@ export default function App() {
     if (!ipc) return undefined;
     ipc.invoke("get-update-state").then((s) => s && setUpdateState(s));
     const onUpdate = (_e, next) => next && setUpdateState(next);
-    ipc.on("update-state", onUpdate);
-    return () => ipc.removeAllListeners("update-state");
+    // removeListener, not removeAllListeners: the settings panel listens on
+    // this channel too, and tearing the channel down would deafen it.
+    const off = ipc.on("update-state", onUpdate);
+    return () => off?.();
   }, []);
 
   /**
@@ -618,18 +624,14 @@ export default function App() {
           });
       });
     };
-    ipc.on("open-settings", onSettings);
-    ipc.on("open-search", onSearch);
-    ipc.on("focus-input", onFocusInput);
-    ipc.on("app-data-updated", onDataUpdated);
-    ipc.on("jira-connected", onJiraConnected);
-    return () => {
-      ipc.removeAllListeners("open-settings");
-      ipc.removeAllListeners("open-search");
-      ipc.removeAllListeners("focus-input");
-      ipc.removeAllListeners("app-data-updated");
-      ipc.removeAllListeners("jira-connected");
-    };
+    const offs = [
+      ipc.on("open-settings", onSettings),
+      ipc.on("open-search", onSearch),
+      ipc.on("focus-input", onFocusInput),
+      ipc.on("app-data-updated", onDataUpdated),
+      ipc.on("jira-connected", onJiraConnected),
+    ];
+    return () => offs.forEach((off) => off?.());
   }, []);
 
   // --- Reminder notifications (keyed per day, so no midnight reset is needed) ---
@@ -893,6 +895,20 @@ export default function App() {
               );
           })
           .catch(() => {});
+      } else if (existing.appleReminderId && clear) {
+        // Clearing has to delete it. The update verb cannot say "no alarm":
+        // a missing time falls back to nine in the morning, so a reminder you
+        // had just taken off went on ringing at 09:00 in the Reminders app.
+        ipc
+          .invoke("apple-reminders-delete-event", {
+            reminderId: existing.appleReminderId,
+          })
+          .catch(() => {});
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === id ? { ...t, appleReminderId: undefined } : t,
+          ),
+        );
       } else if (existing.appleReminderId) {
         ipc
           .invoke("apple-reminders-update-event", {
@@ -1348,14 +1364,17 @@ export default function App() {
 
   const handleExportTasks = useCallback(async () => {
     const result = await ipc?.invoke("export-tasks", {
-      tasks: allDays.find((d) => d.ymd === todayYMD)?.tasks || [],
-      history: allDays.filter((d) => d.ymd !== todayYMD),
+      // ownDays, not allDays: allDays carries the rows other people mentioned
+      // you on, so an export used to include their task text and their email -
+      // and importing it back filed them as your own tasks.
+      tasks: ownDays.find((d) => d.ymd === todayYMD)?.tasks || [],
+      history: ownDays.filter((d) => d.ymd !== todayYMD),
       deletedTasks,
     });
     if (result?.success) toast(t("toast.exported"));
     else if (result && !result.canceled)
       toast(result.error || t("toast.exportFailed"), "error");
-  }, [allDays, todayYMD, deletedTasks, toast, t]);
+  }, [ownDays, todayYMD, deletedTasks, toast, t]);
 
   const handleImportTasks = useCallback(async () => {
     const result = await ipc?.invoke("import-tasks");

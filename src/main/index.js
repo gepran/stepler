@@ -1761,6 +1761,10 @@ async function remindersCreate({ text, dateString, reminderTime }) {
   const script = `
 set targetDate to (current date)
 set year of targetDate to ${date.getFullYear()}
+-- Day first, or the month set below overflows: (current date) still carries
+-- today's day-of-month, so asking for April on the 31st lands on 1 May and
+-- the day set afterwards then reads as 30 May.
+set day of targetDate to 1
 set month of targetDate to ${date.getMonth() + 1}
 set day of targetDate to ${date.getDate()}
 set hours of targetDate to ${date.getHours()}
@@ -1801,6 +1805,10 @@ async function remindersUpdate({
     dateScript = `
 set targetDate to (current date)
 set year of targetDate to ${date.getFullYear()}
+-- Day first, or the month set below overflows: (current date) still carries
+-- today's day-of-month, so asking for April on the 31st lands on 1 May and
+-- the day set afterwards then reads as 30 May.
+set day of targetDate to 1
 set month of targetDate to ${date.getMonth() + 1}
 set day of targetDate to ${date.getDate()}
 set hours of targetDate to ${date.getHours()}
@@ -2567,6 +2575,11 @@ function setupIPC() {
       const me = await res.json();
       jiraBasic = candidate;
       saveSecret(JIRA_BASIC_PATH, candidate);
+      // The window has to hear about it. Only the OAuth callback used to send
+      // this, so connecting with a token - the path a distributed build
+      // actually uses - left the composer's project picker hidden until the
+      // app was restarted.
+      mainWindow?.webContents.send("jira-connected", true);
       return { success: true, displayName: me?.displayName || email };
     } catch (err) {
       return { success: false, error: err.message };

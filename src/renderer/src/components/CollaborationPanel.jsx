@@ -44,6 +44,11 @@ export default function CollaborationPanel({
     if (raw.length < 2) {
       setResults([]);
       setSearched(false);
+      // The spinner is turned off here too. It used to be cleared only in the
+      // debounced timer, which this branch has already cancelled - so deleting
+      // a character back to one left "working..." under the field for the rest
+      // of the session.
+      setSearching(false);
       return undefined;
     }
     const mine = ++runId.current;
@@ -70,8 +75,14 @@ export default function CollaborationPanel({
     async (uid, run, toastKey) => {
       setBusyUid(uid);
       try {
-        await run();
-        if (toastKey) onToast?.(t(toastKey));
+        // The desktop path resolves { success: false } rather than throwing -
+        // only the web one rejects - so a failure used to arrive here and be
+        // announced as a success.
+        const res = await run();
+        if (res && res.success === false) {
+          console.warn("Collaboration action failed:", res.error);
+          onToast?.(t("collab.failed"), "error");
+        } else if (toastKey) onToast?.(t(toastKey));
       } catch (err) {
         console.warn("Collaboration action failed:", err.code || err.message);
         onToast?.(t("collab.failed"), "error");

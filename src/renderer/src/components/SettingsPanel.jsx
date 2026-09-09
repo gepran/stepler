@@ -720,12 +720,14 @@ export default function SettingsPanel({
       });
     };
     const refreshJira = () => ipc?.invoke("jira-status").then(setJiraStatus);
-    ipc?.on("google-calendar-connected", refreshGcal);
-    ipc?.on("jira-connected", refreshJira);
-    return () => {
-      ipc?.removeAllListeners("google-calendar-connected");
-      ipc?.removeAllListeners("jira-connected");
-    };
+    // Point listeners, because this panel unmounts every time it is closed and
+    // App is listening on jira-connected as well: tearing the channel down
+    // left App deaf to it for the rest of the session.
+    const offs = [
+      ipc?.on("google-calendar-connected", refreshGcal),
+      ipc?.on("jira-connected", refreshJira),
+    ];
+    return () => offs.forEach((off) => off?.());
   }, []);
 
   useEffect(() => {
