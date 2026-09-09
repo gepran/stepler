@@ -23,7 +23,7 @@
       },
       {
         "source": "/download/windows",
-        "destination": "https://github.com/gepran/stepler/releases/download/v1.3.5/stepler-1.3.5-setup.exe",
+        "destination": "https://github.com/gepran/stepler/releases/download/v1.3.4/stepler-1.3.4-setup.exe",
         "type": 302
       }
     ],
