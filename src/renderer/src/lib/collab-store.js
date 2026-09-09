@@ -270,6 +270,83 @@ export function subscribeMentions(db, uid, onChange, onError) {
   );
 }
 
+/**
+ * The only fields somebody you mentioned is allowed to move. The rules enforce
+ * this too — this is here so a client cannot even try, and so the two lists
+ * are visibly the same list.
+ */
+export const MENTION_EDITABLE = ["completed", "priority", "subtasks"];
+
+/**
+ * A change made by the person who was mentioned, rather than by the author.
+ *
+ * Two documents, deliberately. The author's task is the source of truth and is
+ * what the author's own devices read, so it has to move — but the mention is
+ * what the MENTIONED person's screen is rendering, and waiting for the author's
+ * laptop to wake up and copy the change back would mean a subtask that
+ * vanishes the moment you add it. So both are written, with the same values.
+ *
+ * Settled with allSettled rather than all: the two writes are independent, and
+ * one of them failing (a connection dropped between us, say) must not leave
+ * the other unsent.
+ */
+export async function updateMentionedTask(db, { meUid, mention, patch }) {
+  const taskId = String(mention?.taskId || mention?.id || "");
+  const author = mention?.fromUid;
+  if (!taskId || !author || !meUid) return false;
+
+  // Anything outside the permitted set is dropped here rather than sent and
+  // refused: a rejected write takes the whole batch down with it.
+  const clean = {};
+  for (const key of MENTION_EDITABLE) {
+    if (patch[key] !== undefined) clean[key] = patch[key];
+  }
+  if (!Object.keys(clean).length) return false;
+
+  const results = await Promise.allSettled([
+    updateDoc(doc(db, "users", author, "tasks", taskId), stamp(clean)),
+    setDoc(mentionRef(db, meUid, taskId), stamp(clean), { merge: true }),
+  ]);
+  for (const r of results) {
+    if (r.status === "rejected")
+      console.warn(
+        "A mention edit did not land:",
+        r.reason?.code || r.reason?.message,
+      );
+  }
+  return results.some((r) => r.status === "fulfilled");
+}
+
+/**
+ * Add a subtask to a task somebody else wrote.
+ *
+ * The id is minted from the clock the same way a task's is, so it cannot
+ * collide with one the author adds at the other end.
+ */
+export function addMentionSubtask(db, { meUid, mention, text }) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return Promise.resolve(false);
+  const subtasks = [
+    ...(Array.isArray(mention.subtasks) ? mention.subtasks : []),
+    { id: String(Date.now()), text: trimmed.slice(0, 20000), completed: false },
+  ];
+  return updateMentionedTask(db, { meUid, mention, patch: { subtasks } });
+}
+
+export function setMentionSubtaskCompleted(
+  db,
+  { meUid, mention, subtaskId, completed },
+) {
+  const subtasks = (mention.subtasks || []).map((st) =>
+    // A legacy subtask can have no id at all, and String(undefined) would then
+    // match every other id-less one at once.
+    st.id != null && String(st.id) === String(subtaskId)
+      ? { ...st, completed: !!completed }
+      : st,
+  );
+  return updateMentionedTask(db, { meUid, mention, patch: { subtasks } });
+}
+
 export function markMentionRead(db, uid, mentionId, read = true) {
   return updateDoc(mentionRef(db, uid, mentionId), stamp({ read: !!read }));
 }
@@ -341,6 +418,11 @@ export async function reconcileTaskMentions(
     text: String(task.text || "").slice(0, 20000),
     ymd: task.ymd || "",
     completed: !!task.completed,
+    // Carried so the mentioned person can see and work on them. Without these
+    // their copy would be a sentence with no subtasks under it, and the star
+    // would have nothing to reflect.
+    priority: !!task.priority,
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
   };
 
   const writes = [];

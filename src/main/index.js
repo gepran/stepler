@@ -1701,6 +1701,32 @@ function setupIPC() {
     sync.collabMarkRead(typeof id === "string" ? id : null),
   );
 
+  // Edits to a task somebody else wrote. The engine checks the mention really
+  // exists before writing anything, and the Firestore rules check it again.
+  ipcMain.handle("collab-edit-mention", (_, { taskId, patch } = {}) =>
+    taskId && patch && typeof patch === "object"
+      ? sync.collabEditMention(String(taskId), patch)
+      : { success: false, error: "bad-request" },
+  );
+
+  ipcMain.handle("collab-add-mention-subtask", (_, { taskId, text } = {}) =>
+    taskId && typeof text === "string"
+      ? sync.collabAddMentionSubtask(String(taskId), text)
+      : { success: false, error: "bad-request" },
+  );
+
+  ipcMain.handle(
+    "collab-toggle-mention-subtask",
+    (_, { taskId, subtaskId, completed } = {}) =>
+      taskId && subtaskId != null
+        ? sync.collabToggleMentionSubtask(
+            String(taskId),
+            String(subtaskId),
+            !!completed,
+          )
+        : { success: false, error: "bad-request" },
+  );
+
   ipcMain.handle("hide-window", () => {
     hideWindow();
     return true;

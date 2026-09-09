@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import { LogOut, Monitor, RotateCcw, X } from "lucide-react";
+import { LogOut, Monitor, Moon, RotateCcw, SunMedium, X } from "lucide-react";
 import { restoreTask, subscribeTasks } from "./store";
 import CollaborationPanel from "../renderer/src/components/CollaborationPanel";
 import {
@@ -9,6 +9,7 @@ import {
   searchProfiles,
   sendInvite,
 } from "./collab";
+import { THEMES, setTheme, useTheme } from "./theme";
 import {
   LANGUAGES,
   setLanguage,
@@ -19,6 +20,8 @@ import {
 
 // Borrowed from the timeline's old day heading, which grew up into a real
 // heading — the small-caps label still belongs on a settings section.
+const THEME_ICONS = { light: SunMedium, dark: Moon, system: Monitor };
+
 const HEADING =
   "mb-2 text-[11px] font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500";
 
@@ -33,6 +36,7 @@ const HEADING =
 export default function SettingsModal({ user, collab, onClose, onSignOut }) {
   const t = useT();
   const language = useLanguage();
+  const theme = useTheme();
   const [deleted, setDeleted] = useState([]);
   const [notice, setNotice] = useState(null);
 
@@ -178,16 +182,31 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
             />
           </section>
 
-          {/* Read-only on purpose. The desktop app switches theme through
-              Electron's nativeTheme; in a browser Tailwind's `dark:` compiles
-              to prefers-color-scheme, so there is no switch to offer here —
-              only the fact of which one is being followed. */}
+          {/* This used to be a read-only line saying the browser decides.
+              Tailwind's `dark:` now answers to an attribute this app writes
+              (see theme.js), so there is a real choice to offer. */}
           <section>
             <h3 className={HEADING}>{t("settings.general.appearance")}</h3>
-            <p className="flex items-center gap-2.5 rounded-xl border border-neutral-200 px-3.5 py-3 text-[13px] text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
-              <Monitor size={15} />
-              {t("settings.general.system")}
-            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {THEMES.map((mode) => {
+                const Icon = THEME_ICONS[mode];
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setTheme(mode)}
+                    className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[13px] font-medium transition-colors ${
+                      theme === mode
+                        ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+                        : "border-neutral-200 text-neutral-600 hover:border-neutral-300 dark:border-neutral-800 dark:text-neutral-300 dark:hover:border-neutral-700"
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {t(`settings.general.${mode}`)}
+                  </button>
+                );
+              })}
+            </div>
           </section>
 
           <section>

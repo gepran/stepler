@@ -39,6 +39,7 @@ import {
 } from "./attachments-cloud";
 import {
   acceptInvite,
+  addMentionSubtask,
   ensureProfile,
   markAllMentionsRead,
   markMentionRead,
@@ -47,8 +48,10 @@ import {
   removeConnection,
   searchProfiles,
   sendInvite,
+  setMentionSubtaskCompleted,
   subscribeConnections,
   subscribeMentions,
+  updateMentionedTask,
 } from "../renderer/src/lib/collab-store";
 
 // Not secrets: every Firebase client ships these. The Firestore rules and the
@@ -341,6 +344,16 @@ export function collabSnapshot() {
       text: m.text || "",
       ymd: m.ymd || "",
       completed: !!m.completed,
+      priority: !!m.priority,
+      // Plain objects only: a Firestore array of maps crosses IPC fine, but
+      // anything it picked up along the way would not.
+      subtasks: Array.isArray(m.subtasks)
+        ? m.subtasks.map((st) => ({
+            id: st?.id != null ? String(st.id) : "",
+            text: String(st?.text || ""),
+            completed: !!st?.completed,
+          }))
+        : [],
       read: !!m.read,
       fromUid: m.fromUid || "",
       fromUsername: m.fromUsername || "",
@@ -850,6 +863,69 @@ export async function collabRemove(uid) {
   try {
     await removeConnection(db, me, uid);
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+/**
+ * An edit the window made to a task somebody else wrote.
+ *
+ * The window hands over the whole new value — the array of subtasks, the flag
+ * — rather than an instruction to compute one, because the window is already
+ * rendering that array and the main process would otherwise have to fetch a
+ * copy it has no listener for.
+ */
+export async function collabEditMention(taskId, patch) {
+  if (!currentUid) return { success: false, error: "not-signed-in" };
+  const mention = mentions.find(
+    (m) => String(m.taskId || m.id) === String(taskId),
+  );
+  if (!mention) return { success: false, error: "no-such-mention" };
+  try {
+    const ok = await updateMentionedTask(db, {
+      meUid: currentUid,
+      mention,
+      patch,
+    });
+    return { success: ok };
+  } catch (err) {
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+export async function collabAddMentionSubtask(taskId, text) {
+  if (!currentUid) return { success: false, error: "not-signed-in" };
+  const mention = mentions.find(
+    (m) => String(m.taskId || m.id) === String(taskId),
+  );
+  if (!mention) return { success: false, error: "no-such-mention" };
+  try {
+    const ok = await addMentionSubtask(db, {
+      meUid: currentUid,
+      mention,
+      text,
+    });
+    return { success: ok };
+  } catch (err) {
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+export async function collabToggleMentionSubtask(taskId, subtaskId, completed) {
+  if (!currentUid) return { success: false, error: "not-signed-in" };
+  const mention = mentions.find(
+    (m) => String(m.taskId || m.id) === String(taskId),
+  );
+  if (!mention) return { success: false, error: "no-such-mention" };
+  try {
+    const ok = await setMentionSubtaskCompleted(db, {
+      meUid: currentUid,
+      mention,
+      subtaskId,
+      completed,
+    });
+    return { success: ok };
   } catch (err) {
     return { success: false, error: err.code || err.message };
   }

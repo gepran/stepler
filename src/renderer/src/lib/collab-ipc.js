@@ -66,6 +66,36 @@ export function useCollab() {
     [],
   );
 
+  /**
+   * The edits somebody you mentioned may make. The window sends the new value
+   * and the main process, which owns the session, does the writing.
+   */
+  const editMention = useCallback(
+    (mention, patch) =>
+      ipc?.invoke("collab-edit-mention", {
+        taskId: String(mention.taskId || mention.id),
+        patch,
+      }),
+    [],
+  );
+  const addMentionSubtask = useCallback(
+    (mention, text) =>
+      ipc?.invoke("collab-add-mention-subtask", {
+        taskId: String(mention.taskId || mention.id),
+        text,
+      }),
+    [],
+  );
+  const toggleMentionSubtask = useCallback(
+    (mention, subtaskId, completed) =>
+      ipc?.invoke("collab-toggle-mention-subtask", {
+        taskId: String(mention.taskId || mention.id),
+        subtaskId,
+        completed,
+      }),
+    [],
+  );
+
   return {
     profile: snapshot.profile,
     connections,
@@ -77,6 +107,9 @@ export function useCollab() {
     accept,
     remove,
     markRead,
+    editMention,
+    addMentionSubtask,
+    toggleMentionSubtask,
   };
 }
 

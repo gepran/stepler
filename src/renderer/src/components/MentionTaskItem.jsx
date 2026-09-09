@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import { AtSign } from "lucide-react";
+import { AtSign, Check, Plus, Star } from "lucide-react";
 import { formatTaskText } from "../lib/format";
 import { useT } from "../lib/i18n";
 
@@ -14,11 +15,37 @@ import { useT } from "../lib/i18n";
  * Shared by the window and the web app so a mention looks the same wherever
  * you happen to read it.
  */
-export function MentionTaskItem({ mention, onMarkRead }) {
+export function MentionTaskItem({
+  mention,
+  onMarkRead,
+  onToggle,
+  onPriority,
+  onSubtaskToggle,
+  onAddSubtask,
+}) {
   const t = useT();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef(null);
   const who = mention.fromUsername
     ? `@${mention.fromUsername}`
     : mention.fromName || mention.fromEmail;
+
+  // Finished subtasks settle to the top, the way they do everywhere else.
+  const subtasks = [...(mention.subtasks || [])].sort((a, b) =>
+    a.completed === b.completed ? 0 : a.completed ? -1 : 1,
+  );
+
+  useEffect(() => {
+    if (adding) inputRef.current?.focus();
+  }, [adding]);
+
+  const submit = () => {
+    const text = draft.trim();
+    if (text) onAddSubtask(mention, text);
+    setDraft("");
+    setAdding(false);
+  };
 
   return (
     <div
@@ -28,40 +55,145 @@ export function MentionTaskItem({ mention, onMarkRead }) {
           : "border-l-orange-500 bg-orange-50/50 dark:bg-orange-500/[0.06]"
       }`}
     >
-      <span
-        aria-hidden="true"
-        className="mt-[3px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border border-dashed border-neutral-300 text-neutral-400 dark:border-neutral-600 dark:text-neutral-500"
+      {/* A real checkbox, not the dashed placeholder this used to be: ticking
+          a task somebody asked you to do is the whole point of being told
+          about it, and it travels back to them. */}
+      <button
+        type="button"
+        title={mention.completed ? t("task.markNotDone") : t("task.markDone")}
+        onClick={() => onToggle(mention, !mention.completed)}
+        className={`mt-[3px] flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded-md border transition-all ${
+          mention.completed
+            ? "border-orange-500 bg-orange-500 text-white"
+            : "border-neutral-300 hover:border-orange-400 dark:border-neutral-600"
+        }`}
       >
-        <AtSign size={11} />
-      </span>
+        {mention.completed && <Check size={12} strokeWidth={3.5} />}
+      </button>
 
       <div className="min-w-0 flex-1">
         <p className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400">
+          <AtSign size={11} className="shrink-0" />
           <span>{who}</span>
           <span className="font-normal text-neutral-400 dark:text-neutral-500">
             {t("collab.mentionedYou")}
           </span>
         </p>
+
+        {/* The words belong to whoever wrote them — there is no edit here,
+            and the rules refuse one. */}
         <div
-          className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+          className={`relative whitespace-pre-wrap break-words text-sm leading-relaxed ${
             mention.completed
               ? "text-neutral-400 line-through dark:text-neutral-600"
               : "text-neutral-800 dark:text-neutral-100"
           }`}
         >
+          {subtasks.length > 0 && (
+            <span className="tree-line pointer-events-none absolute -bottom-2 -left-[21px] top-[22px] w-px" />
+          )}
           {formatTaskText(mention.text)}
         </div>
+
+        {subtasks.length > 0 && (
+          <div className="relative mt-2 space-y-1 pl-1">
+            {subtasks.map((st, index) => (
+              <div
+                key={st.id ?? `st-${index}`}
+                className="group/subtask relative flex items-start gap-2 rounded-lg p-1 transition-colors hover:bg-neutral-200/40 dark:hover:bg-neutral-800/60"
+              >
+                {index === subtasks.length - 1 ? (
+                  <span className="tree-corner pointer-events-none absolute -left-[25px] top-0 h-[14px] w-[25px]" />
+                ) : (
+                  <>
+                    <span className="tree-line pointer-events-none absolute -bottom-1 -left-[25px] top-0 w-px" />
+                    <span className="tree-line pointer-events-none absolute -left-[25px] top-[13px] h-px w-[25px]" />
+                  </>
+                )}
+                <button
+                  type="button"
+                  title={
+                    st.completed ? t("task.markNotDone") : t("task.markDone")
+                  }
+                  onClick={() => onSubtaskToggle(mention, st.id, !st.completed)}
+                  className={`relative mt-0.5 flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded border transition-all after:absolute after:-inset-2 after:content-[''] ${
+                    st.completed
+                      ? "border-orange-500 bg-orange-500 text-white"
+                      : "border-neutral-300 hover:border-orange-400 dark:border-neutral-600"
+                  }`}
+                >
+                  {st.completed && <Check size={10} strokeWidth={4} />}
+                </button>
+                <div
+                  className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed ${
+                    st.completed
+                      ? "text-neutral-400 line-through dark:text-neutral-600"
+                      : "text-neutral-600 dark:text-neutral-300"
+                  }`}
+                >
+                  {formatTaskText(st.text)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {adding ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={submit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                submit();
+              }
+              if (e.key === "Escape") {
+                setDraft("");
+                setAdding(false);
+              }
+            }}
+            placeholder={t("task.newSubtask")}
+            className="mt-2 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-800 outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mt-1.5 flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold text-neutral-400 opacity-0 transition-all hover:text-orange-500 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-500"
+          >
+            <Plus size={12} />
+            {t("task.addSubtask")}
+          </button>
+        )}
       </div>
 
-      {!mention.read && (
+      <div className="flex shrink-0 items-center gap-0.5">
+        {/* Star and read, but no bin: the task belongs to the person who wrote
+            it, and only they can throw it away. */}
         <button
           type="button"
-          onClick={() => onMarkRead(mention.id)}
-          className="shrink-0 cursor-pointer self-center rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 opacity-0 transition-all hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700"
+          title={t("task.priority")}
+          onClick={() => onPriority(mention, !mention.priority)}
+          className={`cursor-pointer rounded-lg p-1.5 transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
+            mention.priority
+              ? "text-orange-500"
+              : "text-neutral-400 opacity-0 group-hover:opacity-100 dark:text-neutral-500"
+          }`}
         >
-          {t("collab.markRead")}
+          <Star size={14} fill={mention.priority ? "currentColor" : "none"} />
         </button>
-      )}
+        {!mention.read && (
+          <button
+            type="button"
+            onClick={() => onMarkRead(mention.id)}
+            className="cursor-pointer rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 opacity-0 transition-all hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700"
+          >
+            {t("collab.markRead")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -72,11 +204,18 @@ MentionTaskItem.propTypes = {
     text: PropTypes.string,
     read: PropTypes.bool,
     completed: PropTypes.bool,
+    priority: PropTypes.bool,
+    subtasks: PropTypes.array,
+    fromUid: PropTypes.string,
     fromUsername: PropTypes.string,
     fromName: PropTypes.string,
     fromEmail: PropTypes.string,
   }).isRequired,
   onMarkRead: PropTypes.func.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  onPriority: PropTypes.func.isRequired,
+  onSubtaskToggle: PropTypes.func.isRequired,
+  onAddSubtask: PropTypes.func.isRequired,
 };
 
 /**

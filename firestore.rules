@@ -69,6 +69,26 @@ service cloud.firestore {
         : "";
     }
 
+    // Am I named on this task? The proof is the mention sitting in MY OWN
+    // space, which only the author could have put there — so a mention nobody
+    // sent me is not something I can forge into write access.
+    function mentionPath(taskId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/mentions/$(taskId);
+    }
+
+    function mentionedOn(author, taskId) {
+      return exists(mentionPath(taskId))
+        ? get(mentionPath(taskId)).data.fromUid == author
+        : false;
+    }
+
+    // Exactly which fields a write moved. `updatedAt` rides along on every
+    // write, so it is always in the permitted set.
+    function onlyTouches(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(fields.concat(['updatedAt']));
+    }
+
     // ---------------------------------------------------------------------
     // Public identity
     //
@@ -111,10 +131,33 @@ service cloud.firestore {
 
       match /tasks/{taskId} {
         allow read: if signedInAs(uid);
+        allow create: if signedInAs(uid) && validTask();
+
+        // Somebody you named in a task can work on it with you, within limits
+        // that are enforced here rather than by the interface: they may tick
+        // it off, star it, and add or tick subtasks. They may not touch the
+        // words — those are yours — and the delete rule below never widens, so
+        // a task can only ever be thrown away by the person who wrote it.
+        //
+        // A ternary rather than two branches joined by `||`. Rules evaluate
+        // both sides of `||` and `&&`, so an owner's write would also run the
+        // mentioned-person branch — paying for a document read on every
+        // keystroke-sized save — and a stranger's write would run validTask()
+        // against fields it has no business having, which raises rather than
+        // returning false. Whose write this is decides which question to ask.
+        allow update: if signedInAs(uid)
+          ? validTask()
+          : (
+              signedIn()
+              && resource != null
+              && mentionedOn(uid, taskId)
+              && onlyTouches(['completed', 'priority', 'subtasks'])
+              && stampedByServer()
+            );
+
         // A task is never really removed — it is tombstoned, so the other
         // devices learn about the delete instead of resurrecting the task on
         // their next sync.
-        allow create, update: if signedInAs(uid) && validTask();
         allow delete: if signedInAs(uid);
       }
 

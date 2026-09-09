@@ -5,9 +5,12 @@ import {
   Check,
   ImageOff,
   LogOut,
+  Monitor,
+  Moon,
   Paperclip,
   Settings,
   Star,
+  SunMedium,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,7 +24,15 @@ import {
   setSubtaskCompleted,
   subscribeTasks,
 } from "./store";
-import { markAllMentionsRead, markMentionRead, useCollab } from "./collab";
+import {
+  addSubtaskToMention,
+  editMention,
+  markAllMentionsRead,
+  markMentionRead,
+  toggleMentionSubtask,
+  useCollab,
+} from "./collab";
+import { THEMES, setTheme, useTheme } from "./theme";
 import {
   MentionBadge,
   MentionTaskItem,
@@ -531,6 +542,20 @@ function Timeline({ user, collab, onOpenSettings }) {
     });
   };
 
+  /**
+   * Every mention edit is fire-and-forget on screen — the row has already
+   * changed by the time Firestore answers — so this is the one place a refusal
+   * gets noticed rather than disappearing into an unhandled rejection.
+   */
+  const report = useCallback(
+    (promise) =>
+      Promise.resolve(promise).catch((err) => {
+        console.warn("That change did not land:", err.code || err.message);
+        setNotice(t("collab.failed"));
+      }),
+    [t],
+  );
+
   const days = useMemo(() => {
     const rows = mentionsOnly
       ? mentionsAsRows(mentions)
@@ -597,7 +622,7 @@ function Timeline({ user, collab, onOpenSettings }) {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-[720px] flex-1 overflow-y-auto px-5 pb-6 pt-4">
+      <div className="mx-auto w-full max-w-[720px] flex-1 overflow-y-auto px-5 pb-6">
         {!ready && (
           <p className="py-16 text-center text-sm text-neutral-400">
             {t("auth.working")}
@@ -629,7 +654,7 @@ function Timeline({ user, collab, onOpenSettings }) {
                   inside its own box, and anything hanging outside it would
                   have rows sliding visibly underneath. */}
               <h2
-                className={`sticky top-0 z-10 mb-1.5 flex items-center gap-2 bg-neutral-50/90 py-2 text-[17px] font-bold backdrop-blur dark:bg-neutral-950/90 ${
+                className={`sticky top-0 z-10 mb-1.5 flex items-center gap-2 bg-neutral-50/90 pb-2 pt-4 text-[17px] font-bold backdrop-blur dark:bg-neutral-950/90 ${
                   isToday
                     ? "text-orange-600 dark:text-orange-400"
                     : "text-neutral-900 dark:text-neutral-100"
@@ -650,10 +675,18 @@ function Timeline({ user, collab, onOpenSettings }) {
                   <MentionTaskItem
                     key={`m-${task.mention.id}`}
                     mention={task.mention}
-                    onMarkRead={(id) =>
-                      markMentionRead(uid, id).catch((err) =>
-                        console.warn("Could not mark read:", err.message),
-                      )
+                    onMarkRead={(id) => report(markMentionRead(uid, id))}
+                    onToggle={(m, completed) =>
+                      report(editMention(uid, m, { completed }))
+                    }
+                    onPriority={(m, priority) =>
+                      report(editMention(uid, m, { priority }))
+                    }
+                    onSubtaskToggle={(m, stId, done) =>
+                      report(toggleMentionSubtask(uid, m, stId, done))
+                    }
+                    onAddSubtask={(m, text) =>
+                      report(addSubtaskToMention(uid, m, text))
                     }
                   />
                 ) : (
@@ -1070,6 +1103,75 @@ function LanguageMenu({ t }) {
 
 LanguageMenu.propTypes = { t: PropTypes.func.isRequired };
 
+const THEME_ICONS = { light: SunMedium, dark: Moon, system: Monitor };
+
+/**
+ * Light, dark, or the machine's choice — as a round badge beside the language
+ * one, because they are the same kind of decision and belong in the same
+ * corner.
+ *
+ * The icon shows the PREFERENCE rather than what is currently on screen: on
+ * "system" it stays the monitor even while the page is dark, which is the only
+ * way to tell "following the machine" apart from "I chose dark".
+ */
+function ThemeMenu({ t }) {
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  const ref = useDismiss(open, setOpen);
+  const Icon = THEME_ICONS[theme] || Monitor;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t("settings.general.appearance")}
+        title={t(`settings.general.${theme}`)}
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-neutral-200 bg-neutral-100 text-neutral-600 transition-shadow hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+      >
+        <Icon size={16} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-30 w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          {THEMES.map((mode) => {
+            const ModeIcon = THEME_ICONS[mode];
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setTheme(mode);
+                  setOpen(false);
+                }}
+                className={`flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left text-[13px] transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                  mode === theme
+                    ? "font-semibold text-neutral-900 dark:text-neutral-50"
+                    : "text-neutral-700 dark:text-neutral-200"
+                }`}
+              >
+                <ModeIcon
+                  size={15}
+                  className="shrink-0 text-neutral-400 dark:text-neutral-500"
+                />
+                {t(`settings.general.${mode}`)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ThemeMenu.propTypes = { t: PropTypes.func.isRequired };
+
 /**
  * The account, as a round avatar in the corner — where every other app puts it.
  * The email used to sit spelled out in the bar, which on a phone squeezed the
@@ -1201,7 +1303,7 @@ export default function App() {
     // casualty. `dvh` tracks the visible viewport as the chrome comes and goes.
     <div className="flex h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
       <header
-        className="shrink-0 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
+        className="relative z-30 shrink-0 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="mx-auto flex h-14 w-full max-w-[720px] items-center gap-3 px-4 sm:px-5">
@@ -1211,6 +1313,7 @@ export default function App() {
           </span>
 
           <div className="ml-auto flex items-center gap-2">
+            <ThemeMenu t={t} />
             <LanguageMenu t={t} />
             <UserMenu
               user={user}

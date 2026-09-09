@@ -1,10 +1,15 @@
 import "./styles.css";
 import { registerAppFont } from "../renderer/src/lib/font";
+import { initTheme } from "./theme";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
+// Before anything renders, so the page is never painted in the wrong theme
+// and corrected a frame later. The stylesheet above is what blocks the first
+// paint, and this runs while it is still doing so.
+initTheme();
 registerAppFont();
 
 createRoot(document.getElementById("root")).render(

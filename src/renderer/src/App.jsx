@@ -1355,6 +1355,12 @@ export default function App() {
           key={`m-${task.mention.id}`}
           mention={task.mention}
           onMarkRead={(id) => collab.markRead(id)}
+          onToggle={(m, completed) => collab.editMention(m, { completed })}
+          onPriority={(m, priority) => collab.editMention(m, { priority })}
+          onSubtaskToggle={(m, stId, done) =>
+            collab.toggleMentionSubtask(m, stId, done)
+          }
+          onAddSubtask={(m, text) => collab.addMentionSubtask(m, text)}
         />
       );
     const dragTarget =

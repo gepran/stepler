@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db } from "./firebase";
 import {
   acceptInvite as acceptInviteRaw,
+  addMentionSubtask as addMentionSubtaskRaw,
   ensureProfile as ensureProfileRaw,
   markAllMentionsRead as markAllReadRaw,
   markMentionRead as markReadRaw,
@@ -17,6 +18,8 @@ import {
   removeConnection as removeConnectionRaw,
   searchProfiles as searchProfilesRaw,
   sendInvite as sendInviteRaw,
+  setMentionSubtaskCompleted as setMentionSubtaskCompletedRaw,
+  updateMentionedTask as updateMentionedTaskRaw,
   subscribeConnections,
   subscribeMentions,
 } from "../renderer/src/lib/collab-store";
@@ -30,6 +33,17 @@ export const markMentionRead = (uid, id, read) =>
   markReadRaw(db, uid, id, read);
 export const markAllMentionsRead = (uid, list) => markAllReadRaw(db, uid, list);
 export const reconcileMentions = (args) => reconcileRaw(db, args);
+
+/**
+ * The three edits somebody you mentioned is allowed to make, each writing the
+ * author's task and your own copy of it together. See updateMentionedTask.
+ */
+export const editMention = (meUid, mention, patch) =>
+  updateMentionedTaskRaw(db, { meUid, mention, patch });
+export const addSubtaskToMention = (meUid, mention, text) =>
+  addMentionSubtaskRaw(db, { meUid, mention, text });
+export const toggleMentionSubtask = (meUid, mention, subtaskId, completed) =>
+  setMentionSubtaskCompletedRaw(db, { meUid, mention, subtaskId, completed });
 
 /**
  * Everything one signed-in account knows about other people, in one place: who

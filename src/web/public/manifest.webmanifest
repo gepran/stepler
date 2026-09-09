@@ -8,9 +8,7 @@
   "orientation": "portrait-primary",
   "background_color": "#fafafa",
   "theme_color": "#fafafa",
-  "categories": [
-    "productivity"
-  ],
+  "categories": ["productivity"],
   "icons": [
     {
       "src": "/icon-192.png",

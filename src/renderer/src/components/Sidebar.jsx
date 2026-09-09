@@ -123,30 +123,36 @@ export default function Sidebar({
             )}
           </div>
         </div>
-        {/* The trash used to sit here; it lives in Settings now, so the count
-            rides on the button that opens Settings rather than vanishing from
-            the window altogether. */}
-        <div className="p-4 shrink-0 flex flex-col gap-1">
-          {account?.signedIn && (
-            <button
-              onClick={onSettingsClick}
-              title={account.email || ""}
-              className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-            >
-              <AccountAvatar email={account.email} />
-              <span className="truncate text-sm font-medium">
-                {account.email}
-              </span>
-            </button>
-          )}
+        {/* One button, not two. There used to be an account row and a
+            Settings row stacked here, and since both opened the same window
+            the second was only ever asking to be misread as something else.
+            Signed in it wears your face and your address; signed out there is
+            no face to wear, so it falls back to the gear — and either way the
+            trash count rides on it, because the trash lives in Settings and
+            would otherwise vanish from the window altogether. */}
+        <div className="p-4 shrink-0">
           <button
             onClick={onSettingsClick}
+            title={account?.email || t("common.settings")}
             className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
           >
-            <Settings size={18} className="icon-rubbery" />
-            <span className="text-sm font-medium">{t("common.settings")}</span>
+            {account?.signedIn ? (
+              <>
+                <AccountAvatar email={account.email} />
+                <span className="truncate text-sm font-medium">
+                  {account.email}
+                </span>
+              </>
+            ) : (
+              <>
+                <Settings size={18} className="icon-rubbery" />
+                <span className="text-sm font-medium">
+                  {t("common.settings")}
+                </span>
+              </>
+            )}
             {deletedCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
+              <span className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
                 {deletedCount > 99 ? "99+" : deletedCount}
               </span>
             )}

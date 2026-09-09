@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* `dark:` follows an attribute on <html> rather than prefers-color-scheme,
+   because a browser tab has no equivalent of the desktop app's nativeTheme
+   and the choice has to be the page's to make. theme.js is what sets it, and
+   resolves "system" to one of the two before writing it — so this selector is
+   the only rule in play and there is never a second source of truth. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* The web build's Vite root is this folder, so Tailwind would only scan
    src/web and miss the renderer components and helpers this app reuses —
    their classes would be silently absent from the stylesheet. */
