@@ -40,6 +40,7 @@ import {
 import {
   acceptInvite,
   addMentionSubtask,
+  dismissMention,
   ensureProfile,
   markAllMentionsRead,
   markMentionRead,
@@ -926,6 +927,17 @@ export async function collabToggleMentionSubtask(taskId, subtaskId, completed) {
       completed,
     });
     return { success: ok };
+  } catch (err) {
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+/** Take a mention off this account's list; the author's task is untouched. */
+export async function collabDismissMention(taskId) {
+  if (!currentUid) return { success: false, error: "not-signed-in" };
+  try {
+    await dismissMention(db, currentUid, String(taskId));
+    return { success: true };
   } catch (err) {
     return { success: false, error: err.code || err.message };
   }

@@ -229,6 +229,9 @@ const en = {
     hint: "Once you are both connected, put @their-handle in a task and it appears in their list too. They can read it, not change it.",
     mentionedYou: "mentioned you",
     markRead: "Got it",
+    dismiss: "Remove from my list",
+    dismissHint:
+      "This only takes it off your list \u2014 the person who wrote it keeps their task.",
     showMentions: "Show only tasks you were mentioned in ({count} unread)",
     showAll: "Show everything again",
     noMentions: "Nobody has mentioned you yet.",
@@ -843,6 +846,10 @@ const ka = {
     mentionedYou:
       "\u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D4\u10D1\u10D0\u10D7",
     markRead: "\u10D2\u10D0\u10D5\u10D8\u10D2\u10D4",
+    dismiss:
+      "\u10E9\u10D4\u10DB\u10D8 \u10E1\u10D8\u10D8\u10D3\u10D0\u10DC \u10DB\u10DD\u10EA\u10D8\u10DA\u10D4\u10D1\u10D0",
+    dismissHint:
+      "\u10D4\u10E1 \u10DB\u10EE\u10DD\u10DA\u10DD\u10D3 \u10D7\u10E5\u10D5\u10D4\u10DC\u10D8 \u10E1\u10D8\u10D8\u10D3\u10D0\u10DC \u10E8\u10DA\u10D8\u10E1 \u2014 \u10D0\u10D5\u10E2\u10DD\u10E0\u10E1 \u10D3\u10D0\u10D5\u10D0\u10DA\u10D4\u10D1\u10D0 \u10E0\u10E9\u10D4\u10D1\u10D0.",
     showMentions:
       "\u10DB\u10EE\u10DD\u10DA\u10DD\u10D3 \u10D8\u10E1, \u10E1\u10D0\u10D3\u10D0\u10EA \u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D4\u10D1\u10D4\u10DC ({count})",
     showAll:
@@ -1431,6 +1438,10 @@ const ru = {
     mentionedYou:
       "\u043E\u0442\u043C\u0435\u0442\u0438\u043B \u0432\u0430\u0441",
     markRead: "\u041F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E",
+    dismiss:
+      "\u0423\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u043C\u043E\u0435\u0433\u043E \u0441\u043F\u0438\u0441\u043A\u0430",
+    dismissHint:
+      "\u042D\u0442\u043E \u0443\u0431\u0435\u0440\u0451\u0442 \u0437\u0430\u0434\u0430\u0447\u0443 \u0442\u043E\u043B\u044C\u043A\u043E \u0443 \u0432\u0430\u0441 \u2014 \u0443 \u0430\u0432\u0442\u043E\u0440\u0430 \u043E\u043D\u0430 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F.",
     showMentions:
       "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0437\u0430\u0434\u0430\u0447\u0438 \u0441 \u0432\u0430\u0448\u0435\u0439 \u043E\u0442\u043C\u0435\u0442\u043A\u043E\u0439 ({count} \u043D\u043E\u0432\u044B\u0445)",
     showAll:

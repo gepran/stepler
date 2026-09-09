@@ -26,6 +26,7 @@ import {
 } from "./store";
 import {
   addSubtaskToMention,
+  dismissMention,
   editMention,
   markAllMentionsRead,
   markMentionRead,
@@ -83,11 +84,26 @@ function groupByDay(tasks, todayYMD) {
     .map(([ymd, list]) => ({ ymd, tasks: orderWithin(list) }));
 }
 
+/**
+ * Today, top to bottom: finished things settle up, everything else stays in
+ * the order it was written, newest last.
+ *
+ * Sorting starred tasks to the bottom used to be a third band, and it meant a
+ * task you had just written appeared ABOVE the starred ones rather than at the
+ * end of the list — which is the one place you look for it. The star is a mark
+ * on a task now, not a place in the order.
+ *
+ * The id is the millisecond the task was written, so it sorts chronologically
+ * on its own. A legacy id that is not a number falls back to 0 rather than
+ * producing NaN, which a comparator treats as "equal to everything" and which
+ * scrambles the whole list.
+ */
+const writtenAt = (task) => Number(task.id) || 0;
+
 const orderWithin = (list) =>
   [...list].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? -1 : 1;
-    if (!!a.priority !== !!b.priority) return a.priority ? 1 : -1;
-    return Number(a.id) - Number(b.id);
+    return writtenAt(a) - writtenAt(b);
   });
 
 /**
@@ -275,6 +291,17 @@ function TaskRow({ task, uid, onOpen }) {
         >
           {subtasks.length > 0 && (
             <span className="tree-line pointer-events-none absolute -bottom-2 -left-[21px] top-[22px] w-px" />
+          )}
+          {/* Priority used to be visible as a position — starred tasks sank
+              to the bottom. Now that order is purely chronological, the star
+              has to be visible on the task itself, the way the desktop app
+              has always drawn it. */}
+          {task.priority && !task.completed && (
+            <Star
+              size={14}
+              fill="currentColor"
+              className="mb-0.5 mr-1.5 inline text-amber-500 dark:text-amber-400"
+            />
           )}
           {formatTaskText(task.text)}
         </div>
@@ -688,6 +715,7 @@ function Timeline({ user, collab, onOpenSettings }) {
                     onAddSubtask={(m, text) =>
                       report(addSubtaskToMention(uid, m, text))
                     }
+                    onDismiss={(m) => report(dismissMention(uid, m))}
                   />
                 ) : (
                   <TaskRow
@@ -714,32 +742,33 @@ function Timeline({ user, collab, onOpenSettings }) {
             keeps its jump-to-newest button in. Shown while anything is unread
             and while the filter is on, so there is always a way back out of
             it. */}
-        {(unread.length > 0 || mentionsOnly) && (
-          <div className="pointer-events-none absolute -top-14 right-4 z-20 sm:right-5">
-            <div className="pointer-events-auto">
-              <MentionBadge
-                count={unread.length}
-                active={mentionsOnly}
-                label={
-                  mentionsOnly
-                    ? t("collab.showAll")
-                    : t("collab.showMentions", { count: unread.length })
-                }
-                onClick={() => {
-                  const next = !mentionsOnly;
-                  setMentionsOnly(next);
-                  // Opening the filter is the moment they have been read —
-                  // they are all on screen and nothing else would ever clear
-                  // the badge.
-                  if (next && unread.length)
-                    markAllMentionsRead(uid, mentions).catch((err) =>
-                      console.warn("Could not mark read:", err.message),
-                    );
-                }}
-              />
-            </div>
+        {/* Always here, so it reads as a filter you can reach rather than a
+            notification that appears and vanishes. The count on it is the
+            part that comes and goes. */}
+        <div className="pointer-events-none absolute -top-14 right-4 z-20 sm:right-5">
+          <div className="pointer-events-auto">
+            <MentionBadge
+              count={unread.length}
+              active={mentionsOnly}
+              label={
+                mentionsOnly
+                  ? t("collab.showAll")
+                  : t("collab.showMentions", { count: unread.length })
+              }
+              onClick={() => {
+                const next = !mentionsOnly;
+                setMentionsOnly(next);
+                // Opening the filter is the moment they have been read —
+                // they are all on screen and nothing else would ever clear
+                // the badge.
+                if (next && unread.length)
+                  markAllMentionsRead(uid, mentions).catch((err) =>
+                    console.warn("Could not mark read:", err.message),
+                  );
+              }}
+            />
           </div>
-        )}
+        </div>
         {notice && (
           <p
             role="alert"

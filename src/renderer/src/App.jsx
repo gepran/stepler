@@ -69,11 +69,26 @@ function groupByDay(tasks, todayYMD) {
     .map(([ymd, list]) => ({ ymd, date: labelForYMD(ymd), tasks: list }));
 }
 
+/**
+ * Today, top to bottom: finished things settle up, everything else stays in
+ * the order it was written, newest last.
+ *
+ * Sorting starred tasks to the bottom used to be a third band, and it meant a
+ * task you had just written appeared ABOVE the starred ones rather than at the
+ * end of the list — which is the one place you look for it. The star is a mark
+ * on a task now, not a place in the order.
+ *
+ * The id is the millisecond the task was written, so it sorts chronologically
+ * on its own. A legacy id that is not a number falls back to 0 rather than
+ * producing NaN, which a comparator treats as "equal to everything" and which
+ * scrambles the whole list.
+ */
+const writtenAt = (task) => Number(task.id) || 0;
+
 const orderWithin = (list) =>
   [...list].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? -1 : 1;
-    if (!!a.priority !== !!b.priority) return a.priority ? 1 : -1;
-    return 0;
+    return writtenAt(a) - writtenAt(b);
   });
 
 function minutesOf(hhmm) {
@@ -1361,6 +1376,7 @@ export default function App() {
             collab.toggleMentionSubtask(m, stId, done)
           }
           onAddSubtask={(m, text) => collab.addMentionSubtask(m, text)}
+          onDismiss={(m) => collab.dismissMention(m)}
         />
       );
     const dragTarget =
@@ -1627,29 +1643,30 @@ export default function App() {
             the jump button is hidden this drops into its place rather than
             floating on its own. Shown while anything is unread and while the
             filter is on, so there is always a way back out of it. */}
-        {(collab.unread.length > 0 || mentionsOnly) && (
-          <MentionBadge
-            className="absolute right-8 z-50"
-            style={{
-              bottom: `${(isExpanded ? 120 : 160) + (showScrollDown ? 52 : 0)}px`,
-            }}
-            count={collab.unread.length}
-            active={mentionsOnly}
-            label={
-              mentionsOnly
-                ? t("collab.showAll")
-                : t("collab.showMentions", { count: collab.unread.length })
-            }
-            onClick={() => {
-              const next = !mentionsOnly;
-              setMentionsOnly(next);
-              // Opening the filter is the moment they have been read: every
-              // one of them is on screen, and nothing else would ever clear
-              // the badge.
-              if (next && collab.unread.length) collab.markRead(null);
-            }}
-          />
-        )}
+        {/* Always here, so it reads as a filter you can reach rather than a
+            notification that appears and vanishes. The count is the part that
+            comes and goes. */}
+        <MentionBadge
+          className="absolute right-8 z-50"
+          style={{
+            bottom: `${(isExpanded ? 120 : 160) + (showScrollDown ? 52 : 0)}px`,
+          }}
+          count={collab.unread.length}
+          active={mentionsOnly}
+          label={
+            mentionsOnly
+              ? t("collab.showAll")
+              : t("collab.showMentions", { count: collab.unread.length })
+          }
+          onClick={() => {
+            const next = !mentionsOnly;
+            setMentionsOnly(next);
+            // Opening the filter is the moment they have been read: every
+            // one of them is on screen, and nothing else would ever clear
+            // the badge.
+            if (next && collab.unread.length) collab.markRead(null);
+          }}
+        />
 
         <TaskInput
           ref={inputRef}

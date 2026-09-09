@@ -1715,6 +1715,12 @@ function setupIPC() {
       : { success: false, error: "bad-request" },
   );
 
+  ipcMain.handle("collab-dismiss-mention", (_, taskId) =>
+    taskId
+      ? sync.collabDismissMention(String(taskId))
+      : { success: false, error: "bad-request" },
+  );
+
   ipcMain.handle(
     "collab-toggle-mention-subtask",
     (_, { taskId, subtaskId, completed } = {}) =>

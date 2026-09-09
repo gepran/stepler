@@ -11,6 +11,7 @@ import { db } from "./firebase";
 import {
   acceptInvite as acceptInviteRaw,
   addMentionSubtask as addMentionSubtaskRaw,
+  dismissMention as dismissMentionRaw,
   ensureProfile as ensureProfileRaw,
   markAllMentionsRead as markAllReadRaw,
   markMentionRead as markReadRaw,
@@ -44,6 +45,10 @@ export const addSubtaskToMention = (meUid, mention, text) =>
   addMentionSubtaskRaw(db, { meUid, mention, text });
 export const toggleMentionSubtask = (meUid, mention, subtaskId, completed) =>
   setMentionSubtaskCompletedRaw(db, { meUid, mention, subtaskId, completed });
+
+/** Off my list, and only mine. */
+export const dismissMention = (uid, mention) =>
+  dismissMentionRaw(db, uid, String(mention.taskId || mention.id));
 
 /**
  * Everything one signed-in account knows about other people, in one place: who

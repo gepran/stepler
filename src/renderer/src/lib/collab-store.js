@@ -263,11 +263,34 @@ export function subscribeMentions(db, uid, onChange, onError) {
     mentionsRef(db, uid),
     (snap) => {
       const list = [];
-      snap.forEach((d) => list.push({ ...d.data(), id: d.id }));
+      snap.forEach((d) => {
+        const data = { ...d.data(), id: d.id };
+        // Dismissed rows are filtered here rather than in each app, so the
+        // two cannot disagree about what is on your list.
+        if (!data.dismissed) list.push(data);
+      });
       onChange(list);
     },
     (err) => onError?.(err),
   );
+}
+
+/**
+ * Take a mention off my list.
+ *
+ * A flag rather than a delete, and that is the whole trick: deleting the
+ * document would only last until the author's next delivery pass, which
+ * rewrites every task it still believes it has sent you and would put this
+ * one straight back. The flag survives that, because the author's write
+ * merges a body that has never heard of it.
+ *
+ * The author's own task is untouched. This removes it from your list, not
+ * from theirs — deleting somebody else's task is not yours to do.
+ */
+export function dismissMention(db, uid, taskId) {
+  return setDoc(mentionRef(db, uid, taskId), stamp({ dismissed: true }), {
+    merge: true,
+  });
 }
 
 /**

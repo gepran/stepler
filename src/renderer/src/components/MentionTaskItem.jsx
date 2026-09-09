@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import { AtSign, Check, Plus, Star } from "lucide-react";
+import { AtSign, Check, Plus, Star, Trash2 } from "lucide-react";
 import { formatTaskText } from "../lib/format";
 import { useT } from "../lib/i18n";
 
@@ -22,6 +22,7 @@ export function MentionTaskItem({
   onPriority,
   onSubtaskToggle,
   onAddSubtask,
+  onDismiss,
 }) {
   const t = useT();
   const [adding, setAdding] = useState(false);
@@ -48,13 +49,11 @@ export function MentionTaskItem({
   };
 
   return (
-    <div
-      className={`group relative flex items-start gap-3 rounded-xl border-l-2 py-2 pl-3 pr-2 transition-colors ${
-        mention.read
-          ? "border-l-neutral-200 dark:border-l-neutral-700"
-          : "border-l-orange-500 bg-orange-50/50 dark:bg-orange-500/[0.06]"
-      }`}
-    >
+    // Deliberately the same box as a task you wrote yourself: a coloured bar
+    // and a tinted background made these read as a different kind of object,
+    // when the only thing that actually differs is that somebody else wrote
+    // it — which the line above the text already says.
+    <div className="group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50">
       {/* A real checkbox, not the dashed placeholder this used to be: ticking
           a task somebody asked you to do is the whole point of being told
           about it, and it travels back to them. */}
@@ -72,7 +71,15 @@ export function MentionTaskItem({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400">
+        {/* Who this came from. Unread is worth showing, but as a shade on
+            this one line rather than as a differently-coloured row. */}
+        <p
+          className={`mb-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold ${
+            mention.read
+              ? "text-neutral-400 dark:text-neutral-500"
+              : "text-orange-600 dark:text-orange-400"
+          }`}
+        >
           <AtSign size={11} className="shrink-0" />
           <span>{who}</span>
           <span className="font-normal text-neutral-400 dark:text-neutral-500">
@@ -91,6 +98,17 @@ export function MentionTaskItem({
         >
           {subtasks.length > 0 && (
             <span className="tree-line pointer-events-none absolute -bottom-2 -left-[21px] top-[22px] w-px" />
+          )}
+          {/* Priority used to be visible as a position — starred tasks sank
+              to the bottom. Now that order is purely chronological, the star
+              has to be visible on the task itself, the way the desktop app
+              has always drawn it. */}
+          {mention.priority && !mention.completed && (
+            <Star
+              size={14}
+              fill="currentColor"
+              className="mb-0.5 mr-1.5 inline text-amber-500 dark:text-amber-400"
+            />
           )}
           {formatTaskText(mention.text)}
         </div>
@@ -169,9 +187,7 @@ export function MentionTaskItem({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5">
-        {/* Star and read, but no bin: the task belongs to the person who wrote
-            it, and only they can throw it away. */}
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <button
           type="button"
           title={t("task.priority")}
@@ -179,16 +195,31 @@ export function MentionTaskItem({
           className={`cursor-pointer rounded-lg p-1.5 transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
             mention.priority
               ? "text-orange-500"
-              : "text-neutral-400 opacity-0 group-hover:opacity-100 dark:text-neutral-500"
+              : "text-neutral-400 dark:text-neutral-500"
           }`}
         >
           <Star size={14} fill={mention.priority ? "currentColor" : "none"} />
         </button>
+
+        {/* The bin takes it off YOUR list and leaves the author's task alone —
+            deleting somebody else's task is not yours to do, and the rules
+            refuse it anyway. The title says so, because a bin icon on its own
+            promises rather more than this does. */}
+        <button
+          type="button"
+          title={`${t("collab.dismiss")} — ${t("collab.dismissHint")}`}
+          aria-label={t("collab.dismiss")}
+          onClick={() => onDismiss(mention)}
+          className="cursor-pointer rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-neutral-500 dark:hover:bg-red-950/40"
+        >
+          <Trash2 size={14} />
+        </button>
+
         {!mention.read && (
           <button
             type="button"
             onClick={() => onMarkRead(mention.id)}
-            className="cursor-pointer rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 opacity-0 transition-all hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700"
+            className="cursor-pointer rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
           >
             {t("collab.markRead")}
           </button>
@@ -216,6 +247,7 @@ MentionTaskItem.propTypes = {
   onPriority: PropTypes.func.isRequired,
   onSubtaskToggle: PropTypes.func.isRequired,
   onAddSubtask: PropTypes.func.isRequired,
+  onDismiss: PropTypes.func.isRequired,
 };
 
 /**

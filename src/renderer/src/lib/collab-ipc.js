@@ -86,6 +86,14 @@ export function useCollab() {
       }),
     [],
   );
+  const dismissMention = useCallback(
+    (mention) =>
+      ipc?.invoke(
+        "collab-dismiss-mention",
+        String(mention.taskId || mention.id),
+      ),
+    [],
+  );
   const toggleMentionSubtask = useCallback(
     (mention, subtaskId, completed) =>
       ipc?.invoke("collab-toggle-mention-subtask", {
@@ -110,6 +118,7 @@ export function useCollab() {
     editMention,
     addMentionSubtask,
     toggleMentionSubtask,
+    dismissMention,
   };
 }
 
