@@ -121,11 +121,20 @@ const attachDir = join(USER_DATA, "attachments");
 
 // --------------- small helpers ---------------
 
-function writeJsonAtomic(path, obj) {
+/**
+ * `mode` is for the files that hold a credential. The folder above them is
+ * already private, so this is a second lock rather than the only one — but the
+ * local API token is the one secret here that cannot go through safeStorage,
+ * because the CLI is a plain node process that has to read it back.
+ */
+function writeJsonAtomic(path, obj, mode) {
   const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  writeFileSync(tmp, JSON.stringify(obj, null, 2), mode ? { mode } : undefined);
   renameSync(tmp, path);
 }
+
+/** Owner only. Used for anything carrying a token. */
+const PRIVATE_FILE = 0o600;
 
 function safeExt(name) {
   const ext = extname(String(name || "")).toLowerCase();
@@ -133,6 +142,90 @@ function safeExt(name) {
 }
 
 const UNSAFE_NAME_CHARS = '\\/:*?"<>| ';
+
+/**
+ * The extensions this app is willing to hand to the OS to open.
+ *
+ * Deliberately an allowlist. Opening an attachment means writing the bytes out
+ * under the name the attachment carries and asking the system to open that —
+ * and a file this app wrote carries no mark saying it came from anywhere, so
+ * Gatekeeper and SmartScreen never look at it. An attachment named
+ * "invoice.pdf.command" would simply run. Since the name travels with a task,
+ * and a task can arrive in an exported file or from another account, the name
+ * is not ours to trust.
+ *
+ * Anything not named here is revealed in the file manager instead. The user
+ * opens it themselves, from a file that has been marked foreign below, and the
+ * OS gets the say it should have had.
+ */
+const OPENABLE_EXT = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".heic",
+  ".pdf",
+  ".txt",
+  ".md",
+  ".csv",
+  ".tsv",
+  ".json",
+  ".log",
+  ".rtf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".pages",
+  ".numbers",
+  ".key",
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".aac",
+  ".flac",
+  ".mp4",
+  ".mov",
+  ".m4v",
+  ".webm",
+  ".zip",
+]);
+
+/**
+ * Mark a file this app just wrote as having come from outside.
+ *
+ * macOS reads com.apple.quarantine and Windows reads the Zone.Identifier
+ * stream; both then apply the checks they apply to a download. Best effort on
+ * purpose — the allowlist above is the guard that has to hold, and a file
+ * system that will not carry the mark should not stop an attachment opening.
+ */
+async function markAsForeign(path) {
+  try {
+    if (isMac) {
+      const stamp = Math.floor(Date.now() / 1000).toString(16);
+      await new Promise((resolve) =>
+        execFile(
+          "xattr",
+          ["-w", "com.apple.quarantine", `0081;${stamp};Stepler;`, path],
+          () => resolve(),
+        ),
+      );
+    } else if (process.platform === "win32") {
+      writeFileSync(
+        `${path}:Zone.Identifier`,
+        "[ZoneTransfer]\r\nZoneId=3\r\n",
+      );
+    }
+  } catch {
+    /* nothing to do; the allowlist is what actually stops execution */
+  }
+}
 
 /**
  * Strip any directory component, control character and path separator, so a
@@ -241,7 +334,8 @@ function saveSettings(partial) {
   const merged = { ...loadSettings(), ...partial };
   settingsCache = merged;
   try {
-    writeJsonAtomic(settingsPath, merged);
+    // Holds apiToken, so it is written owner-only.
+    writeJsonAtomic(settingsPath, merged, PRIVATE_FILE);
   } catch (err) {
     console.error("Failed to persist settings:", err.message);
   }
@@ -1235,9 +1329,15 @@ function saveSecret(path, obj) {
           v: 1,
           enc: safeStorage.encryptString(json).toString("base64"),
         }),
+        { mode: PRIVATE_FILE },
       );
     } else {
-      writeFileSync(path, json);
+      // No keyring on this machine. The token still has to be kept or the
+      // integration stops working, so it is kept as tightly as a file can be.
+      console.warn(
+        "No OS keyring available - credentials are stored unencrypted.",
+      );
+      writeFileSync(path, json, { mode: PRIVATE_FILE });
     }
   } catch (err) {
     console.error("Failed to store credentials:", err.message);
@@ -1986,6 +2086,14 @@ function setupIPC() {
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       const target = join(dir, sanitizeFileName(name || basename(p)));
       copyFileSync(p, target);
+      await markAsForeign(target);
+      // Not openPath for everything: see OPENABLE_EXT. Revealing is the
+      // fallback rather than an error, because refusing outright would leave
+      // somebody with a file they cannot get at.
+      if (!OPENABLE_EXT.has(extname(target).toLowerCase())) {
+        shell.showItemInFolder(target);
+        return { success: true, revealed: true };
+      }
       const err = await shell.openPath(target);
       if (err) return { success: false, error: err };
       return { success: true };
@@ -2803,7 +2911,7 @@ function startAPIServer() {
   server.listen(settings.apiPort, "127.0.0.1", () => {
     apiInfo.port = server.address().port;
     try {
-      writeJsonAtomic(apiInfoPath, { port: apiInfo.port, token });
+      writeJsonAtomic(apiInfoPath, { port: apiInfo.port, token }, PRIVATE_FILE);
     } catch {
       /* the CLI can still be pointed at it manually */
     }
