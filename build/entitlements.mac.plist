@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+  <!-- allow-dyld-environment-variables is deliberately absent. It is the one
+       entitlement that would hand DYLD_INSERT_LIBRARIES back to an attacker
+       and undo the hardened runtime above it. The two below are what V8 needs
+       to execute JavaScript and cannot be dropped. -->
   <dict>
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <!-- Required only because this build is signed ad-hoc, which gives it no
+         Team ID: with the hardened runtime on, macOS otherwise refuses to map
+         the Electron framework into the process and the app will not start.
+         It does NOT hand back DYLD_INSERT_LIBRARIES, which is what the missing
+         entitlement above governs and what the injection actually used. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
   </dict>
 </plist>
