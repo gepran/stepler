@@ -381,6 +381,15 @@ export function MentionBadge({
   className,
   style,
 }) {
+  // `relative` is only the default. A caller that positions this itself passes
+  // its own position class, and putting both in the class list does NOT let
+  // theirs win: Tailwind emits .absolute before .relative, so .relative wins on
+  // source order no matter which is written last — which is how the badge ended
+  // up back in the flow, under the sidebar, instead of over the task list.
+  const positioned = /(?:^|\s)(?:absolute|fixed|sticky|static)(?:\s|$)/.test(
+    className || "",
+  );
+
   return (
     <button
       type="button"
@@ -389,7 +398,7 @@ export function MentionBadge({
       aria-label={label}
       aria-pressed={active}
       style={style}
-      className={`group relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition-all ${
+      className={`group ${positioned ? "" : "relative"} flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition-all ${
         active
           ? "border-orange-500 bg-orange-500 text-white"
           : "border-neutral-200 bg-white/80 text-neutral-600 hover:bg-white hover:text-orange-500 dark:border-neutral-700 dark:bg-neutral-800/80 dark:text-neutral-400"
