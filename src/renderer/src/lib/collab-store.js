@@ -39,10 +39,12 @@ import {
   resolveMentions,
   usernameFromEmail,
 } from "./collab";
+import { newTaskId } from "./ids";
 
 export { connectionLabel, resolveMentions };
 
 const profileRef = (db, uid) => doc(db, "profiles", uid);
+const emailRef = (db, address) => doc(db, "emails", address);
 const handleRef = (db, handle) => doc(db, "usernames", handle);
 const connectionsRef = (db, uid) => collection(db, "users", uid, "connections");
 const connectionRef = (db, uid, other) =>
@@ -53,6 +55,67 @@ const mentionRef = (db, uid, taskId) =>
 const sentRef = (db, uid) => doc(db, "users", uid, "meta", "mentions");
 
 const stamp = (fields) => ({ ...fields, updatedAt: serverTimestamp() });
+
+/**
+ * The document id an address is filed under: the address, lowercased. Returns
+ * "" for anything that cannot be a Firestore document id, so a rare address
+ * carrying a slash simply goes unregistered instead of throwing at sign-in.
+ */
+function emailKey(address) {
+  const clean = String(address || "")
+    .trim()
+    .toLowerCase();
+  if (!clean || clean.length > 400) return "";
+  if (clean.includes("/") || clean.startsWith("__")) return "";
+  if (clean === "." || clean === "..") return "";
+  return clean;
+}
+
+/**
+ * What every signed-in account may read about you — deliberately not your
+ * email address. `allow read` on /profiles covers `list` as well as `get`, so
+ * anything in this document can be paged out of the collection wholesale by a
+ * single throwaway account. The address lives in /emails instead, where it is
+ * the document id and listing is denied: an address you were given can be
+ * looked up, addresses you were not cannot be harvested.
+ */
+function publicCardFor(user, username) {
+  return {
+    uid: user.uid,
+    username,
+    usernameLower: username,
+    displayName: user.displayName || "",
+    photoURL: user.photoURL || "",
+  };
+}
+
+/**
+ * Write the two documents that make an account findable: the public card, and
+ * the address entry pointing at it. `email: deleteField()` is what clears the
+ * address out of profiles written by a version that still put it there.
+ */
+async function writeIdentity(db, user, username) {
+  const card = publicCardFor(user, username);
+  await setDoc(
+    profileRef(db, user.uid),
+    stamp({ ...card, email: deleteField() }),
+    {
+      merge: true,
+    },
+  );
+  const key = emailKey(user.email);
+  if (key) {
+    // Not fatal. The rules refuse an address that is not the one on this
+    // account's own token, and being unfindable by email is a far smaller
+    // problem than a sign-in that fails.
+    await setDoc(emailRef(db, key), stamp({ uid: user.uid }), {
+      merge: true,
+    }).catch((err) =>
+      console.warn("Could not register the address:", err.code || err.message),
+    );
+  }
+  return card;
+}
 
 /** What another person is allowed to learn about an account. */
 function cardFor(user, username) {
@@ -90,14 +153,16 @@ export async function ensureProfile(db, user) {
     const username = existing.data().username;
     // The email or the Google photo can change under a handle that does not.
     // Refreshed quietly so the card other people see does not go stale.
-    const card = cardFor(user, username);
-    const stale = ["email", "displayName", "photoURL"].some(
-      (k) => existing.data()[k] !== card[k],
-    );
-    if (stale) {
-      await setDoc(profileRef(db, user.uid), stamp(card), { merge: true });
-    }
-    return { ...existing.data(), ...card };
+    const card = publicCardFor(user, username);
+    // A legacy `email` still sitting on the card counts as stale: rewriting is
+    // what removes it, and every sign-in is a chance to.
+    const stale =
+      existing.data().email !== undefined ||
+      ["displayName", "photoURL"].some((k) => existing.data()[k] !== card[k]);
+    if (stale) await writeIdentity(db, user, username);
+    // Your own address travels with your own card: connection rows are private
+    // to the person holding them, so they may carry it.
+    return { ...existing.data(), ...card, email: user.email || "" };
   }
 
   const base = usernameFromEmail(user.email) || `user${user.uid.slice(0, 6)}`;
@@ -112,9 +177,8 @@ export async function ensureProfile(db, user) {
       } else {
         await setDoc(claim, stamp({ uid: user.uid, username: candidate }));
       }
-      const card = cardFor(user, candidate);
-      await setDoc(profileRef(db, user.uid), stamp(card), { merge: true });
-      return card;
+      const card = await writeIdentity(db, user, candidate);
+      return { ...card, email: user.email || "" };
     } catch (err) {
       // A lost race looks exactly like this. Try the next candidate rather
       // than failing sign-in over a name.
@@ -161,14 +225,15 @@ export async function searchProfiles(db, term, { self, max = 8 } = {}) {
   }
 
   if (raw.includes("@") && raw.includes(".")) {
-    const snap = await getDocs(
-      query(
-        collection(db, "profiles"),
-        where("email", "==", raw.toLowerCase()),
-        limit(max),
-      ),
-    );
-    snap.forEach((d) => found.set(d.id, d.data()));
+    // A get, not a query. The collection cannot be listed, so an address can be
+    // confirmed but never discovered.
+    const key = emailKey(raw);
+    const hit = key ? await getDoc(emailRef(db, key)).catch(() => null) : null;
+    const uid = hit && hit.exists() ? hit.data().uid : null;
+    if (uid) {
+      const prof = await getDoc(profileRef(db, uid)).catch(() => null);
+      if (prof && prof.exists()) found.set(prof.id, prof.data());
+    }
   }
 
   return [...found.values()]
@@ -230,10 +295,19 @@ export async function acceptInvite(db, me, other) {
  * would refuse to reach into that person's list once we are no longer
  * connected anyway.
  */
-export async function removeConnection(db, me, otherUid) {
+export function removeConnection(db, me, otherUid) {
   if (!me?.uid || !otherUid) return false;
-  await deleteDoc(connectionRef(db, me.uid, otherUid)).catch(() => {});
-  await deleteDoc(connectionRef(db, otherUid, me.uid)).catch(() => {});
+  // One batch, like sendInvite and acceptInvite, so a disconnect cannot land
+  // on one side only. And deliberately not awaited: a Firestore write does not
+  // settle while offline, and the second delete used to never even be issued.
+  const batch = writeBatch(db);
+  batch.delete(connectionRef(db, me.uid, otherUid));
+  batch.delete(connectionRef(db, otherUid, me.uid));
+  batch
+    .commit()
+    .catch((err) =>
+      console.warn("Disconnect did not land:", err.code || err.message),
+    );
   return true;
 }
 
@@ -351,7 +425,7 @@ export function addMentionSubtask(db, { meUid, mention, text }) {
   if (!trimmed) return Promise.resolve(false);
   const subtasks = [
     ...(Array.isArray(mention.subtasks) ? mention.subtasks : []),
-    { id: String(Date.now()), text: trimmed.slice(0, 20000), completed: false },
+    { id: newTaskId(), text: trimmed.slice(0, 20000), completed: false },
   ];
   return updateMentionedTask(db, { meUid, mention, patch: { subtasks } });
 }
