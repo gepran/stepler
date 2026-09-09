@@ -2,56 +2,1646 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <title>Stepler</title>
-    <meta name="color-scheme" content="light dark" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stepler — a fast daily task timeline for macOS and Windows</title>
     <meta
       name="description"
-      content="Stepler — a fast daily task timeline that syncs across your devices."
+      content="Stepler keeps today's work at the bottom of the screen, next to the box you type in. Finished days roll up into history. Free, local-first, for macOS and Windows."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Stepler" />
+    <meta name="color-scheme" content="light" />
+
+    <meta property="og:title" content="Stepler — a fast daily task timeline" />
     <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
+      property="og:description"
+      content="Today's work at the bottom of the screen, next to the box you type in. Free, local-first, for macOS and Windows."
     />
+    <meta property="og:type" content="website" />
     <meta
-      name="theme-color"
-      content="#fafafa"
-      media="(prefers-color-scheme: light)"
+      property="og:image"
+      content="https://steplerapp.web.app/screenshot-light.png"
     />
-    <meta
-      name="theme-color"
-      content="#0a0a0a"
-      media="(prefers-color-scheme: dark)"
-    />
-    <!-- Unlike the desktop window, this page must reach the network — but only
-         the handful of Google hosts Firebase Auth and Firestore actually use.
-         `frame-src` carries the auth domain because Firebase keeps a hidden
-         iframe there for session handling; drop it and sign-in stalls with no
-         visible error. -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self';
-               script-src 'self' https://apis.google.com https://www.gstatic.com;
-               style-src 'self' 'unsafe-inline';
-               img-src 'self' data: blob: https://*.googleusercontent.com https://www.gstatic.com;
-               font-src 'self' data:;
-               connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com wss://*.firebaseio.com;
-               frame-src 'self' https://stepler-490308.firebaseapp.com https://accounts.google.com;
-               base-uri 'none';
-               form-action 'self';"
-    />
+
+    <style>
+      /* ---------------------------------------------------------------
+         Tokens
+      --------------------------------------------------------------- */
+      :root {
+        --bg: #fbfbfd;
+        --bg-elevated: rgba(255, 255, 255, 0.72);
+        --bg-card: rgba(255, 255, 255, 0.6);
+        --text: #0b0b0f;
+        --text-muted: #6b6b76;
+        --text-faint: #93939e;
+        --line: rgba(10, 10, 20, 0.09);
+        --line-strong: rgba(10, 10, 20, 0.14);
+
+        --blue: #41a1ff;
+        --violet: #9b6aff;
+        --amber: #ff9a00;
+        --red: #ff3b30;
+
+        /* The logo is two ribbons: a cool one over a warm one. The page
+           uses both, and --brand-full sweeps through all four stops. */
+        --brand: linear-gradient(135deg, var(--blue), var(--violet));
+        --brand-warm: linear-gradient(135deg, var(--amber), var(--red));
+        /* #ff5f9e is the bridge: straight violet -> amber crosses a muddy
+           grey, so the sweep is routed through pink instead. */
+        --brand-full: linear-gradient(
+          100deg,
+          var(--blue) 0%,
+          var(--violet) 26%,
+          #ff5f9e 54%,
+          var(--amber) 82%,
+          var(--red) 100%
+        );
+        --warm-ink: #e2481a;
+        --glow-cool: 120, 100, 255;
+        --glow-warm: 255, 92, 26;
+
+        --shadow-sm: 0 1px 2px rgba(12, 12, 25, 0.05);
+        --shadow-md: 0 12px 32px -12px rgba(12, 12, 25, 0.18);
+        --shadow-xl: 0 48px 100px -32px rgba(12, 12, 25, 0.35);
+
+        --particle: 155, 106, 255;
+        --particle-warm: 255, 128, 30;
+        --particle-link: 255, 122, 24;
+        --particle-warm-share: 0.34;
+        --particle-alpha: 0.55;
+        --link-alpha: 0.22;
+
+        --radius: 18px;
+        --maxw: 1120px;
+        --pointer-x: 50vw;
+        --pointer-y: 40vh;
+      }
+
+      /* ---------------------------------------------------------------
+         Base
+      --------------------------------------------------------------- */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 17px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        overflow-x: hidden;
+      }
+
+      /* The only background effect on the page: a particle field that the
+         cursor pulls apart and wires itself into. */
+      #field {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      /* A soft light that rides with the same cursor. */
+      #field + .cursor-light {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            520px circle at var(--pointer-x) var(--pointer-y),
+            rgba(155, 106, 255, 0.1),
+            transparent 68%
+          ),
+          radial-gradient(
+            760px circle at calc(var(--pointer-x) + 200px)
+              calc(var(--pointer-y) + 140px),
+            rgba(255, 138, 0, 0.1),
+            transparent 66%
+          );
+      }
+
+      .page {
+        position: relative;
+        z-index: 1;
+      }
+
+      .wrap {
+        width: 100%;
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+        font-weight: 640;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      /* ---------------------------------------------------------------
+         Nav
+      --------------------------------------------------------------- */
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        background: var(--bg-elevated);
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.25s ease;
+      }
+
+      .nav.is-stuck {
+        border-bottom-color: var(--line);
+      }
+
+      .nav-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 60px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 660;
+        font-size: 17px;
+        letter-spacing: -0.02em;
+      }
+
+      .brand svg {
+        width: 26px;
+        height: 26px;
+        flex: none;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+        font-size: 14.5px;
+        font-weight: 520;
+        color: var(--text-muted);
+        transition: color 0.18s ease;
+      }
+
+      .nav-links a:hover {
+        color: var(--text);
+      }
+
+      .nav-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 15px;
+        border-radius: 999px;
+        background: var(--brand-warm);
+        color: #fff !important;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 6px 18px -6px rgba(var(--glow-warm), 0.6);
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease;
+      }
+
+      .nav-cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px -8px rgba(var(--glow-warm), 0.78);
+      }
+
+      @media (max-width: 700px) {
+        .nav-links .hide-sm {
+          display: none;
+        }
+      }
+
+      /* ---------------------------------------------------------------
+         Hero
+      --------------------------------------------------------------- */
+      .hero {
+        padding-top: 92px;
+        text-align: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 14px 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        font-size: 13px;
+        font-weight: 540;
+        color: var(--text-muted);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .eyebrow .pip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 9px;
+        border-radius: 999px;
+        background: var(--brand);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 680;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .hero h1 {
+        margin: 26px auto 0;
+        max-width: 20ch;
+        font-size: clamp(2.75rem, 6.4vw, 5rem);
+        font-weight: 660;
+        letter-spacing: -0.045em;
+      }
+
+      .hero h1 .grad {
+        display: inline-block;
+        background: var(--brand-full);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .lede {
+        margin: 22px auto 0;
+        max-width: 56ch;
+        font-size: clamp(1.05rem, 1.6vw, 1.28rem);
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 34px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 26px;
+        border-radius: 14px;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid transparent;
+        transition:
+          transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1),
+          box-shadow 0.18s ease,
+          background-color 0.18s ease;
+      }
+
+      .btn svg {
+        width: 19px;
+        height: 19px;
+        flex: none;
+      }
+
+      .btn-primary {
+        background: var(--brand-warm);
+        color: #fff;
+        box-shadow: 0 14px 34px -14px rgba(var(--glow-warm), 0.85);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 20px 44px -16px rgba(var(--glow-warm), 0.95);
+      }
+
+      .btn-ghost {
+        background: var(--bg-card);
+        border-color: var(--line-strong);
+        color: var(--text);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .btn-ghost:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+      }
+
+      .fineprint {
+        margin-top: 18px;
+        font-size: 13.5px;
+        color: var(--text-faint);
+      }
+
+      .fineprint b {
+        color: var(--text-muted);
+        font-weight: 560;
+      }
+
+      /* ---------------------------------------------------------------
+         First-run note. Windows SmartScreen blocks anything it has not
+         seen before, and a red full-screen warning reads like a virus
+         alert — so the page says what to expect before the download does.
+      --------------------------------------------------------------- */
+      .firstrun {
+        max-width: 620px;
+        margin: 22px auto 0;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--bg-card);
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--text-muted);
+        text-align: left;
+      }
+
+      .firstrun summary {
+        cursor: pointer;
+        font-weight: 560;
+        color: var(--text);
+        list-style: none;
+      }
+
+      .firstrun summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .firstrun summary::before {
+        content: "▸";
+        display: inline-block;
+        width: 1em;
+        color: var(--text-faint);
+        transition: transform 0.15s ease;
+      }
+
+      .firstrun[open] summary::before {
+        transform: rotate(90deg);
+      }
+
+      .firstrun p {
+        margin: 10px 0 0 1em;
+      }
+
+      .firstrun b {
+        color: var(--text);
+        font-weight: 580;
+      }
+
+      /* ---------------------------------------------------------------
+         Screenshot
+      --------------------------------------------------------------- */
+      .showcase {
+        margin-top: 64px;
+        perspective: 1600px;
+      }
+
+      .window {
+        position: relative;
+        margin: 0 auto;
+        max-width: 1180px;
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--bg-elevated);
+        border: 1px solid var(--line-strong);
+        box-shadow: var(--shadow-xl);
+        transform: rotateX(var(--tiltX, 0deg)) rotateY(var(--tiltY, 0deg));
+        transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
+        will-change: transform;
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--bg-card);
+      }
+
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+
+      .dot.r {
+        background: #ff5f57;
+      }
+
+      .dot.y {
+        background: #febc2e;
+      }
+
+      .dot.g {
+        background: #28c840;
+      }
+
+      .titlebar .name {
+        margin: 0 auto;
+        font-size: 12.5px;
+        font-weight: 560;
+        color: var(--text-faint);
+        transform: translateX(-19px);
+      }
+
+      .window img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .caption {
+        margin: 20px auto 0;
+        max-width: 62ch;
+        text-align: center;
+        font-size: 13.5px;
+        color: var(--text-faint);
+      }
+
+      /* ---------------------------------------------------------------
+         Sections
+      --------------------------------------------------------------- */
+      section.band {
+        padding-top: 112px;
+      }
+
+      .section-head {
+        max-width: 46ch;
+      }
+
+      .section-head.center {
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .kicker {
+        font-size: 12.5px;
+        font-weight: 640;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--violet);
+      }
+
+      .kicker.warm {
+        color: var(--warm-ink);
+      }
+
+      .section-head h2 {
+        margin-top: 14px;
+        font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+      }
+
+      .section-head p {
+        margin-top: 14px;
+        color: var(--text-muted);
+        font-size: 1.05rem;
+      }
+
+      /* Feature grid */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 44px;
+      }
+
+      @media (max-width: 940px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 620px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        padding: 26px 24px 28px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--bg-card);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: var(--shadow-sm);
+        transition:
+          transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1),
+          box-shadow 0.25s ease,
+          border-color 0.25s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-3px);
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow-md);
+      }
+
+      .card .ico {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: var(--brand);
+        color: #fff;
+        box-shadow: 0 8px 20px -10px rgba(var(--glow-cool), 0.9);
+      }
+
+      /* Every other card wears the warm ribbon, so the grid reads as a
+         checkerboard of the logo's two halves instead of one purple wall. */
+      .card:nth-child(even) .ico {
+        background: var(--brand-warm);
+        box-shadow: 0 8px 20px -10px rgba(var(--glow-warm), 0.85);
+      }
+
+      .card .ico svg {
+        width: 19px;
+        height: 19px;
+      }
+
+      .card h3 {
+        margin-top: 18px;
+        font-size: 1.06rem;
+        font-weight: 620;
+        letter-spacing: -0.015em;
+      }
+
+      .card p {
+        margin-top: 8px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+
+      /* Shortcuts */
+      .keys {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 40px;
+      }
+
+      @media (max-width: 760px) {
+        .keys {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      .key {
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--bg-card);
+        text-align: center;
+      }
+
+      .key kbd {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line-strong);
+        border-bottom: 2px solid rgba(255, 122, 24, 0.5);
+        background: var(--bg);
+        font-family: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .key span {
+        display: block;
+        margin-top: 12px;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+
+      /* Data / local-first strip */
+      .split {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr;
+        gap: 44px;
+        align-items: center;
+        margin-top: 44px;
+        padding: 40px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          radial-gradient(
+            72% 120% at 0% 0%,
+            rgba(155, 106, 255, 0.09),
+            transparent 62%
+          ),
+          radial-gradient(
+            72% 130% at 100% 100%,
+            rgba(255, 138, 0, 0.11),
+            transparent 64%
+          ),
+          var(--bg-card);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: var(--shadow-sm);
+      }
+
+      @media (max-width: 820px) {
+        .split {
+          grid-template-columns: 1fr;
+          gap: 28px;
+          padding: 28px;
+        }
+      }
+
+      .split h2 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+      }
+
+      .split p {
+        margin-top: 14px;
+        color: var(--text-muted);
+        font-size: 1rem;
+      }
+
+      .filelist {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      .filelist li {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 13px 16px;
+        font-size: 14px;
+      }
+
+      .filelist li + li {
+        border-top: 1px solid var(--line);
+      }
+
+      .filelist code {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        color: var(--text);
+      }
+
+      .filelist span {
+        color: var(--text-faint);
+        text-align: right;
+      }
+
+      /* Closing CTA */
+      .closing {
+        position: relative;
+        margin-top: 112px;
+        padding: 76px 24px 84px;
+        text-align: center;
+        border-top: 1px solid var(--line);
+      }
+
+      .closing::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            56% 110% at 20% 0%,
+            rgba(155, 106, 255, 0.11),
+            transparent 70%
+          ),
+          radial-gradient(
+            58% 120% at 82% 40%,
+            rgba(255, 138, 0, 0.13),
+            transparent 72%
+          );
+      }
+
+      .closing > .wrap {
+        position: relative;
+      }
+
+      .closing h2 {
+        font-size: clamp(2rem, 4.4vw, 3.1rem);
+        max-width: 18ch;
+        margin: 0 auto;
+      }
+
+      .closing p {
+        margin: 18px auto 0;
+        max-width: 48ch;
+        color: var(--text-muted);
+      }
+
+      /* Footer */
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 30px 0 44px;
+      }
+
+      .foot-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 13.5px;
+        color: var(--text-faint);
+      }
+
+      .foot-inner a {
+        color: var(--text-muted);
+        text-decoration: none;
+      }
+
+      .foot-inner a:hover {
+        color: var(--text);
+      }
+
+      .foot-links {
+        display: flex;
+        gap: 20px;
+      }
+
+      /* Reveal on scroll */
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 0.7s cubic-bezier(0.2, 0.8, 0.3, 1),
+          transform 0.7s cubic-bezier(0.2, 0.8, 0.3, 1);
+      }
+
+      .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+
+        .window {
+          transform: none !important;
+        }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
-    <script type="module" src="/main.jsx"></script>
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="cursor-light" aria-hidden="true"></div>
+
+    <div class="page">
+      <header class="nav" id="nav">
+        <div class="wrap nav-inner">
+          <a class="brand" href="index.html">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs>
+                <linearGradient id="rt" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#41A1FF" />
+                  <stop offset="100%" stop-color="#9B6AFF" />
+                </linearGradient>
+                <linearGradient id="rb" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#FF9A00" />
+                  <stop offset="100%" stop-color="#FF3B30" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M 30 20 H 65 C 80 20 80 50 65 50 H 30 C 15 50 15 20 30 20 Z"
+                fill="url(#rt)"
+              />
+              <path
+                d="M 35 50 H 70 C 85 50 85 80 70 80 H 35 C 20 80 20 50 35 50 Z"
+                fill="url(#rb)"
+              />
+              <path d="M 35 50 L 65 50 L 50 65 Z" fill="#000" opacity="0.15" />
+            </svg>
+            Stepler
+          </a>
+
+          <nav class="nav-links">
+            <a class="hide-sm" href="#features">Features</a>
+            <a class="hide-sm" href="#shortcuts">Shortcuts</a>
+            <a class="hide-sm" href="#data">Your data</a>
+            <a
+              href="https://github.com/gepran/stepler"
+              target="_blank"
+              rel="noopener noreferrer"
+              >GitHub</a
+            >
+            <a href="/app">Open app</a>
+            <a class="nav-cta" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Download
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        <!-- Hero -->
+        <section class="hero wrap" id="download">
+          <span class="eyebrow">
+            <span class="pip">Free</span>
+            Native for macOS &amp; Windows
+          </span>
+
+          <h1>
+            Your whole day on<br /><span class="grad">one timeline.</span>
+          </h1>
+
+          <p class="lede">
+            Today's work sits at the bottom of the window, right next to the box
+            you type into. Finished days roll up into history above it. Nothing
+            else gets in the way.
+          </p>
+
+          <div class="actions">
+            <a
+              class="btn btn-primary"
+              href="/download/mac"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M16.4 12.7c0-2.2 1.8-3.2 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.6 2.1-1.5 2.6-.4 6.5 1.1 8.7.7 1 1.6 2.2 2.7 2.2 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7c1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.4 1.2-2.5-.1 0-2.2-.9-2.2-3.4zM14.3 6.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.6 1 .1 2-.5 2.6-1.2z"
+                />
+              </svg>
+              Download for Mac
+            </a>
+
+            <a
+              class="btn btn-ghost"
+              href="/download/windows"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M3 5.6 10.3 4.6v6.9H3V5.6Zm8.5-1.2L21 3v8.5h-9.5V4.4ZM3 12.5h7.3v6.9L3 18.4v-5.9Zm8.5 0H21V21l-9.5-1.3v-7.2Z"
+                />
+              </svg>
+              Download for Windows
+            </a>
+
+            <a class="btn btn-ghost" href="/app">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18Z" />
+              </svg>
+              Open in your browser
+            </a>
+          </div>
+
+          <p class="fineprint">
+            <b>v<span data-app-version>1.3.4</span></b> &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp;
+            free and open source &nbsp;·&nbsp;
+            <a
+              href="https://github.com/gepran/stepler/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              >all releases</a
+            >
+          </p>
+
+          <details class="firstrun">
+            <summary>Opening it the first time on macOS</summary>
+            <p>
+              macOS may say <b>“Stepler is damaged and can’t be opened”</b>, or
+              simply do nothing. It is not damaged — anything downloaded from a
+              browser is quarantined, and Stepler is signed ad-hoc rather than
+              with a paid Apple certificate.
+            </p>
+            <p>
+              Right-click Stepler in Applications, choose <b>Open</b>, then
+              <b>Open</b> again. Once only: updates installed from inside the
+              app are never quarantined.
+            </p>
+          </details>
+          <details class="firstrun">
+            <summary>
+              Windows warns you the first time — this is expected
+            </summary>
+            <p>
+              Windows shows a blue <b>“Windows protected your PC”</b> screen for
+              any app it has not seen before. Click <b>More info</b>, then
+              <b>Run anyway</b>, and the installer carries on as normal.
+            </p>
+            <p>
+              Stepler is not yet signed with a paid Microsoft certificate, so
+              SmartScreen has no record of it. Every release is built from the
+              public source in this repository — you can check the code, or
+              build it yourself, before running it.
+            </p>
+          </details>
+        </section>
+
+        <!-- Screenshot -->
+        <section class="showcase wrap">
+          <div class="window" id="window">
+            <div class="titlebar">
+              <span class="dot r"></span>
+              <span class="dot y"></span>
+              <span class="dot g"></span>
+              <span class="name">Stepler</span>
+            </div>
+            <img
+              src="/screenshot-light.png"
+              width="1400"
+              height="940"
+              alt="Stepler showing today's timeline: completed tasks struck through, a task with subtasks, a task due tomorrow with a 09:30 reminder, and a starred task with a 17:00 reminder, above the composer."
+            />
+          </div>
+          <p class="caption">
+            The whole app: projects on the left, the day's timeline in the
+            middle, and the composer always within reach at the bottom.
+          </p>
+        </section>
+
+        <!-- Features -->
+        <section class="band wrap" id="features">
+          <div class="section-head center reveal">
+            <div class="kicker">What it does</div>
+            <h2>Small app, no ceremony.</h2>
+            <p>
+              Write the thing down, tag it if you feel like it, and get on with
+              your day.
+            </p>
+          </div>
+
+          <div class="grid">
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 5h16M4 12h16M4 19h10" />
+                </svg>
+              </span>
+              <h3>A daily timeline</h3>
+              <p>
+                Today sits at the bottom next to the composer. Finished days
+                roll into history above it, in the order you actually lived
+                them.
+              </p>
+            </article>
+
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z" />
+                </svg>
+              </span>
+              <h3>Capture in a keystroke</h3>
+              <p>
+                A global shortcut brings the window up from anywhere, Esc sends
+                it away again. It never becomes a thing you have to go and open.
+              </p>
+            </article>
+
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="16" rx="3" />
+                  <path d="M8 3v4M16 3v4M3 10h18" />
+                </svg>
+              </span>
+              <h3>Subtasks, projects, reminders</h3>
+              <p>
+                Tag a note with a project, give it a day, set a time and get a
+                notification when it comes round.
+              </p>
+            </article>
+
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M21 12.5 12.6 21a5 5 0 0 1-7-7l8.4-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"
+                  />
+                </svg>
+              </span>
+              <h3>Attachments that stay files</h3>
+              <p>
+                Paste or attach images and documents. They are kept as real
+                files in the data folder, so you can open, copy or save them
+                anywhere.
+              </p>
+            </article>
+
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </span>
+              <h3>Search that reaches everything</h3>
+              <p>
+                Task text, subtasks, project names and attachment filenames —
+                all from the keyboard, without lifting your hands.
+              </p>
+            </article>
+
+            <article class="card reveal">
+              <span class="ico">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 12a8 8 0 1 1 2.6 5.9" />
+                  <path d="M4 20v-5h5" />
+                </svg>
+              </span>
+              <h3>Trash and history</h3>
+              <p>
+                Restore anything you deleted, or pull a finished note from a
+                past day straight back into today.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <!-- Shortcuts -->
+        <section class="band wrap" id="shortcuts">
+          <div class="section-head center reveal">
+            <div class="kicker warm">Keyboard first</div>
+            <h2>Four keys and you're done.</h2>
+          </div>
+
+          <div class="keys reveal">
+            <div class="key">
+              <kbd id="k-global">⇧ ⌘ Space</kbd>
+              <span>Show or hide Stepler from anywhere</span>
+            </div>
+            <div class="key">
+              <kbd id="k-new">⌘ N</kbd>
+              <span>Jump straight to the composer</span>
+            </div>
+            <div class="key">
+              <kbd id="k-find">⌘ F</kbd>
+              <span>Full-screen search</span>
+            </div>
+            <div class="key">
+              <kbd>Esc</kbd>
+              <span>Send the window away</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Data -->
+        <section class="band wrap" id="data">
+          <div class="split reveal">
+            <div>
+              <div class="kicker warm">Local first</div>
+              <h2>Your notes never leave the machine.</h2>
+              <p>
+                Everything lives in a plain folder on your own disk. Writes are
+                atomic and batched, so a crash or a forced quit cannot leave the
+                file half written — and the previous good copy is kept as a
+                backup at every successful start.
+              </p>
+              <p>
+                Google Calendar, Jira and Apple Reminders are all there if you
+                want them, and all switched off until you turn them on.
+              </p>
+            </div>
+
+            <ul class="filelist">
+              <li>
+                <code>stepler-data.json</code>
+                <span>Tasks, history and trash</span>
+              </li>
+              <li>
+                <code>stepler-data.backup.json</code>
+                <span>The last known-good copy</span>
+              </li>
+              <li>
+                <code>attachments/</code>
+                <span>Every image and file you attached</span>
+              </li>
+              <li>
+                <code>stepler-settings.json</code>
+                <span>Preferences and the local API token</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Closing CTA -->
+        <section class="closing">
+          <div class="wrap">
+            <h2 class="reveal">Start with today.</h2>
+            <p class="reveal">
+              Download it, hit the shortcut, and write down the first thing on
+              your mind.
+            </p>
+
+            <div class="actions reveal">
+              <a
+                class="btn btn-primary"
+                href="/download/mac"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path
+                    d="M16.4 12.7c0-2.2 1.8-3.2 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.6 2.1-1.5 2.6-.4 6.5 1.1 8.7.7 1 1.6 2.2 2.7 2.2 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7c1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.4 1.2-2.5-.1 0-2.2-.9-2.2-3.4zM14.3 6.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.6 1 .1 2-.5 2.6-1.2z"
+                  />
+                </svg>
+                Download for Mac
+              </a>
+
+              <a
+                class="btn btn-ghost"
+                href="/download/windows"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path
+                    d="M3 5.6 10.3 4.6v6.9H3V5.6Zm8.5-1.2L21 3v8.5h-9.5V4.4ZM3 12.5h7.3v6.9L3 18.4v-5.9Zm8.5 0H21V21l-9.5-1.3v-7.2Z"
+                  />
+                </svg>
+                Download for Windows
+              </a>
+            </div>
+
+            <p class="fineprint reveal">
+              On Windows, SmartScreen asks first: click <b>More info</b> →
+              <b>Run anyway</b>.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="wrap foot-inner">
+          <span>Stepler — built with Electron, React, Vite and Tailwind.</span>
+          <span class="foot-links">
+            <a
+              href="https://github.com/gepran/stepler"
+              target="_blank"
+              rel="noopener noreferrer"
+              >GitHub</a
+            >
+            <a
+              href="https://github.com/gepran/stepler/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Releases</a
+            >
+            <a
+              href="https://github.com/gepran"
+              target="_blank"
+              rel="noopener noreferrer"
+              >@gepran</a
+            >
+          </span>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var reduced = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        var root = document.documentElement;
+
+        // ------------------------------------------------------------
+        // Pointer. Until the visitor moves it, an invisible one drifts
+        // in a slow figure so the field is alive on touch screens too.
+        // ------------------------------------------------------------
+        var pointer = { x: window.innerWidth / 2, y: window.innerHeight * 0.4 };
+        var pointerLive = false;
+
+        window.addEventListener(
+          "pointermove",
+          function (e) {
+            pointerLive = true;
+            pointer.x = e.clientX;
+            pointer.y = e.clientY;
+            root.style.setProperty("--pointer-x", e.clientX + "px");
+            root.style.setProperty("--pointer-y", e.clientY + "px");
+          },
+          { passive: true },
+        );
+
+        // ------------------------------------------------------------
+        // The particle field
+        // ------------------------------------------------------------
+        var canvas = document.getElementById("field");
+        var ctx = canvas.getContext("2d");
+        var particles = [];
+        var w = 0;
+        var h = 0;
+        var dpr = 1;
+
+        var LINK = 148; // particle-to-particle wiring distance
+        var REACH = 220; // how far the cursor is felt
+        var PUSH = 16; // how hard the cursor shoves a particle
+
+        function colors() {
+          var s = getComputedStyle(root);
+          return {
+            dot: s.getPropertyValue("--particle").trim() || "155, 106, 255",
+            warm:
+              s.getPropertyValue("--particle-warm").trim() || "255, 128, 30",
+            link:
+              s.getPropertyValue("--particle-link").trim() || "255, 122, 24",
+            warmShare:
+              parseFloat(s.getPropertyValue("--particle-warm-share")) || 0.34,
+            dotA: parseFloat(s.getPropertyValue("--particle-alpha")) || 0.55,
+            linkA: parseFloat(s.getPropertyValue("--link-alpha")) || 0.22,
+          };
+        }
+
+        var palette = colors();
+
+        function Particle() {
+          this.bx = Math.random() * w;
+          this.by = Math.random() * h;
+          this.x = this.bx;
+          this.y = this.by;
+          this.vx = (Math.random() - 0.5) * 0.34;
+          this.vy = (Math.random() - 0.5) * 0.34;
+          this.r = Math.random() * 1.5 + 0.9;
+          // A slice of the field carries the logo's warm ribbon.
+          this.warm = Math.random() < palette.warmShare;
+        }
+
+        Particle.prototype.step = function () {
+          this.bx += this.vx;
+          this.by += this.vy;
+          if (this.bx < 0 || this.bx > w) this.vx *= -1;
+          if (this.by < 0 || this.by > h) this.vy *= -1;
+
+          this.x = this.bx;
+          this.y = this.by;
+
+          var dx = pointer.x - this.x;
+          var dy = pointer.y - this.y;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          if (d > 0 && d < REACH) {
+            var f = (REACH - d) / REACH;
+            this.x -= (dx / d) * f * PUSH;
+            this.y -= (dy / d) * f * PUSH;
+          }
+        };
+
+        function resize() {
+          dpr = Math.min(window.devicePixelRatio || 1, 2);
+          w = window.innerWidth;
+          h = window.innerHeight;
+          canvas.width = Math.round(w * dpr);
+          canvas.height = Math.round(h * dpr);
+          canvas.style.width = w + "px";
+          canvas.style.height = h + "px";
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+          var target = Math.min(Math.round((w * h) / 20000), 130);
+          particles.length = 0;
+          for (var i = 0; i < target; i++) particles.push(new Particle());
+        }
+
+        function frame(t) {
+          if (!pointerLive) {
+            // Slow idle orbit so the field still breathes without a mouse.
+            var a = t / 6200;
+            pointer.x = w / 2 + Math.cos(a) * w * 0.26;
+            pointer.y = h * 0.45 + Math.sin(a * 1.35) * h * 0.22;
+            root.style.setProperty("--pointer-x", pointer.x + "px");
+            root.style.setProperty("--pointer-y", pointer.y + "px");
+          }
+
+          ctx.clearRect(0, 0, w, h);
+
+          var i, j, p, q, dx, dy, d;
+          for (i = 0; i < particles.length; i++) particles[i].step();
+
+          ctx.lineWidth = 1;
+          for (i = 0; i < particles.length; i++) {
+            p = particles[i];
+
+            for (j = i + 1; j < particles.length; j++) {
+              q = particles[j];
+              dx = p.x - q.x;
+              dy = p.y - q.y;
+              if (dx > LINK || dx < -LINK || dy > LINK || dy < -LINK) continue;
+              d = Math.sqrt(dx * dx + dy * dy);
+              if (d >= LINK) continue;
+              ctx.strokeStyle =
+                "rgba(" +
+                palette.dot +
+                "," +
+                (1 - d / LINK) * palette.linkA +
+                ")";
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(q.x, q.y);
+              ctx.stroke();
+            }
+
+            dx = p.x - pointer.x;
+            dy = p.y - pointer.y;
+            d = Math.sqrt(dx * dx + dy * dy);
+            if (d < REACH * 0.82) {
+              ctx.strokeStyle =
+                "rgba(" +
+                palette.link +
+                "," +
+                (1 - d / (REACH * 0.82)) * 0.4 +
+                ")";
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(pointer.x, pointer.y);
+              ctx.stroke();
+            }
+          }
+
+          for (i = 0; i < particles.length; i++) {
+            p = particles[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle =
+              "rgba(" +
+              (p.warm ? palette.warm : palette.dot) +
+              "," +
+              palette.dotA +
+              ")";
+            ctx.fill();
+          }
+
+          raf = requestAnimationFrame(frame);
+        }
+
+        var raf = 0;
+
+        function start() {
+          if (!raf) raf = requestAnimationFrame(frame);
+        }
+
+        function stop() {
+          if (raf) {
+            cancelAnimationFrame(raf);
+            raf = 0;
+          }
+        }
+
+        resize();
+        window.addEventListener("resize", function () {
+          resize();
+          palette = colors();
+        });
+        document.addEventListener("visibilitychange", function () {
+          document.hidden ? stop() : start();
+        });
+
+        if (reduced) {
+          // One still frame: the texture, none of the motion.
+          drawStill();
+          window.addEventListener("resize", drawStill);
+        } else {
+          start();
+        }
+
+        function drawStill() {
+          ctx.clearRect(0, 0, w, h);
+          for (var k = 0; k < particles.length; k++) {
+            var pp = particles[k];
+            ctx.beginPath();
+            ctx.arc(pp.x, pp.y, pp.r, 0, Math.PI * 2);
+            ctx.fillStyle =
+              "rgba(" +
+              (pp.warm ? palette.warm : palette.dot) +
+              "," +
+              palette.dotA +
+              ")";
+            ctx.fill();
+          }
+        }
+
+        // ------------------------------------------------------------
+        // Nav hairline once the page has scrolled
+        // ------------------------------------------------------------
+        var nav = document.getElementById("nav");
+        var onScroll = function () {
+          nav.classList.toggle("is-stuck", window.scrollY > 8);
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        onScroll();
+
+        // ------------------------------------------------------------
+        // Screenshot tilt, driven by the same cursor
+        // ------------------------------------------------------------
+        var win = document.getElementById("window");
+        if (win && !reduced) {
+          window.addEventListener(
+            "pointermove",
+            function (e) {
+              var cx = window.innerWidth / 2;
+              var cy = window.innerHeight / 2;
+              win.style.setProperty(
+                "--tiltY",
+                ((e.clientX - cx) / cx) * 2.1 + "deg",
+              );
+              win.style.setProperty(
+                "--tiltX",
+                ((cy - e.clientY) / cy) * 1.4 + "deg",
+              );
+            },
+            { passive: true },
+          );
+        }
+
+        // ------------------------------------------------------------
+        // Reveal on scroll
+        // ------------------------------------------------------------
+        var items = document.querySelectorAll(".reveal");
+        if ("IntersectionObserver" in window && !reduced) {
+          var io = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry, idx) {
+                if (!entry.isIntersecting) return;
+                var el = entry.target;
+                setTimeout(
+                  function () {
+                    el.classList.add("in");
+                  },
+                  Math.min(idx * 70, 280),
+                );
+                io.unobserve(el);
+              });
+            },
+            { rootMargin: "0px 0px -12% 0px", threshold: 0.08 },
+          );
+          items.forEach(function (el) {
+            io.observe(el);
+          });
+        } else {
+          items.forEach(function (el) {
+            el.classList.add("in");
+          });
+        }
+
+        // ------------------------------------------------------------
+        // Windows visitors get the Windows shortcuts
+        // ------------------------------------------------------------
+        var isMac = /Mac|iPhone|iPad|iPod/.test(
+          navigator.platform || navigator.userAgent,
+        );
+        if (!isMac) {
+          document.getElementById("k-global").textContent = "Ctrl ⇧ Space";
+          document.getElementById("k-new").textContent = "Ctrl N";
+          document.getElementById("k-find").textContent = "Ctrl F";
+        }
+      })();
+    </script>
+    <script type="module">
+      /**
+       * Two small jobs, both about the download buttons.
+       *
+       * The version in the fine print is stamped from package.json, so it
+       * cannot drift from the file /download/mac actually hands over.
+       *
+       * And the click is turned into a background fetch of the redirect
+       * rather than a navigation. Both URLs answer with
+       * Content-Disposition: attachment, so a plain link already downloads
+       * without leaving the page in most browsers — but "most" is doing real
+       * work in that sentence, and a hidden iframe makes it every browser.
+       * The href stays exactly as it is, so this degrades to the plain link
+       * with scripting off.
+       */
+      const version = import.meta.env.VITE_APP_VERSION;
+      for (const el of document.querySelectorAll("[data-app-version]")) {
+        el.textContent = version;
+      }
+
+      let frame = null;
+      for (const link of document.querySelectorAll('a[href^="/download/"]')) {
+        link.addEventListener("click", (e) => {
+          // A modified click is the reader asking for a tab of their own.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.hidden = true;
+            frame.setAttribute("aria-hidden", "true");
+            document.body.appendChild(frame);
+          }
+          frame.src = link.getAttribute("href");
+        });
+      }
+    </script>
   </body>
 </html>

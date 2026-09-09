@@ -2,6 +2,7 @@ import {
   collection,
   deleteField,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -64,9 +65,18 @@ function stamp(fields) {
   return { ...fields, updatedAt: serverTimestamp() };
 }
 
-export async function addTask(uid, text) {
+/**
+ * Returns the new id straight away, plus the promise for the write itself.
+ *
+ * They are separate on purpose. Firestore does not settle a write until the
+ * server has acknowledged it, so offline that promise never resolves — while
+ * the row appears instantly from the local cache. Anything awaiting it offline
+ * waits forever, which is how an attached photo used to go missing without a
+ * word. The id is minted here, so nothing has to wait for it.
+ */
+export function addTask(uid, text) {
   const id = String(Date.now());
-  await setDoc(
+  const written = setDoc(
     taskRef(uid, id),
     stamp({
       id,
@@ -77,7 +87,7 @@ export async function addTask(uid, text) {
       priority: false,
     }),
   );
-  return id;
+  return { id, written };
 }
 
 export function setCompleted(uid, id, completed) {
@@ -88,11 +98,59 @@ export function setPriority(uid, id, priority) {
   return updateDoc(taskRef(uid, id), stamp({ priority: !!priority }));
 }
 
+/**
+ * Subtasks ride inside the task document as an array, so ticking one off means
+ * writing the whole array back. The array is passed in rather than re-read from
+ * the server: the caller is already rendering it, and a read here would cost a
+ * round trip and still fail offline — which is precisely where this app is
+ * meant to keep working. Every other field on the subtask is carried over
+ * untouched, so an attachment the desktop knows about survives a tap here.
+ */
+export async function setSubtaskCompleted(
+  uid,
+  id,
+  subtasks,
+  subtaskId,
+  completed,
+) {
+  const target = taskRef(uid, id);
+  let base = subtasks || [];
+  try {
+    // Online this is the server's copy; offline it comes straight out of the
+    // IndexedDB cache and resolves rather than rejecting. Either way it is
+    // fresher than the array this row was rendered from, which matters because
+    // the write below replaces the whole array — a stale one would delete a
+    // subtask another device added in the meantime.
+    const snap = await getDoc(target);
+    if (snap.exists() && Array.isArray(snap.data().subtasks))
+      base = snap.data().subtasks;
+  } catch (err) {
+    console.warn("Could not re-read the subtasks:", err.code || err.message);
+  }
+  const next = base.map((st) =>
+    // A legacy row can be missing its id entirely, and String(undefined) would
+    // then match every other id-less subtask at once.
+    st.id != null && String(st.id) === String(subtaskId)
+      ? { ...st, completed: !!completed }
+      : st,
+  );
+  return updateDoc(target, stamp({ subtasks: next }));
+}
+
 export function setText(uid, id, text) {
   return updateDoc(
     taskRef(uid, id),
     stamp({ text: String(text).slice(0, 20000) }),
   );
+}
+
+/**
+ * The bytes are already in Storage by the time this runs — all this records is
+ * where. The whole object is written rather than merged into, so replacing one
+ * attachment with another cannot leave the previous one's width behind.
+ */
+export function setAttachment(uid, id, attachment) {
+  return updateDoc(taskRef(uid, id), stamp({ attachment }));
 }
 
 export function deleteTask(uid, id) {
@@ -124,10 +182,17 @@ export async function importTasks(uid, tasks) {
           completed: !!t.completed,
           deleted: !!t.deleted,
           priority: !!t.priority,
-          // The desktop app stores attachments as local file ids that mean
-          // nothing on another machine; drop the reference rather than ship a
-          // broken one.
-          attachment: deleteField(),
+          // An attachment is worth carrying only once its bytes are somewhere
+          // both machines can reach. A bare local file id is not — it names a
+          // file in one machine's app folder — so it is dropped, while a
+          // storagePath is kept.
+          attachment: t.attachment?.storagePath
+            ? {
+                name: String(t.attachment.name || "attachment").slice(0, 120),
+                type: t.attachment.type === "image" ? "image" : "file",
+                storagePath: t.attachment.storagePath,
+              }
+            : deleteField(),
         }),
         { merge: true },
       );

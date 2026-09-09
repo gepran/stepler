@@ -175,7 +175,11 @@
 .shine-ring {
   position: absolute;
   inset: -1.5px;
-  border-radius: 25.5px;
+  /* The ring sits 1.5px outside its box, so its radius is the box's own plus
+     that offset. 25.5px is the desktop composer's 24px corner; the web
+     composer is rounded-xl and passes its own. One parameterised rule beats a
+     duplicated override kept in step across two builds by hand. */
+  border-radius: var(--shine-radius, 25.5px);
   padding: 1.5px;
   pointer-events: none;
   background: conic-gradient(

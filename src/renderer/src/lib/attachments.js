@@ -1,3 +1,5 @@
+import { compressImage } from "./images";
+
 export const ipc = window.electron?.ipcRenderer;
 
 /**
@@ -30,11 +32,17 @@ export function imageBox(att) {
 
 /** Wrap a picked/pasted File for preview without writing anything to disk yet. */
 export function pendingAttachment(file) {
+  const name = file.name || `pasted-${Date.now()}.png`;
   return {
     file,
-    name: file.name || `pasted-${Date.now()}.png`,
+    name,
     type: file.type.startsWith("image/") ? "image" : "file",
     previewUrl: URL.createObjectURL(file),
+    // Started here rather than at save time so the re-encode runs while the
+    // user is still typing; by the time Enter lands it has almost always
+    // finished. The preview chip keeps showing the original — the smaller copy
+    // and its corrected extension only ever apply to what gets stored.
+    compressed: compressImage(file, name),
   };
 }
 
@@ -49,10 +57,15 @@ export async function persistAttachment(pending) {
     return { id: pending.id, name: pending.name, type: pending.type };
   if (!pending.file || !ipc) return null;
   try {
-    const bytes = new Uint8Array(await pending.file.arrayBuffer());
+    // Null means the picture was left alone: too small to be worth it, not a
+    // raster image, or it came out no smaller than it arrived.
+    const smaller = await pending.compressed;
+    const bytes = new Uint8Array(
+      await (smaller?.blob || pending.file).arrayBuffer(),
+    );
     const res = await ipc.invoke("save-attachment", {
       bytes,
-      name: pending.name,
+      name: smaller?.name || pending.name,
       type: pending.type,
     });
     if (res?.success) return res.attachment;

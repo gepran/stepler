@@ -1,7 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
 import GuideTab from "./GuideTab";
-import { LANGUAGES, setLanguage, useLanguage, useT } from "../lib/i18n";
+import DeletedTasksList from "./DeletedTasksList";
+import CollaborationPanel from "./CollaborationPanel";
+import {
+  LANGUAGES,
+  setLanguage,
+  translatePlural as tPlural,
+  useLanguage,
+  useT,
+} from "../lib/i18n";
 import {
   BookOpen,
   X,
@@ -22,6 +30,7 @@ import {
   Cloud,
   CloudOff,
   LogOut,
+  Users,
 } from "lucide-react";
 
 const ipc = window.electron?.ipcRenderer;
@@ -112,8 +121,11 @@ function SyncSection() {
   useEffect(() => {
     ipc?.invoke("sync-status").then((s) => s && setStatus(s));
     const onStatus = (_, s) => s && setStatus(s);
-    ipc?.on("sync-status", onStatus);
-    return () => ipc?.removeAllListeners("sync-status");
+    // App listens on this same channel for the sidebar's avatar, and this
+    // section unmounts every time you switch tabs — removeAllListeners would
+    // take that subscription down with it and freeze the avatar until restart.
+    const off = ipc?.on("sync-status", onStatus);
+    return () => off?.();
   }, []);
 
   const withBusy = async (run) => {
@@ -277,6 +289,11 @@ export default function SettingsPanel({
   onImport,
   onSettingsUpdate,
   onToast,
+  deletedTasks = [],
+  onRestore,
+  onPermanentDelete,
+  onClearAll,
+  collab,
 }) {
   const t = useT();
   const language = useLanguage();
@@ -415,8 +432,22 @@ export default function SettingsPanel({
       label: t("settings.tabs.integrations"),
       Icon: Calendar,
     },
+    {
+      id: "collab",
+      label: t("settings.tabs.collab"),
+      Icon: Users,
+      // Somebody waiting on an answer is the one thing in this window worth
+      // interrupting for, so it carries the same badge the trash does.
+      badge: collab.connections.filter((c) => c.status === "incoming").length,
+    },
     { id: "guide", label: t("settings.tabs.guide"), Icon: BookOpen },
     { id: "data", label: t("settings.tabs.data"), Icon: Download },
+    {
+      id: "trash",
+      label: t("settings.tabs.trash"),
+      Icon: Trash2,
+      badge: deletedTasks.length,
+    },
   ];
 
   return (
@@ -439,7 +470,7 @@ export default function SettingsPanel({
           </div>
 
           <nav className="space-y-1.5">
-            {tabs.map(({ id, label, Icon }) => (
+            {tabs.map(({ id, label, Icon, badge }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -451,6 +482,11 @@ export default function SettingsPanel({
               >
                 <Icon size={18} strokeWidth={activeTab === id ? 2.5 : 2} />
                 {label}
+                {badge > 0 && (
+                  <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -1115,6 +1151,26 @@ export default function SettingsPanel({
             </div>
           )}
 
+          {activeTab === "collab" && (
+            <div>
+              <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
+                {t("collab.title")}
+              </h3>
+              <p className="mb-8 text-sm text-neutral-500">
+                {t("collab.hint")}
+              </p>
+              <CollaborationPanel
+                profile={collab.profile}
+                connections={collab.connections}
+                onSearch={collab.search}
+                onInvite={collab.invite}
+                onAccept={collab.accept}
+                onRemove={collab.remove}
+                onToast={onToast}
+              />
+            </div>
+          )}
+
           {activeTab === "guide" && <GuideTab />}
 
           {activeTab === "data" && (
@@ -1159,6 +1215,23 @@ export default function SettingsPanel({
               </p>
             </div>
           )}
+
+          {activeTab === "trash" && (
+            <div>
+              <h3 className="mb-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
+                {t("trash.title")}
+              </h3>
+              <p className="mb-8 text-sm text-neutral-500 dark:text-neutral-400">
+                {tPlural("trash.inTrash", deletedTasks.length)}
+              </p>
+              <DeletedTasksList
+                deletedTasks={deletedTasks}
+                onRestore={onRestore}
+                onPermanentDelete={onPermanentDelete}
+                onClearAll={onClearAll}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1166,10 +1239,22 @@ export default function SettingsPanel({
 }
 
 SettingsPanel.propTypes = {
+  collab: PropTypes.shape({
+    profile: PropTypes.object,
+    connections: PropTypes.array.isRequired,
+    search: PropTypes.func.isRequired,
+    invite: PropTypes.func.isRequired,
+    accept: PropTypes.func.isRequired,
+    remove: PropTypes.func.isRequired,
+  }).isRequired,
   settings: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onExport: PropTypes.func,
   onImport: PropTypes.func,
   onSettingsUpdate: PropTypes.func,
   onToast: PropTypes.func,
+  deletedTasks: PropTypes.array,
+  onRestore: PropTypes.func,
+  onPermanentDelete: PropTypes.func,
+  onClearAll: PropTypes.func,
 };

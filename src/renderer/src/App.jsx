@@ -15,17 +15,13 @@ import FullScreenSearch from "./components/FullScreenSearch";
 import TaskItem from "./components/TaskItem";
 import TaskInput from "./components/TaskInput";
 import FilePreviewModal from "./components/FilePreviewModal";
-import DeletedTasksPanel from "./components/DeletedTasksPanel";
 import Toasts from "./components/Toasts";
 import { PanelLeft, ChevronDown } from "lucide-react";
-import {
-  formatTaskText,
-  localYMD,
-  labelForYMD,
-  taskTimestamp,
-  ymdToDate,
-} from "./lib/format";
+import { localYMD, labelForYMD, taskTimestamp, ymdToDate } from "./lib/format";
 import { ipc, persistAttachment } from "./lib/attachments";
+import { useCollab } from "./lib/collab-ipc";
+import { MentionBadge, MentionTaskItem } from "./components/MentionTaskItem";
+import { mentionsAsRows } from "./lib/collab";
 import {
   formatDate,
   getLanguage,
@@ -114,6 +110,10 @@ DayChip.propTypes = {
   onClick: PropTypes.func.isRequired,
 };
 
+/** How far one step back through the timeline reaches. Counted in days that
+    exist, because a week of the calendar can hold nothing at all. */
+const DAYS_PER_STEP = 7;
+
 let toastSeq = 0;
 
 export default function App() {
@@ -137,8 +137,8 @@ export default function App() {
 
   const [showCompleted, setShowCompleted] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [account, setAccount] = useState({ signedIn: false, email: null });
   const [showSearch, setShowSearch] = useState(false);
-  const [showDeletedPanel, setShowDeletedPanel] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -147,6 +147,10 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [weeksShown, setWeeksShown] = useState(1);
+  // The @ badge's filter: your own timeline, or only what other people have
+  // addressed to you.
+  const [mentionsOnly, setMentionsOnly] = useState(false);
+  const collab = useCollab();
 
   const [editingId, setEditingId] = useState(null);
   const [addingSubtaskId, setAddingSubtaskId] = useState(null);
@@ -215,9 +219,17 @@ export default function App() {
   }, [tasks, settings.projects]);
 
   const allDays = useMemo(
-    () => groupByDay(tasks, todayYMD),
+    () => {
+      // A mention rides in the day it was written on, alongside your own
+      // rows, so a task somebody sent you sits with the rest of that Tuesday
+      // rather than in a second list you have to remember to look at.
+      const rows = mentionsOnly
+        ? mentionsAsRows(collab.mentions)
+        : [...tasks, ...mentionsAsRows(collab.mentions)];
+      return groupByDay(rows, todayYMD);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tasks, todayYMD, language],
+    [tasks, collab.mentions, mentionsOnly, todayYMD, language],
   );
 
   const todayTasks = useMemo(
@@ -225,10 +237,27 @@ export default function App() {
     [allDays, todayYMD],
   );
 
+  /**
+   * Today's work, without the rows other people addressed to you.
+   *
+   * The counter is a promise about YOUR day — "3 of 7 done" — and a task
+   * somebody else is responsible for has no business moving it. The list below
+   * still shows both.
+   */
+  const todayOwnTasks = useMemo(
+    () => todayTasks.filter((t) => !t.mention),
+    [todayTasks],
+  );
+
   const matchesFilters = useCallback(
     (t) =>
-      (showCompleted || !t.completed) &&
-      (!selectedProject || t.projects?.includes(selectedProject)),
+      // A mention carries none of this account's own metadata — no projects,
+      // and its completed flag belongs to somebody else's list — so the
+      // sidebar's filters have nothing to say about it.
+      t.mention
+        ? true
+        : (showCompleted || !t.completed) &&
+          (!selectedProject || t.projects?.includes(selectedProject)),
     [showCompleted, selectedProject],
   );
 
@@ -250,18 +279,25 @@ export default function App() {
     [todayTasks, matchesFilters],
   );
 
-  /** Only the most recent week is built up front; older weeks arrive as you
-      scroll back through the timeline. */
+  /** Only the most recent week is built up front; older days arrive as you
+      step back through the timeline.
+
+      A step is counted in days that HAVE something on them, not in days of the
+      calendar. Real history is full of gaps — this app opened on 8 September
+      with nothing behind it until 5 May — and a cutoff that walked back seven
+      calendar days at a time landed inside that gap eighteen times in a row,
+      rendering an identical list each time. The button looked broken because
+      it was. */
   const visiblePastDays = useMemo(() => {
     const cutoff = ymdToDate(todayYMD);
-    cutoff.setDate(cutoff.getDate() - (weeksShown * 7 - 1));
+    cutoff.setDate(cutoff.getDate() - (DAYS_PER_STEP - 1));
     const cutoffYMD = localYMD(cutoff);
-    const withinWindow = pastDays.filter((d) => d.ymd >= cutoffYMD);
-    // A filter can empty the window entirely; fall back to the most recent
-    // days that do have something on them.
-    if (!withinWindow.length && pastDays.length)
-      return pastDays.slice(-7 * weeksShown);
-    return withinWindow;
+    const thisWeek = pastDays.filter((d) => d.ymd >= cutoffYMD).length;
+    // A quiet week — or a filter that emptied it — still opens on real
+    // history rather than on nothing.
+    const count =
+      (thisWeek || DAYS_PER_STEP) + (weeksShown - 1) * DAYS_PER_STEP;
+    return pastDays.slice(-count);
   }, [pastDays, todayYMD, weeksShown]);
 
   const hasOlderDays = pastDays.length > visiblePastDays.length;
@@ -312,11 +348,29 @@ export default function App() {
     (ymd) => {
       const index = pastDays.findIndex((d) => d.ymd === ymd);
       if (index === -1) return;
-      const weeksNeeded = Math.ceil((pastDays.length - index) / 7);
-      setWeeksShown((w) => Math.max(w, weeksNeeded + 1));
+      const missing = pastDays.length - index - visiblePastDays.length;
+      if (missing <= 0) return; // already on screen
+      // This path can prepend months of history at once, so it holds the
+      // distance to the bottom exactly the way the button does.
+      const sc = mainScrollRef.current;
+      keepDistanceRef.current = sc ? sc.scrollHeight - sc.scrollTop : null;
+      const steps = Math.ceil(missing / DAYS_PER_STEP);
+      setWeeksShown((w) => Math.max(w, weeksShown + steps));
     },
-    [pastDays],
+    [pastDays, visiblePastDays.length, weeksShown],
   );
+
+  // --- Who is signed in, so the sidebar can show them ---
+  useEffect(() => {
+    if (!ipc) return undefined;
+    ipc.invoke("sync-status").then((s) => s && setAccount(s));
+    const onStatus = (_e, s) => s && setAccount(s);
+    // Settings listens on this same channel and unmounts on every tab switch;
+    // `on` hands back an unsubscribe for exactly this listener, which
+    // removeAllListeners would not respect.
+    const off = ipc.on("sync-status", onStatus);
+    return () => off?.();
+  }, []);
 
   // --- Initial load ---
   useEffect(() => {
@@ -483,7 +537,7 @@ export default function App() {
           setPreviewFile(null);
           return;
         }
-        if (showSearch || showSettings || showDeletedPanel) return; // those close themselves
+        if (showSearch || showSettings) return; // those close themselves
         if (!settingsRef.current.escToHide) return;
         const el = document.activeElement;
         const typing =
@@ -497,7 +551,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewFile, showSearch, showSettings, showDeletedPanel]);
+  }, [previewFile, showSearch, showSettings]);
 
   // --- Menu / main-process messages ---
   useEffect(() => {
@@ -1295,6 +1349,14 @@ export default function App() {
   // ------------------------- render -------------------------
 
   const renderTask = (task) => {
+    if (task.mention)
+      return (
+        <MentionTaskItem
+          key={`m-${task.mention.id}`}
+          mention={task.mention}
+          onMarkRead={(id) => collab.markRead(id)}
+        />
+      );
     const dragTarget =
       dragOverId &&
       (dragOverId === task.id ||
@@ -1361,8 +1423,8 @@ export default function App() {
         show={showSidebar}
         tasks={tasks}
         onSettingsClick={() => setShowSettings(true)}
+        account={account}
         deletedCount={deletedTasks.length}
-        onTrashClick={() => setShowDeletedPanel(true)}
         availableProjects={availableProjects}
         selectedProject={selectedProject}
         onProjectClick={setSelectedProject}
@@ -1423,8 +1485,8 @@ export default function App() {
               </button>
               <div className="border-l border-neutral-300 pl-3 text-sm font-medium text-neutral-400 dark:border-neutral-700 dark:text-neutral-500">
                 {t("app.counter", {
-                  done: todayTasks.filter((task) => task.completed).length,
-                  total: todayTasks.length,
+                  done: todayOwnTasks.filter((task) => task.completed).length,
+                  total: todayOwnTasks.length,
                 })}
               </div>
             </div>
@@ -1527,7 +1589,7 @@ export default function App() {
                   <div className="absolute bottom-0 left-[7px] top-0 z-0 w-[2px] bg-neutral-200 dark:bg-neutral-800" />
                   {sortedTasks.length === 0 ? (
                     <p className="py-2 text-sm italic text-neutral-400 dark:text-neutral-600">
-                      {todayTasks.length > 0
+                      {todayOwnTasks.length > 0
                         ? t("app.allDone")
                         : t("app.nothingToday")}
                     </p>
@@ -1554,6 +1616,35 @@ export default function App() {
           </button>
         )}
 
+        {/* The @ badge, in the same column as the jump-to-newest button and
+            stacked above it — 52px is that button's 40px plus the gap. When
+            the jump button is hidden this drops into its place rather than
+            floating on its own. Shown while anything is unread and while the
+            filter is on, so there is always a way back out of it. */}
+        {(collab.unread.length > 0 || mentionsOnly) && (
+          <MentionBadge
+            className="absolute right-8 z-50"
+            style={{
+              bottom: `${(isExpanded ? 120 : 160) + (showScrollDown ? 52 : 0)}px`,
+            }}
+            count={collab.unread.length}
+            active={mentionsOnly}
+            label={
+              mentionsOnly
+                ? t("collab.showAll")
+                : t("collab.showMentions", { count: collab.unread.length })
+            }
+            onClick={() => {
+              const next = !mentionsOnly;
+              setMentionsOnly(next);
+              // Opening the filter is the moment they have been read: every
+              // one of them is on screen, and nothing else would ever clear
+              // the badge.
+              if (next && collab.unread.length) collab.markRead(null);
+            }}
+          />
+        )}
+
         <TaskInput
           ref={inputRef}
           onSubmit={addTask}
@@ -1564,6 +1655,7 @@ export default function App() {
           onToast={toast}
           jiraStatus={jiraStatus}
           jiraProjects={jiraProjects}
+          connections={collab.accepted}
         />
 
         {showSettings && (
@@ -1574,17 +1666,11 @@ export default function App() {
             onImport={handleImportTasks}
             onSettingsUpdate={setSettings}
             onToast={toast}
-          />
-        )}
-
-        {showDeletedPanel && (
-          <DeletedTasksPanel
             deletedTasks={deletedTasks}
-            onClose={() => setShowDeletedPanel(false)}
             onRestore={restoreTask}
             onPermanentDelete={permanentlyDeleteTask}
             onClearAll={clearDeletedTasks}
-            formatTaskText={formatTaskText}
+            collab={collab}
           />
         )}
 

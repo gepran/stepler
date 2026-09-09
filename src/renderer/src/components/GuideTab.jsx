@@ -20,6 +20,7 @@ const LAYOUT = [
   { id: "open", items: ["shortcut", ...(isMac ? ["selection"] : [])] },
   { id: "details", items: ["day", "notification", "important"] },
   { id: "organise", items: ["projects", "subtasks", "files", "search"] },
+  { id: "collaborate", items: ["connect", "mention", "inbox"] },
   { id: "safety", items: ["trash", "past", "data"] },
   { id: "connect", items: [...(isMac ? ["reminders"] : []), "gcal", "jira"] },
   { id: "power", items: ["cli", "updates"] },

@@ -20,6 +20,7 @@ const en = {
     toSignUp: "No account yet? Create one",
     toSignIn: "Already have an account? Sign in",
     signOut: "Sign out",
+    backToSite: "← Back to stepler",
     working: "One moment…",
     syncing: "Syncing…",
     synced: "Synced",
@@ -200,6 +201,34 @@ const en = {
       "Stepler could not replace itself ({error}). This puts the downloaded build in your Downloads folder.",
   },
 
+  collab: {
+    title: "Collaboration",
+    yourHandle: "Your handle — this is what people type to mention you",
+    noHandle: "No handle yet",
+    find: "Find someone",
+    searchPlaceholder: "Handle or email — testeruser, or name@company.com",
+    noResults: "Nobody found for \u201C{term}\u201D.",
+    invite: "Invite",
+    invited: "Invited",
+    accept: "Accept",
+    decline: "Decline",
+    connected: "Connected",
+    waiting: "Waiting",
+    disconnect: "Disconnect",
+    incoming: "Wants to connect with you",
+    connections: "Your people",
+    noneYet: "Nobody yet. Search above to invite someone.",
+    hint: "Once you are both connected, put @their-handle in a task and it appears in their list too. They can read it, not change it.",
+    mentionedYou: "mentioned you",
+    markRead: "Got it",
+    showMentions: "Show only tasks you were mentioned in ({count} unread)",
+    showAll: "Show everything again",
+    noMentions: "Nobody has mentioned you yet.",
+    failed: "That did not go through. Try again.",
+    toastInvited: "Invitation sent",
+    toastAccepted: "Connected",
+    toastRemoved: "Disconnected",
+  },
   settings: {
     sync: {
       title: "Account and sync",
@@ -220,8 +249,10 @@ const en = {
       general: "General",
       projects: "Projects",
       integrations: "Integrations",
+      collab: "Collaboration",
       guide: "Guide",
       data: "Data",
+      trash: "Trash",
     },
     general: {
       title: "General",
@@ -416,6 +447,36 @@ const en = {
         ],
       },
     },
+    collaborate: {
+      title: "Working with other people",
+      blurb: "Connect with someone, then put their name on a task.",
+      connect: {
+        title: "Connect with someone",
+        steps: [
+          "Open Settings and go to Collaboration.",
+          "Your own handle is at the top — it comes from your email, so testeruser@gmail.com becomes @testeruser.",
+          "Search for the person by handle or by email address, and press Invite.",
+          "Nothing is shared until they open their own Collaboration page and accept.",
+        ],
+      },
+      mention: {
+        title: "Put someone on a task",
+        steps: [
+          "Type @ in the task box. The people you are connected to appear — pick one.",
+          "Write the rest of the task and press Enter.",
+          "A copy lands in their list, on the same day, marked with your handle.",
+          "They can read it. Only you can change it or tick it off.",
+        ],
+      },
+      inbox: {
+        title: "When somebody mentions you",
+        steps: [
+          "A round @ button appears in the bottom right corner with a number on it.",
+          "Click it to show only the tasks you were mentioned in.",
+          "Click it again to go back to your whole list.",
+        ],
+      },
+    },
     safety: {
       title: "Nothing gets lost",
       blurb: "What happens to things you finish or delete.",
@@ -514,6 +575,7 @@ const ka = {
     toSignUp: "ჯერ არ გაქვს ანგარიში? შექმენი",
     toSignIn: "უკვე გაქვს ანგარიში? შედი",
     signOut: "გასვლა",
+    backToSite: "← საიტზე დაბრუნება",
     working: "ერთი წამი…",
     syncing: "სინქრონიზაცია…",
     synced: "დასინქრონიზდა",
@@ -735,6 +797,50 @@ const ka = {
       "Stepler-მა საკუთარი თავის ჩანაცვლება ვერ შეძლო ({error}). ჩამოტვირთული ბილდი Downloads საქაღალდეში მოხვდება.",
   },
 
+  collab: {
+    title:
+      "\u10D7\u10D0\u10DC\u10D0\u10DB\u10E8\u10E0\u10DD\u10DB\u10DA\u10DD\u10D1\u10D0",
+    yourHandle:
+      "\u10D7\u10E5\u10D5\u10D4\u10DC\u10D8 \u10DB\u10D8\u10DB\u10D0\u10E0\u10D7\u10D5\u10D0 \u2014 \u10D0\u10DB\u10D8\u10D7 \u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D4\u10D1\u10D4\u10DC",
+    noHandle:
+      "\u10DB\u10D8\u10DB\u10D0\u10E0\u10D7\u10D5\u10D0 \u10D2\u10D0\u10DB\u10DD\u10E3\u10E7\u10D4\u10DC\u10D4\u10D1\u10D4\u10DA\u10D8\u10D0",
+    find: "\u10D8\u10DE\u10DD\u10D5\u10D4 \u10D0\u10D3\u10D0\u10DB\u10D8\u10D0\u10DC\u10D8",
+    searchPlaceholder:
+      "\u10DB\u10D8\u10DB\u10D0\u10E0\u10D7\u10D5\u10D0 \u10D0\u10DC \u10E4\u10DD\u10E1\u10E2\u10D0",
+    noResults:
+      "\u10D0\u10E0\u10D0\u10D5\u10D8\u10DC \u10DB\u10DD\u10D8\u10EB\u10D4\u10D1\u10DC\u10D0 \u201C{term}\u201D-\u10D6\u10D4.",
+    invite: "\u10DB\u10DD\u10EC\u10D5\u10D4\u10D5\u10D0",
+    invited: "\u10DB\u10DD\u10EC\u10D5\u10D4\u10E3\u10DA\u10D8\u10D0",
+    accept: "\u10DB\u10D8\u10E6\u10D4\u10D1\u10D0",
+    decline: "\u10E3\u10D0\u10E0\u10D9\u10D5\u10D0",
+    connected:
+      "\u10D3\u10D0\u10D9\u10D0\u10D5\u10E8\u10D8\u10E0\u10D4\u10D1\u10E3\u10DA\u10D8",
+    waiting: "\u10DA\u10DD\u10D3\u10D8\u10DC\u10E8\u10D8",
+    disconnect: "\u10D2\u10D0\u10DC\u10D7\u10D8\u10E8\u10D5\u10D0",
+    incoming:
+      "\u10D3\u10D0\u10D9\u10D0\u10D5\u10E8\u10D8\u10E0\u10D4\u10D1\u10D0 \u10E1\u10E3\u10E0\u10E1",
+    connections:
+      "\u10D7\u10E5\u10D5\u10D4\u10DC\u10D8 \u10D0\u10D3\u10D0\u10DB\u10D8\u10D0\u10DC\u10D4\u10D1\u10D8",
+    noneYet:
+      "\u10D2\u10D0\u10DB\u10DD\u10D8\u10EB\u10D4\u10D1\u10DC\u10D4\u10D7 \u10D0\u10D3\u10D0\u10DB\u10D8\u10D0\u10DC\u10D8 \u10D6\u10D4\u10DB\u10DD\u10D7.",
+    hint: "\u10D3\u10D0\u10D9\u10D0\u10D5\u10E8\u10D8\u10E0\u10D4\u10D1\u10D8\u10E1 \u10E8\u10D4\u10DB\u10D3\u10D4\u10D2 \u10D3\u10D0\u10D0\u10DB\u10D0\u10E2\u10D4\u10D7 @\u10DB\u10D8\u10DB\u10D0\u10E0\u10D7\u10D5\u10D0 \u10D3\u10D0\u10D5\u10D0\u10DA\u10D4\u10D1\u10D0\u10E8\u10D8 \u2014 \u10D8\u10E1 \u10DB\u10D0\u10E1\u10D0\u10E3\u10EA \u10D2\u10D0\u10DB\u10DD\u10E9\u10DC\u10D3\u10D4\u10D1\u10D0. \u10E8\u10D4\u10E3\u10EB\u10DA\u10D8\u10D0 \u10EC\u10D0\u10D9\u10D8\u10D7\u10EE\u10D5\u10D0, \u10DB\u10D0\u10D2\u10E0\u10D0\u10DB \u10D0\u10E0 \u10E8\u10D4\u10EA\u10D5\u10DA\u10D0.",
+    mentionedYou:
+      "\u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D4\u10D1\u10D0\u10D7",
+    markRead: "\u10D2\u10D0\u10D5\u10D8\u10D2\u10D4",
+    showMentions:
+      "\u10DB\u10EE\u10DD\u10DA\u10DD\u10D3 \u10D8\u10E1, \u10E1\u10D0\u10D3\u10D0\u10EA \u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D4\u10D1\u10D4\u10DC ({count})",
+    showAll:
+      "\u10E7\u10D5\u10D4\u10DA\u10D0\u10E4\u10D4\u10E0\u10D8\u10E1 \u10E9\u10D5\u10D4\u10DC\u10D4\u10D1\u10D0",
+    noMentions:
+      "\u10E1\u10D0\u10D3\u10D0\u10EC\u10D4\u10E0\u10D8 \u10D0\u10E0\u10D0\u10D5\u10D8\u10DC \u10D2\u10D8\u10EE\u10E1\u10D4\u10DC\u10D8\u10D4\u10D1\u10D8\u10D0.",
+    failed:
+      "\u10D5\u10D4\u10E0 \u10D2\u10D0\u10DC\u10EE\u10DD\u10E0\u10EA\u10D8\u10D4\u10DA\u10D3\u10D0. \u10E1\u10EA\u10D0\u10D3\u10D4\u10D7 \u10D7\u10D0\u10D5\u10D8\u10D3\u10D0\u10DC.",
+    toastInvited:
+      "\u10DB\u10DD\u10EC\u10D5\u10D4\u10D5\u10D0 \u10D2\u10D0\u10D8\u10D2\u10D6\u10D0\u10D5\u10DC\u10D0",
+    toastAccepted:
+      "\u10D3\u10D0\u10D9\u10D0\u10D5\u10E8\u10D8\u10E0\u10D3\u10D8\u10D7",
+    toastRemoved: "\u10D2\u10D0\u10DC\u10D7\u10D8\u10E8\u10D3\u10D8\u10D7",
+  },
   settings: {
     sync: {
       title: "ანგარიში და სინქრონიზაცია",
@@ -755,8 +861,10 @@ const ka = {
       general: "ზოგადი",
       projects: "პროექტები",
       integrations: "ინტეგრაციები",
+      collab: "თანამშრომლობა",
       guide: "გზამკვლევი",
       data: "მონაცემები",
+      trash: "სანაგვე",
     },
     general: {
       title: "ზოგადი",
@@ -953,6 +1061,36 @@ const ka = {
         ],
       },
     },
+    collaborate: {
+      title: "სხვებთან ერთად",
+      blurb: "დაამკავშირეთ ადამიანი და მიანიშნეთ დავალებაში.",
+      connect: {
+        title: "დაკავშირება",
+        steps: [
+          "გახსენით პარამეტრები და აირჩიეთ „თანამშრომლობა“.",
+          "ზედა თქვენი მიმართვაა — იგი ფოსტიდან მოდის.",
+          "მოემის ადამიანი მიმართვით ან ფოსტით და დაათითეთ „მოწვევა“.",
+          "სანამ ის დაადასტურებს, არაფერი გაზიარდება.",
+        ],
+      },
+      mention: {
+        title: "დავალებაში მითითება",
+        steps: [
+          "დავალების ველში აკრეფეთ @ და აირკიეთ ადამიანი.",
+          "დაასრულეთ დავალება და დაათითეთ Enter.",
+          "ასლი მივა მასთან იმავე დღეს.",
+          "მას აკითხვს; შეცვლა მხოლოდ თქვენ შეგიძლიათ.",
+        ],
+      },
+      inbox: {
+        title: "როცა თქვენ გიხსენებენ",
+        steps: [
+          "მარჯვენა ქვედა გამოჩნდება @ ღილაკი რიცხვით.",
+          "დაათითეთ — დარჩება მხოლოდ ის, სადაც გიხსენებენ.",
+          "დაათითეთ კვლავ და დაბრუნდება ყველაფერი.",
+        ],
+      },
+    },
     safety: {
       title: "არაფერი იკარგება",
       blurb: "რა ემართება იმას, რასაც ასრულებ ან შლი.",
@@ -1051,6 +1189,7 @@ const ru = {
     toSignUp: "Ещё нет аккаунта? Создать",
     toSignIn: "Уже есть аккаунт? Войти",
     signOut: "Выйти",
+    backToSite: "← На сайт Stepler",
     working: "Секунду…",
     syncing: "Синхронизация…",
     synced: "Синхронизировано",
@@ -1239,6 +1378,49 @@ const ru = {
       "Stepler не смог заменить себя ({error}). Загруженная сборка окажется в папке «Загрузки».",
   },
 
+  collab: {
+    title:
+      "\u0421\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0442\u0430",
+    yourHandle:
+      "\u0412\u0430\u0448 \u043D\u0438\u043A \u2014 \u0435\u0433\u043E \u043F\u0438\u0448\u0443\u0442, \u0447\u0442\u043E\u0431\u044B \u0432\u0430\u0441 \u043E\u0442\u043C\u0435\u0442\u0438\u0442\u044C",
+    noHandle:
+      "\u041D\u0438\u043A\u0430 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442",
+    find: "\u041D\u0430\u0439\u0442\u0438 \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430",
+    searchPlaceholder:
+      "\u041D\u0438\u043A \u0438\u043B\u0438 \u043F\u043E\u0447\u0442\u0430 \u2014 testeruser \u0438\u043B\u0438 name@company.com",
+    noResults:
+      "\u041F\u043E \u00AB{term}\u00BB \u043D\u0438\u043A\u043E\u0433\u043E \u043D\u0435 \u043D\u0430\u0448\u043B\u043E\u0441\u044C.",
+    invite: "\u041F\u0440\u0438\u0433\u043B\u0430\u0441\u0438\u0442\u044C",
+    invited: "\u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0451\u043D",
+    accept: "\u041F\u0440\u0438\u043D\u044F\u0442\u044C",
+    decline: "\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C",
+    connected: "\u0421\u0432\u044F\u0437\u0430\u043D\u044B",
+    waiting: "\u0416\u0434\u0451\u043C \u043E\u0442\u0432\u0435\u0442\u0430",
+    disconnect:
+      "\u0420\u0430\u0437\u043E\u0440\u0432\u0430\u0442\u044C \u0441\u0432\u044F\u0437\u044C",
+    incoming:
+      "\u0425\u043E\u0447\u0435\u0442 \u0441 \u0432\u0430\u043C\u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C\u0441\u044F",
+    connections: "\u0412\u0430\u0448\u0438 \u043B\u044E\u0434\u0438",
+    noneYet:
+      "\u041F\u043E\u043A\u0430 \u043D\u0438\u043A\u043E\u0433\u043E. \u041D\u0430\u0439\u0434\u0438\u0442\u0435 \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u0432\u044B\u0448\u0435 \u0438 \u043F\u0440\u0438\u0433\u043B\u0430\u0441\u0438\u0442\u0435.",
+    hint: "\u041A\u043E\u0433\u0434\u0430 \u0441\u0432\u044F\u0437\u044C \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430, \u043D\u0430\u043F\u0438\u0448\u0438\u0442\u0435 @\u043D\u0438\u043A \u0432 \u0437\u0430\u0434\u0430\u0447\u0435 \u2014 \u043E\u043D\u0430 \u043F\u043E\u044F\u0432\u0438\u0442\u0441\u044F \u0438 \u0443 \u043D\u0435\u0433\u043E. \u0427\u0438\u0442\u0430\u0442\u044C \u043C\u043E\u0436\u043D\u043E, \u043C\u0435\u043D\u044F\u0442\u044C \u2014 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.",
+    mentionedYou:
+      "\u043E\u0442\u043C\u0435\u0442\u0438\u043B \u0432\u0430\u0441",
+    markRead: "\u041F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E",
+    showMentions:
+      "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0437\u0430\u0434\u0430\u0447\u0438 \u0441 \u0432\u0430\u0448\u0435\u0439 \u043E\u0442\u043C\u0435\u0442\u043A\u043E\u0439 ({count} \u043D\u043E\u0432\u044B\u0445)",
+    showAll:
+      "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0451",
+    noMentions:
+      "\u0412\u0430\u0441 \u043F\u043E\u043A\u0430 \u043D\u0438\u043A\u0442\u043E \u043D\u0435 \u043E\u0442\u043C\u0435\u0447\u0430\u043B.",
+    failed:
+      "\u041D\u0435 \u043F\u043E\u043B\u0443\u0447\u0438\u043B\u043E\u0441\u044C. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437.",
+    toastInvited:
+      "\u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E",
+    toastAccepted: "\u0421\u0432\u044F\u0437\u0430\u043B\u0438\u0441\u044C",
+    toastRemoved:
+      "\u0421\u0432\u044F\u0437\u044C \u0440\u0430\u0437\u043E\u0440\u0432\u0430\u043D\u0430",
+  },
   settings: {
     sync: {
       title: "Аккаунт и синхронизация",
@@ -1259,8 +1441,10 @@ const ru = {
       general: "Общие",
       projects: "Проекты",
       integrations: "Интеграции",
+      collab: "Совместная работа",
       guide: "Руководство",
       data: "Данные",
+      trash: "Корзина",
     },
     general: {
       title: "Общие",
@@ -1452,6 +1636,36 @@ const ru = {
           "Нажмите {mod}F.",
           "Наберите что угодно: текст задачи, подзадачу, проект, даже имя файла.",
           "Двигайтесь стрелками, нажмите Enter, чтобы перейти к задаче на ленте.",
+        ],
+      },
+    },
+    collaborate: {
+      title: "Работа вдвоём",
+      blurb: "Свяжитесь с человеком и отмечайте его в задачах.",
+      connect: {
+        title: "Связаться с человеком",
+        steps: [
+          "Откройте Настройки и раздел «Совместная работа».",
+          "Сверху — ваш ник. Он берётся из почты: testeruser@gmail.com становится @testeruser.",
+          "Найдите человека по нику или почте и нажмите «Пригласить».",
+          "Ничего не передаётся, пока он не подтвердит у себя.",
+        ],
+      },
+      mention: {
+        title: "Отметить человека в задаче",
+        steps: [
+          "Начните писать @ в поле задачи — появятся ваши люди. Выберите нужного.",
+          "Допишите задачу и нажмите Enter.",
+          "Копия появится в его списке в тот же день, с вашим ником.",
+          "Он её читает. Менять и закрывать можете только вы.",
+        ],
+      },
+      inbox: {
+        title: "Когда отметили вас",
+        steps: [
+          "В правом нижнем углу появится круглая кнопка @ с числом.",
+          "Нажмите — останутся только задачи с вашей отметкой.",
+          "Нажмите ещё раз — вернётся весь список.",
         ],
       },
     },

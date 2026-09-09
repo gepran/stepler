@@ -1,10 +1,34 @@
 import { useSyncExternalStore } from "react";
 import { translations } from "./translations";
 
+/**
+ * `short` is what the web app's round language button shows. It is deliberately
+ * neither the language code nor a slice of the locale: Georgian is `ka`, but
+ * the two letters people recognise at badge size are GE — and taking the region
+ * off the locale would have printed GB for English.
+ */
 export const LANGUAGES = [
-  { code: "en", label: "English", native: "English", locale: "en-GB" },
-  { code: "ka", label: "Georgian", native: "ქართული", locale: "ka-GE" },
-  { code: "ru", label: "Russian", native: "Русский", locale: "ru-RU" },
+  {
+    code: "en",
+    label: "English",
+    native: "English",
+    locale: "en-GB",
+    short: "EN",
+  },
+  {
+    code: "ka",
+    label: "Georgian",
+    native: "ქართული",
+    locale: "ka-GE",
+    short: "GE",
+  },
+  {
+    code: "ru",
+    label: "Russian",
+    native: "Русский",
+    locale: "ru-RU",
+    short: "RU",
+  },
 ];
 
 const CODES = LANGUAGES.map((l) => l.code);

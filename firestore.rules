@@ -1,10 +1,20 @@
 rules_version = '2';
 
-// Stepler — every document lives under the user who owns it, and nothing is
-// readable across accounts. The client is never trusted to say who it is: the
-// only uid that matters is the one Firebase Auth put in the token.
+// Stepler — a task lives under the user who owns it, and nothing is readable
+// across accounts. The client is never trusted to say who it is: the only uid
+// that matters is the one Firebase Auth put in the token.
+//
+// Collaboration adds the only three places where two accounts meet: a public
+// profile card, the handle that names it, and the two subcollections that carry
+// an invitation and a mention. Each of those is written under a rule narrow
+// enough that the worst a hostile client can do is write the one document that
+// represents itself.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
 
     function signedInAs(uid) {
       return request.auth != null && request.auth.uid == uid;
@@ -33,6 +43,68 @@ service cloud.firestore {
         && stampedByServer();
     }
 
+    // Two people are connected only when BOTH sides say so. Reading the far
+    // side's row is what stops an invitation nobody accepted from being a
+    // licence to write into that person's list.
+    //
+    // A ternary rather than `exists(x) && get(x)`: `&&` evaluates both of its
+    // operands, so the `get` of a document that is not there raises instead of
+    // returning false. The write is denied either way, but a rule that throws
+    // is a rule nobody can read the intent of afterwards.
+    function connectionPath(owner, other) {
+      return /databases/$(database)/documents/users/$(owner)/connections/$(other);
+    }
+
+    function acceptedWith(owner, other) {
+      return exists(connectionPath(owner, other))
+        ? get(connectionPath(owner, other)).data.status == 'accepted'
+        : false;
+    }
+
+    // The handle a person actually holds, or "" if they hold none. Same
+    // ternary, same reason.
+    function handleHolder(handle) {
+      return exists(/databases/$(database)/documents/usernames/$(handle))
+        ? get(/databases/$(database)/documents/usernames/$(handle)).data.uid
+        : "";
+    }
+
+    // ---------------------------------------------------------------------
+    // Public identity
+    //
+    // A profile card is the only thing in this database any signed-in user can
+    // read about another, and it holds exactly what you need to decide whether
+    // the @handle you are about to type is the person you meant.
+    // ---------------------------------------------------------------------
+
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      // The handle on the card has to be one this account has actually claimed
+      // in /usernames. Without that check the lock below would be decorative:
+      // anybody could write @somebody-else onto their own card and turn up in
+      // that person's place in every search box.
+      allow write: if signedInAs(uid)
+        && isString('username', 24)
+        && isString('usernameLower', 24)
+        && request.resource.data.username == request.resource.data.usernameLower
+        && handleHolder(request.resource.data.usernameLower) == uid
+        && stampedByServer();
+    }
+
+    // The handle itself, as its own document so the id enforces uniqueness:
+    // a create fails if somebody already holds the name, which is the whole
+    // point of the collection. Nobody can take a name off somebody else —
+    // an update or a delete has to come from the uid already recorded in it.
+    match /usernames/{handle} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && stampedByServer();
+      allow update, delete: if signedIn()
+        && resource != null
+        && resource.data.uid == request.auth.uid;
+    }
+
     match /users/{uid} {
       allow read: if signedInAs(uid);
       allow write: if signedInAs(uid) && stampedByServer();
@@ -44,6 +116,49 @@ service cloud.firestore {
         // their next sync.
         allow create, update: if signedInAs(uid) && validTask();
         allow delete: if signedInAs(uid);
+      }
+
+      // -------------------------------------------------------------------
+      // Invitations
+      //
+      // Your own list is yours to write. Somebody else may write exactly one
+      // document in it — the one whose id is their own uid, the row that
+      // represents them — which is how an invitation reaches you and how your
+      // acceptance reaches them. They can never touch the row describing
+      // anybody else, and never read the list at all.
+      // -------------------------------------------------------------------
+      match /connections/{otherUid} {
+        allow read: if signedInAs(uid);
+        allow create, update: if signedInAs(uid)
+          || (signedInAs(otherUid) && stampedByServer());
+        allow delete: if signedInAs(uid) || signedInAs(otherUid);
+      }
+
+      // -------------------------------------------------------------------
+      // Mentions
+      //
+      // A copy of the task, written into the mentioned person's own space by
+      // whoever wrote the task — but only once both sides have accepted each
+      // other, so a mention cannot be used to push text at a stranger. The
+      // owner may write their own copy too, which is how "read" gets ticked.
+      // -------------------------------------------------------------------
+      match /mentions/{mentionId} {
+        allow read: if signedInAs(uid);
+        allow create, update: if signedInAs(uid)
+          || (
+            signedIn()
+            && request.resource.data.fromUid == request.auth.uid
+            && isString('text', 20000)
+            && isString('taskId', 64)
+            && stampedByServer()
+            && acceptedWith(uid, request.auth.uid)
+          );
+        // Either end can take a mention back: the author when they stop
+        // mentioning you, and you when you have finished with it.
+        allow delete: if signedInAs(uid)
+          || (signedIn()
+              && resource != null
+              && resource.data.fromUid == request.auth.uid);
       }
 
       // Settings and sync bookkeeping. Shape is left open on purpose; these
