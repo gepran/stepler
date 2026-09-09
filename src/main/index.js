@@ -2475,10 +2475,12 @@ function startAPIServer() {
         ],
       });
       flushAppData();
-      mainWindow?.webContents.send("app-data-updated", {
-        tasks: dataCache.tasks,
-        deletedTasks: dataCache.deletedTasks,
-      });
+      // Must be the whole picture. This used to send tasks + deletedTasks with
+      // no history, and the window only replaces its list when both tasks and
+      // history are present — so it skipped the list, applied the trash, and
+      // then saved the task back from its own unchanged copy. The delete was
+      // undone and the task ended up in both places at once.
+      broadcastData();
       return send(200, { success: true });
     }
 
