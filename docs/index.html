@@ -907,7 +907,9 @@
             Native for macOS &amp; Windows
           </span>
 
-          <h1>Your whole day on<br /><span class="grad">one timeline.</span></h1>
+          <h1>
+            Your whole day on<br /><span class="grad">one timeline.</span>
+          </h1>
 
           <p class="lede">
             Today's work sits at the bottom of the window, right next to the box
@@ -918,7 +920,7 @@
           <div class="actions">
             <a
               class="btn btn-primary"
-              href="https://github.com/gepran/stepler/releases/download/v1.3.3/stepler-1.3.3.dmg"
+              href="https://github.com/gepran/stepler/releases/download/v1.3.4/stepler-1.3.4.dmg"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path
@@ -930,7 +932,7 @@
 
             <a
               class="btn btn-ghost"
-              href="https://github.com/gepran/stepler/releases/download/v1.3.3/stepler-1.3.3-setup.exe"
+              href="https://github.com/gepran/stepler/releases/download/v1.3.4/stepler-1.3.4-setup.exe"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path
@@ -942,8 +944,8 @@
           </div>
 
           <p class="fineprint">
-            <b>v1.3.3</b> &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; free and
-            open source &nbsp;·&nbsp;
+            <b>v1.3.4</b> &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp;
+            free and open source &nbsp;·&nbsp;
             <a
               href="https://github.com/gepran/stepler/releases"
               target="_blank"
@@ -953,7 +955,23 @@
           </p>
 
           <details class="firstrun">
-            <summary>Windows warns you the first time — this is expected</summary>
+            <summary>Opening it the first time on macOS</summary>
+            <p>
+              macOS may say <b>“Stepler is damaged and can’t be opened”</b>, or
+              simply do nothing. It is not damaged — anything downloaded from a
+              browser is quarantined, and Stepler is signed ad-hoc rather than
+              with a paid Apple certificate.
+            </p>
+            <p>
+              Right-click Stepler in Applications, choose <b>Open</b>, then
+              <b>Open</b> again. Once only: updates installed from inside the
+              app are never quarantined.
+            </p>
+          </details>
+          <details class="firstrun">
+            <summary>
+              Windows warns you the first time — this is expected
+            </summary>
             <p>
               Windows shows a blue <b>“Windows protected your PC”</b> screen for
               any app it has not seen before. Click <b>More info</b>, then
@@ -1215,7 +1233,7 @@
             <div class="actions reveal">
               <a
                 class="btn btn-primary"
-                href="https://github.com/gepran/stepler/releases/download/v1.3.3/stepler-1.3.3.dmg"
+                href="https://github.com/gepran/stepler/releases/download/v1.3.4/stepler-1.3.4.dmg"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path
@@ -1227,7 +1245,7 @@
 
               <a
                 class="btn btn-ghost"
-                href="https://github.com/gepran/stepler/releases/download/v1.3.3/stepler-1.3.3-setup.exe"
+                href="https://github.com/gepran/stepler/releases/download/v1.3.4/stepler-1.3.4-setup.exe"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path
@@ -1319,8 +1337,10 @@
           var s = getComputedStyle(root);
           return {
             dot: s.getPropertyValue("--particle").trim() || "155, 106, 255",
-            warm: s.getPropertyValue("--particle-warm").trim() || "255, 128, 30",
-            link: s.getPropertyValue("--particle-link").trim() || "255, 122, 24",
+            warm:
+              s.getPropertyValue("--particle-warm").trim() || "255, 128, 30",
+            link:
+              s.getPropertyValue("--particle-link").trim() || "255, 122, 24",
             warmShare:
               parseFloat(s.getPropertyValue("--particle-warm-share")) || 0.34,
             dotA: parseFloat(s.getPropertyValue("--particle-alpha")) || 0.55,

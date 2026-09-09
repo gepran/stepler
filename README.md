@@ -24,6 +24,14 @@
 - **Optional integrations.** Google Calendar, Jira and Apple Reminders — all off until you turn them on.
 - **English, ქართული and Русский.** Switch the interface language in Settings → General.
 
+## 📥 Installing on macOS
+
+The first launch after downloading shows **“Stepler is damaged and can’t be opened”**, or nothing happens at all. The app is not damaged: macOS quarantines anything downloaded from a browser, and Gatekeeper refuses to run it because Stepler is signed ad-hoc rather than with a paid Apple Developer certificate.
+
+Right-click the app in Applications and choose **Open**, then **Open** again in the dialog. You only do this once. Updates installed from inside the app are never quarantined, so this never comes up again.
+
+If you would rather do it from a terminal: `xattr -dr com.apple.quarantine /Applications/Stepler.app`
+
 ## 📥 Installing on Windows
 
 The first launch shows a blue **“Windows protected your PC”** screen: click **More info**, then **Run anyway**.
