@@ -26,6 +26,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   doc,
   getFirestore,
   onSnapshot,
@@ -125,6 +126,10 @@ export function flattenLocal(data, todayYMD) {
   const seen = new Set();
   const push = (t, deleted) => {
     if (!t || t.id == null) return;
+    // Belt and braces against the bug that put mention rows in the file: one
+    // of those going up would appear in the cloud as a task this account had
+    // written, and then land on its other machines as one.
+    if (t.mention) return;
     const id = String(t.id);
     if (seen.has(id)) return;
     seen.add(id);
@@ -522,6 +527,10 @@ function applyRemoteTasks(remote) {
     }
   }
   setStatus({ state: "synced", error: null });
+  // A pull can also bring back an echo another device has not cleaned up yet.
+  repairMentionEchoes().catch((err) =>
+    console.warn("Echo repair reported:", err.code || "", err.message),
+  );
   // A pull can reveal that this machine holds tasks the cloud has never seen.
   schedulePush();
 }
@@ -777,6 +786,11 @@ async function startCollab(user) {
     (list) => {
       mentions = list;
       emitCollab();
+      // Knowing what was addressed to you is what makes the echoes
+      // identifiable, so this is the moment to look for them.
+      repairMentionEchoes().catch((err) =>
+        console.warn("Echo repair reported:", err.code || "", err.message),
+      );
     },
     (err) => console.warn("Mentions failed:", err.code, err.message),
   );
@@ -821,6 +835,68 @@ async function deliverMentions() {
     sent: sentMap || {},
   });
   if (uid === currentUid) sentMap = sent;
+}
+
+/**
+ * Undo the echo.
+ *
+ * A bug wrote rows other people had addressed to you into your own task file,
+ * where sync duly pushed them up as tasks you had written. Filtering them out
+ * going forward is not enough on its own: the copies already in the cloud come
+ * back on the next pull, and by then they have lost the `mention` field that
+ * would identify them.
+ *
+ * The id is what identifies them instead. A mention carries the AUTHOR's task
+ * id, and your own ids are minted from your own clock — so a task of yours
+ * sharing an id with a mention you received is the echo and nothing else. The
+ * text has to match too, which takes "essentially impossible" down to "no".
+ *
+ * The cloud copy is deleted rather than tombstoned: a tombstone would put
+ * somebody else's task in your trash, which is a worse thing to explain than
+ * the bug. The author's own task is never touched — this only ever reaches
+ * into this account's own collection.
+ */
+async function repairMentionEchoes() {
+  if (!currentUid || !mentions.length) return;
+  const byId = new Map(
+    mentions.map((m) => [String(m.taskId || m.id), String(m.text || "")]),
+  );
+  const today = deps.todayYMD();
+  const flat = flattenLocal(deps.getData(), today);
+  const echoes = flat.filter(
+    (t) => byId.has(t.id) && String(t.text || "") === byId.get(t.id),
+  );
+  if (!echoes.length) return;
+
+  console.warn(
+    `Removing ${echoes.length} mention echo(es) from this account's tasks.`,
+  );
+
+  const uid = currentUid;
+  await Promise.allSettled(
+    echoes.map((t) => deleteDoc(doc(db, "users", uid, "tasks", t.id))),
+  );
+  if (uid !== currentUid) return;
+
+  // Out of the file too, and out of the shadow — otherwise the next push
+  // would helpfully put them back.
+  const ids = new Set(echoes.map((t) => t.id));
+  applyingRemote = true;
+  try {
+    deps.applyRemote(
+      rebuildLocal(
+        flattenLocal(deps.getData(), today).filter((t) => !ids.has(t.id)),
+        today,
+      ),
+    );
+  } finally {
+    applyingRemote = false;
+  }
+  const saved = (await deps.readToken()) || {};
+  if (saved.uid === uid && saved.shadow) {
+    for (const id of ids) delete saved.shadow[id];
+    await deps.writeToken(saved);
+  }
 }
 
 export async function collabSearch(term) {

@@ -43,6 +43,10 @@ function flattenStored(data) {
   const out = [];
   const push = (t) => {
     if (!t || seen.has(t.id)) return;
+    // A row carrying `mention` is somebody else's task that a bug once wrote
+    // into this file. Dropping it on the way in is what lets an already
+    // polluted file clean itself up on the next save, without a migration.
+    if (t.mention) return;
     seen.add(t.id);
     out.push(t);
   };
@@ -478,17 +482,37 @@ export default function App() {
     return () => ipc.removeAllListeners("update-state");
   }, []);
 
+  /**
+   * What actually belongs to this account.
+   *
+   * `allDays` is the list on SCREEN, and rows other people addressed to you
+   * are part of that — but they are not yours, they live in the cloud under
+   * your mentions, and they must never reach the file. Writing them there
+   * turned a mention into a task of your own, which was then read back as one,
+   * merged with the live mention again, and saved twice; the file grew a copy
+   * per pass and sync pushed the lot up as tasks you had written.
+   */
+  const ownDays = useMemo(
+    () =>
+      allDays
+        .map((day) => ({ ...day, tasks: day.tasks.filter((t) => !t.mention) }))
+        // A day that held nothing but mentions is not a day you had anything
+        // on, and an empty bucket in the file helps nobody.
+        .filter((day) => day.tasks.length > 0),
+    [allDays],
+  );
+
   // --- Persist (the main process batches this into one atomic write) ---
   useEffect(() => {
     if (!loaded || !ipc) return;
     // On disk the shape stays "today plus past days" so the CLI and older
     // exports keep working, even though memory holds one flat list.
     ipc.invoke("save-app-data", {
-      tasks: allDays.find((d) => d.ymd === todayYMD)?.tasks || [],
-      history: allDays.filter((d) => d.ymd !== todayYMD),
+      tasks: ownDays.find((d) => d.ymd === todayYMD)?.tasks || [],
+      history: ownDays.filter((d) => d.ymd !== todayYMD),
       deletedTasks,
     });
-  }, [allDays, todayYMD, deletedTasks, loaded]);
+  }, [ownDays, todayYMD, deletedTasks, loaded]);
 
   // --- Land on Today once the data is actually on screen ---
   // Images and fonts settle after the first paint and push the timeline
