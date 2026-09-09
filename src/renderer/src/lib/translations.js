@@ -270,6 +270,40 @@ const en = {
       data: "Data",
       trash: "Trash",
     },
+    // The sidebar reads as four short groups rather than seven flat rows, so
+    // the question "where would that setting live?" has a shape to it.
+    nav: {
+      app: "App",
+      connections: "Connections",
+      dataGroup: "Your data",
+      help: "Help",
+    },
+    // One line under each tab title. Between them they are the whole app: a
+    // person who opens Settings should learn what Stepler can do without
+    // clicking every tab to find out.
+    subtitles: {
+      general:
+        "Appearance, language, the global shortcut, and window behaviour.",
+      projects: "The tags you reuse. Pin the ones you type most.",
+      integrations:
+        "Calendar, Jira, Reminders, the terminal and coding agents. Everything is off until you turn it on.",
+      collab: "Share a task with someone and see what they send you.",
+      guide: "Short answers to “how do I…”.",
+      data: "Export, import, and where your file lives.",
+      trash: "Deleted tasks, restorable until you clear them out.",
+    },
+    agents: {
+      title: "Claude Code, Codex, Cursor",
+      blurb:
+        "Stepler ships an MCP server, so a coding assistant can read your list and write to it — “what's on today?”, “add this for tomorrow”.",
+      needsApi: "Turn on command line access above first — it serves the API.",
+      step: "Run this once in a terminal:",
+      copy: "Copy",
+      copied: "Copied",
+      requires:
+        "Needs Node.js and the Claude Code CLI. For Codex or Cursor, point their MCP config at the same command.",
+      docs: "How it works",
+    },
     general: {
       title: "General",
       appearance: "Appearance",
@@ -278,12 +312,18 @@ const en = {
       system: "System",
       language: "Language",
       languageHint: "Menus, buttons and the guide switch straight away.",
-      shortcut: "Global Shortcut",
+      shortcut: "Shortcuts",
       change: "Change",
       recording: "Press the new combination… (Esc to cancel)",
       shortcutHint:
         "Press this combination from any app to show or hide Stepler.",
       shortcutError: "Use at least one of ⌘, ⌃ or ⌥ together with another key.",
+      keyGlobal: "Show or hide Stepler from anywhere",
+      keyNew: "Jump straight to the composer",
+      keyFind: "Full-screen search",
+      keyEsc: "Send the window away",
+      keySelection:
+        "Select text in any app, press the global shortcut, and it arrives already written down.",
       behaviour: "Behaviour",
       captureSelection: "Bring the selection with you",
       captureSelectionHint:
@@ -332,6 +372,7 @@ const en = {
     },
     data: {
       title: "Data Management",
+      folder: "Data folder",
       export: "Export",
       exportBlurb:
         "One JSON file with every task, including the attachments themselves.",
@@ -563,6 +604,7 @@ const en = {
           "Settings → Integrations → Command line access has to be on.",
           "The bundled CLI can list and add tasks without opening the window.",
           "Claude Code, Codex and Cursor can be connected too, so an assistant can put things on your list for you.",
+          "The command that connects one is on that same screen, with a Copy button — run it once in a terminal.",
           "Everything stays on this computer, behind a token only apps running as you can read.",
         ],
       },
@@ -900,6 +942,35 @@ const ka = {
       data: "მონაცემები",
       trash: "სანაგვე",
     },
+    nav: {
+      app: "აპლიკაცია",
+      connections: "კავშირები",
+      dataGroup: "შენი მონაცემები",
+      help: "დახმარება",
+    },
+    subtitles: {
+      general: "იერსახე, ენა, გლობალური მალსახმობი და ფანჯრის ქცევა.",
+      projects: "ტეგები, რომლებსაც ხელახლა იყენებ. ხშირად ნახმარები დაამაგრე.",
+      integrations:
+        "კალენდარი, Jira, შეხსენებები, ტერმინალი და კოდის აგენტები. ყველაფერი გამორთულია, სანამ თავად არ ჩართავ.",
+      collab: "გაუზიარე დავალება და ნახე, რას გიგზავნიან.",
+      guide: "მოკლე პასუხები კითხვაზე „როგორ…“.",
+      data: "ექსპორტი, იმპორტი და სად ინახება შენი ფაილი.",
+      trash: "წაშლილი დავალებები — აღდგენადი, სანამ არ გაასუფთავებ.",
+    },
+    agents: {
+      title: "Claude Code, Codex, Cursor",
+      blurb:
+        "Stepler-ს თან მოჰყვება MCP სერვერი, ასე რომ კოდის ასისტენტს შეუძლია შენი სია წაიკითხოს და ჩაწეროს — „რა მაქვს დღეს?“, „ეს ხვალისთვის დაამატე“.",
+      needsApi:
+        "ჯერ ზემოთ ჩართე ბრძანების ხაზთან წვდომა — სწორედ ის ამუშავებს API-ს.",
+      step: "ერთხელ გაუშვი ტერმინალში:",
+      copy: "კოპირება",
+      copied: "დაკოპირდა",
+      requires:
+        "საჭიროა Node.js და Claude Code-ის CLI. Codex-ისთვის ან Cursor-ისთვის იმავე ბრძანებაზე მიუთითე მათ MCP კონფიგურაციაში.",
+      docs: "როგორ მუშაობს",
+    },
     general: {
       title: "ზოგადი",
       appearance: "გარეგნობა",
@@ -908,13 +979,19 @@ const ka = {
       system: "სისტემური",
       language: "ენა",
       languageHint: "მენიუ, ღილაკები და გზამკვლევი მაშინვე იცვლება.",
-      shortcut: "გლობალური მალსახმობი",
+      shortcut: "მალსახმობები",
       change: "შეცვლა",
       recording: "დააჭირე ახალ კომბინაციას… (Esc — გაუქმება)",
       shortcutHint:
         "დააჭირე ამ კომბინაციას ნებისმიერი აპიდან, რომ Stepler გამოჩნდეს ან დაიმალოს.",
       shortcutError:
         "გამოიყენე ⌘, ⌃ ან ⌥ სულ მცირე ერთი მათგანი სხვა ღილაკთან ერთად.",
+      keyGlobal: "Stepler-ის ჩვენება ან დამალვა ნებისმიერი ადგილიდან",
+      keyNew: "პირდაპირ ჩაწერის ველში",
+      keyFind: "სრულეკრანიანი ძებნა",
+      keyEsc: "ფანჯრის დამალვა",
+      keySelection:
+        "მონიშნე ტექსტი ნებისმიერ აპში, დააჭირე გლობალურ მალსახმობს — და ის უკვე ჩაწერილი გხვდება.",
       behaviour: "ქცევა",
       captureSelection: "მონიშნული ტექსტის თან წამოღება",
       captureSelectionHint:
@@ -963,6 +1040,7 @@ const ka = {
     },
     data: {
       title: "მონაცემების მართვა",
+      folder: "მონაცემების საქაღალდე",
       export: "ექსპორტი",
       exportBlurb: "ერთი JSON ფაილი ყველა დავალებით, დანართების ჩათვლით.",
       import: "იმპორტი",
@@ -1195,6 +1273,7 @@ const ka = {
           "პარამეტრები → ინტეგრაციები → „ბრძანების სტრიქონის წვდომა“ ჩართული უნდა იყოს.",
           "თანდართულ CLI-ს შეუძლია დავალებების ჩვენება და დამატება ფანჯრის გახსნის გარეშე.",
           "Claude Code, Codex და Cursor-იც შეიძლება დაუკავშირდეს, რომ ასისტენტმა შენს სიაში ჩაგიწეროს.",
+          "დასაკავშირებელი ბრძანება იმავე გვერდზეა, კოპირების ღილაკით — ერთხელ გაუშვი ტერმინალში.",
           "ყველაფერი ამ კომპიუტერზე რჩება, ტოკენის მიღმა, რომელსაც მხოლოდ შენი სახელით გაშვებული აპები კითხულობენ.",
         ],
       },
@@ -1498,6 +1577,36 @@ const ru = {
       data: "Данные",
       trash: "Корзина",
     },
+    nav: {
+      app: "Приложение",
+      connections: "Подключения",
+      dataGroup: "Ваши данные",
+      help: "Помощь",
+    },
+    subtitles: {
+      general:
+        "Оформление, язык, глобальное сочетание клавиш и поведение окна.",
+      projects: "Теги, которыми вы пользуетесь постоянно. Частые — закрепите.",
+      integrations:
+        "Календарь, Jira, Напоминания, терминал и кодовые агенты. Всё выключено, пока вы сами не включите.",
+      collab: "Поделитесь задачей и смотрите, что присылают вам.",
+      guide: "Короткие ответы на вопрос «как мне…».",
+      data: "Экспорт, импорт и где лежит ваш файл.",
+      trash: "Удалённые задачи — их можно вернуть, пока не очистите.",
+    },
+    agents: {
+      title: "Claude Code, Codex, Cursor",
+      blurb:
+        "В Stepler встроен MCP-сервер, поэтому кодовый ассистент может читать ваш список и писать в него — «что у меня сегодня?», «добавь это на завтра».",
+      needsApi:
+        "Сначала включите доступ из командной строки выше — именно он поднимает API.",
+      step: "Выполните один раз в терминале:",
+      copy: "Скопировать",
+      copied: "Скопировано",
+      requires:
+        "Нужны Node.js и CLI Claude Code. Для Codex или Cursor укажите ту же команду в их настройках MCP.",
+      docs: "Как это работает",
+    },
     general: {
       title: "Общие",
       appearance: "Оформление",
@@ -1506,13 +1615,19 @@ const ru = {
       system: "Системная",
       language: "Язык",
       languageHint: "Меню, кнопки и руководство переключаются сразу.",
-      shortcut: "Глобальное сочетание клавиш",
+      shortcut: "Сочетания клавиш",
       change: "Изменить",
       recording: "Нажмите новое сочетание… (Esc — отмена)",
       shortcutHint:
         "Нажмите это сочетание в любом приложении, чтобы показать или скрыть Stepler.",
       shortcutError:
         "Используйте хотя бы одну из клавиш ⌘, ⌃ или ⌥ вместе с другой клавишей.",
+      keyGlobal: "Показать или скрыть Stepler откуда угодно",
+      keyNew: "Сразу в поле ввода",
+      keyFind: "Полноэкранный поиск",
+      keyEsc: "Убрать окно",
+      keySelection:
+        "Выделите текст в любом приложении, нажмите сочетание — и он уже записан.",
       behaviour: "Поведение",
       captureSelection: "Забирать выделенный текст",
       captureSelectionHint:
@@ -1560,6 +1675,7 @@ const ru = {
     },
     data: {
       title: "Управление данными",
+      folder: "Папка с данными",
       export: "Экспорт",
       exportBlurb: "Один файл JSON со всеми задачами, включая сами вложения.",
       import: "Импорт",
@@ -1791,6 +1907,7 @@ const ru = {
           "Настройки → Интеграции → «Доступ из командной строки» должен быть включён.",
           "Встроенный CLI умеет показывать и добавлять задачи, не открывая окно.",
           "Claude Code, Codex и Cursor тоже можно подключить, чтобы ассистент записывал дела в ваш список.",
+          "Команда для подключения — на том же экране, с кнопкой «Скопировать». Выполните её один раз в терминале.",
           "Всё остаётся на этом компьютере, за токеном, который читают только приложения, запущенные от вашего имени.",
         ],
       },

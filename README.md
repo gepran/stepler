@@ -93,9 +93,13 @@ Stepler ships an MCP server, so a coding agent can read and write your list
 without you leaving the terminal. It is a thin front for the local API above,
 has no dependencies, and needs nothing but `node`.
 
+The app writes this line out for you, with the right path for wherever it is
+installed: **Settings → Integrations → Claude Code, Codex, Cursor**, then
+*Copy*. By hand it is:
+
 ```bash
 # Installed the app:
-claude mcp add stepler -- node "/Applications/Stepler.app/Contents/Resources/app.asar.unpacked/stepler-mcp.mjs"
+claude mcp add stepler -s user -- node "/Applications/Stepler.app/Contents/Resources/app.asar.unpacked/stepler-mcp.mjs"
 
 # Working from a clone:
 claude mcp add stepler -- node "$(pwd)/stepler-mcp.mjs"

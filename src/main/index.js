@@ -2088,6 +2088,33 @@ function setupIPC() {
     return err ? { success: false, error: err } : { success: true };
   });
 
+  /**
+   * Where the MCP server lives, and the one line that registers it.
+   *
+   * The path differs between an installed app and a clone, and nobody should
+   * have to work that out from a README: inside the bundle the file sits in
+   * app.asar.unpacked (a plain `node` cannot run anything from inside an
+   * asar, which is why electron-builder unpacks it), and in development it is
+   * next to package.json.
+   */
+  ipcMain.handle("agent-setup", () => {
+    const scriptPath = app.isPackaged
+      ? join(process.resourcesPath, "app.asar.unpacked", "stepler-mcp.mjs")
+      : join(app.getAppPath(), "stepler-mcp.mjs");
+    return {
+      path: scriptPath,
+      // -s user, not the default: an agent that only knows about your tasks
+      // in one folder is a worse agent than one that always does.
+      command: `claude mcp add stepler -s user -- node "${scriptPath}"`,
+      enabled: !!loadSettings().apiEnabled,
+    };
+  });
+
+  ipcMain.handle("copy-text", (_, text) => {
+    clipboard.writeText(String(text ?? ""));
+    return { success: true };
+  });
+
   // ---- misc ----
 
   ipcMain.handle("start-dictation", async () => {
