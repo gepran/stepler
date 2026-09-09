@@ -12,3 +12,16 @@ createRoot(document.getElementById("root")).render(
     <App />
   </StrictMode>,
 );
+
+// Registered after load so it never competes with the first paint. A failure
+// here costs the install prompt and offline start, nothing else, so it is
+// logged rather than surfaced.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((err) =>
+        console.warn("Service worker not registered:", err.message),
+      );
+  });
+}

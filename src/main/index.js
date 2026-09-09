@@ -82,6 +82,14 @@ const backupPath = join(USER_DATA, "stepler-data.backup.json");
 const apiInfoPath = join(USER_DATA, "stepler-api.json");
 // Who is signed in for cloud sync, plus the shadow of what this machine has
 // already pushed. Kept out of the settings file because it holds a token.
+/**
+ * The one loopback port Google will redirect to. It is registered against the
+ * OAuth client as http://127.0.0.1:3000/oauth2callback, and Google matches the
+ * redirect URI exactly — a different port comes back as "Error 400:
+ * redirect_uri_mismatch" with no hint about which part was wrong.
+ */
+const OAUTH_PORT = 3000;
+
 const syncSessionPath = join(USER_DATA, "stepler-sync.json");
 // The Firebase session itself. Separate from the file above because that one is
 // bookkeeping we own, while this is the SDK's own store and its shape is not
@@ -1172,7 +1180,7 @@ async function initGoogleAuth() {
   oAuth2Client = new google.auth.OAuth2(
     googleClientId,
     googleClientSecret,
-    `http://127.0.0.1:${apiInfo.port || loadSettings().apiPort}/oauth2callback`,
+    `http://127.0.0.1:${OAUTH_PORT}/oauth2callback`,
   );
   oAuth2Client.on("tokens", (tokens) => {
     const merged = { ...oAuth2Client.credentials, ...tokens };
@@ -1946,8 +1954,8 @@ function setupIPC() {
         success: false,
         error: "Google Calendar is not configured on this machine.",
       };
-    if (!apiInfo.port)
-      return { success: false, error: "Local callback server is not running." };
+    const portProblem = oauthPortProblem();
+    if (portProblem) return { success: false, error: portProblem };
     const url = googleAuthUrl();
     if (!url)
       return {
@@ -2581,6 +2589,19 @@ async function handleJiraCallback(url, send) {
  * only for identity, and it asks for `openid` — without that scope Google
  * returns no id_token at all and Firebase has nothing to accept.
  */
+/**
+ * Google will only send people back to the port registered with the OAuth
+ * client, so if this app could not take that port the sign-in cannot work.
+ * Saying so here beats opening a browser tab that ends on Google's own
+ * "Access blocked" page, which tells the person nothing they can act on.
+ */
+function oauthPortProblem() {
+  if (apiInfo.port === OAUTH_PORT) return null;
+  if (!apiInfo.port)
+    return `Stepler needs port ${OAUTH_PORT} for Google sign-in, and its local server is not running.`;
+  return `Google sign-in needs port ${OAUTH_PORT}, but something else is using it and Stepler fell back to ${apiInfo.port}. Free port ${OAUTH_PORT} and restart Stepler.`;
+}
+
 function firebaseAuthUrl() {
   if (!oAuth2Client) return null;
   return oAuth2Client.generateAuthUrl({

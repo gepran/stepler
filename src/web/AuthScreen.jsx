@@ -109,7 +109,7 @@ export default function AuthScreen() {
     });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-5 py-10 dark:bg-neutral-950">
+    <div className="flex min-h-dvh items-center justify-center bg-neutral-50 px-5 py-10 dark:bg-neutral-950">
       <div className="w-full max-w-[380px]">
         <div className="mb-8 flex flex-col items-center text-center">
           <SteplerLogo size={54} />

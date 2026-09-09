@@ -212,10 +212,15 @@ function Timeline({ uid }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80">
+      {/* The inline padding keeps the composer clear of the iPhone home
+          indicator, and resolves to zero anywhere without an inset. */}
+      <div
+        className="shrink-0 border-t border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <form
           onSubmit={submit}
-          className="mx-auto flex w-full max-w-[720px] items-center gap-2 px-5 py-3"
+          className="mx-auto flex w-full max-w-[720px] items-center gap-2 px-4 py-3 sm:px-5"
         >
           <input
             value={draft}
@@ -266,6 +271,93 @@ function Timeline({ uid }) {
 
 Timeline.propTypes = { uid: PropTypes.string.isRequired };
 
+/**
+ * The account, as a round avatar in the corner — where every other app puts it.
+ * The email used to sit spelled out in the bar, which on a phone squeezed the
+ * title until neither was readable; behind the avatar it costs no width and is
+ * still one tap away.
+ */
+function UserMenu({ user, onSignOut, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const esc = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const label = user.email || user.displayName || user.uid;
+  // Google gives a photo; email/password accounts get their first letter.
+  const initial = (user.displayName || user.email || "?").trim()[0] || "?";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={label}
+        className="flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100 text-[13px] font-bold uppercase text-neutral-600 transition-shadow hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+      >
+        {user.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          initial
+        )}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-30 w-60 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          <p className="truncate border-b border-neutral-100 px-4 py-3 text-[13px] text-neutral-600 dark:border-neutral-800 dark:text-neutral-300">
+            {label}
+          </p>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSignOut();
+            }}
+            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left text-[13px] text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            <LogOut size={15} />
+            {t("auth.signOut")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+UserMenu.propTypes = {
+  user: PropTypes.shape({
+    email: PropTypes.string,
+    displayName: PropTypes.string,
+    photoURL: PropTypes.string,
+    uid: PropTypes.string,
+  }).isRequired,
+  onSignOut: PropTypes.func.isRequired,
+  t: PropTypes.func.isRequired,
+};
+
 export default function App() {
   const t = useT();
   const language = useLanguage();
@@ -275,7 +367,7 @@ export default function App() {
 
   if (user === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+      <div className="flex min-h-dvh items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <SteplerLogo size={40} className="animate-pulse" />
       </div>
     );
@@ -284,11 +376,19 @@ export default function App() {
   if (!user) return <AuthScreen />;
 
   return (
-    <div className="flex h-screen flex-col bg-neutral-50 dark:bg-neutral-950">
-      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80">
-        <div className="mx-auto flex w-full max-w-[720px] items-center gap-3 px-5 py-3">
-          <SteplerLogo size={24} />
-          <span className="text-[15px] font-black tracking-tight text-neutral-900 dark:text-neutral-50">
+    // `dvh`, not `vh`. On a phone `100vh` is the height with the browser's
+    // address bar hidden, so a full-height column overflows the part you can
+    // actually see — and with the body set to overflow:hidden there is no way
+    // to scroll down to what fell off. The composer at the bottom was the
+    // casualty. `dvh` tracks the visible viewport as the chrome comes and goes.
+    <div className="flex h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
+      <header
+        className="shrink-0 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="mx-auto flex h-14 w-full max-w-[720px] items-center gap-3 px-4 sm:px-5">
+          <SteplerLogo size={26} />
+          <span className="text-[16px] font-black tracking-tight text-neutral-900 dark:text-neutral-50">
             Stepler
           </span>
 
@@ -297,7 +397,7 @@ export default function App() {
               aria-label="Language"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="cursor-pointer rounded-lg border border-neutral-200 bg-white px-2 py-1 text-[12px] text-neutral-600 outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+              className="cursor-pointer rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-600 outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
             >
               {LANGUAGES.map((l) => (
                 <option key={l.code} value={l.code}>
@@ -305,20 +405,7 @@ export default function App() {
                 </option>
               ))}
             </select>
-            <span
-              className="max-w-[180px] truncate text-[12px] text-neutral-500 dark:text-neutral-400"
-              title={user.email || user.uid}
-            >
-              {user.email || user.displayName || user.uid}
-            </span>
-            <button
-              type="button"
-              onClick={() => signOut(auth)}
-              title={t("auth.signOut")}
-              className="cursor-pointer rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
-            >
-              <LogOut size={15} />
-            </button>
+            <UserMenu user={user} onSignOut={() => signOut(auth)} t={t} />
           </div>
         </div>
       </header>
