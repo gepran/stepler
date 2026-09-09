@@ -125,6 +125,29 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
+    // An address is a lookup key, never a listing. `get` is allowed so somebody
+    // who was given a colleague's address can find the account behind it; `list`
+    // is denied outright, so the collection cannot be walked. That distinction
+    // is the whole point: /profiles allows `list`, which is why the address must
+    // not live there — one throwaway account could page out every address in the
+    // database.
+    //
+    // The document id has to be the address on the caller's own token, so an
+    // account cannot point somebody else's address at itself and turn up in
+    // their place when that address is searched.
+    match /emails/{address} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.auth.token.email is string
+        && address == request.auth.token.email.lower()
+        && stampedByServer();
+      allow delete: if signedIn()
+        && resource != null
+        && resource.data.uid == request.auth.uid;
+    }
+
     match /users/{uid} {
       allow read: if signedInAs(uid);
       allow write: if signedInAs(uid) && stampedByServer();
@@ -172,8 +195,21 @@ service cloud.firestore {
       // -------------------------------------------------------------------
       match /connections/{otherUid} {
         allow read: if signedInAs(uid);
+        // Your own list is yours to write. Somebody else may write exactly one
+        // document in it — the row that represents THEM — and the identity on
+        // that row now has to be one they can prove. Without the handle check
+        // an invitation could arrive wearing a colleague's name, and it is the
+        // name on this row that `resolveMentions` matches when it decides who
+        // to deliver your tasks to: your own client would post them to whoever
+        // sent the row.
         allow create, update: if signedInAs(uid)
-          || (signedInAs(otherUid) && stampedByServer());
+          ? true
+          : (
+            signedInAs(otherUid)
+            && stampedByServer()
+            && request.resource.data.uid == request.auth.uid
+            && handleHolder(request.resource.data.usernameLower) == request.auth.uid
+          );
         allow delete: if signedInAs(uid) || signedInAs(otherUid);
       }
 
@@ -187,15 +223,40 @@ service cloud.firestore {
       // -------------------------------------------------------------------
       match /mentions/{mentionId} {
         allow read: if signedInAs(uid);
-        allow create, update: if signedInAs(uid)
-          || (
-            signedIn()
-            && request.resource.data.fromUid == request.auth.uid
-            && isString('text', 20000)
-            && isString('taskId', 64)
-            && stampedByServer()
-            && acceptedWith(uid, request.auth.uid)
-          );
+
+        // Only the AUTHOR may put a mention in somebody's list. The owner used
+        // to be allowed here too, and that was the hole: `mentionedOn` treats
+        // this document as proof that its `fromUid` mentioned you, so an
+        // account that could write its own mentions could name anybody as the
+        // author and cash that in for write access to that person's task.
+        allow create: if signedIn()
+          && request.resource.data.fromUid == request.auth.uid
+          && isString('text', 20000)
+          && isString('taskId', 64)
+          && stampedByServer()
+          && acceptedWith(uid, request.auth.uid);
+
+        // Two different updates. You may tick your copy off and mark it read;
+        // the author may revise what they said. Neither may rewrite who it
+        // came from, which is the field the task rule above trusts.
+        allow update: if resource == null
+          ? false
+          : (
+          signedInAs(uid)
+            ? (
+                onlyTouches(['read', 'dismissed', 'completed', 'priority', 'subtasks'])
+                && request.resource.data.fromUid == resource.data.fromUid
+              )
+            : (
+                signedIn()
+                && resource.data.fromUid == request.auth.uid
+                && request.resource.data.fromUid == request.auth.uid
+                && isString('text', 20000)
+                && isString('taskId', 64)
+                && stampedByServer()
+              )
+        );
+
         // Either end can take a mention back: the author when they stop
         // mentioning you, and you when you have finished with it.
         allow delete: if signedInAs(uid)
