@@ -190,6 +190,11 @@ const en = {
   },
 
   update: {
+    reveal: "Show the file",
+    revealed:
+      "{name} is in your Downloads \u2014 unzip it and drag Stepler into Applications.",
+    revealFailed:
+      "There is no downloaded copy \u2014 opening the download page.",
     checkNow: "Check for updates",
     newAvailable: "A new version is ready",
     checking: "Checking…",
@@ -797,6 +802,12 @@ const ka = {
   },
 
   update: {
+    reveal:
+      "\u10E4\u10D0\u10D8\u10DA\u10D8\u10E1 \u10E9\u10D5\u10D4\u10DC\u10D4\u10D1\u10D0",
+    revealed:
+      "{name} \u10D0\u10E0\u10D8\u10E1 Downloads-\u10E8\u10D8 \u2014 \u10D2\u10D0\u10D0\u10EE\u10D0\u10E0\u10D8\u10E1\u10EE\u10D4\u10D7 \u10D3\u10D0 \u10E9\u10D0\u10D0\u10D2\u10D3\u10D4\u10D7 Applications-\u10E8\u10D8.",
+    revealFailed:
+      "\u10E9\u10D0\u10DB\u10DD\u10E2\u10D5\u10D8\u10E0\u10D7\u10E3\u10DA\u10D8 \u10D0\u10E1\u10DA\u10D8 \u10D0\u10E0 \u10D0\u10E0\u10D8\u10E1 \u2014 \u10D5\u10EE\u10E1\u10DC\u10D8\u10D7 \u10D2\u10D5\u10D4\u10E0\u10D3\u10E1.",
     checkNow: "განახლების შემოწმება",
     newAvailable: "ახალი ვერსია მზადია",
     checking: "მოწმება…",
@@ -1390,6 +1401,12 @@ const ru = {
   },
 
   update: {
+    reveal:
+      "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0444\u0430\u0439\u043B",
+    revealed:
+      "{name} \u043B\u0435\u0436\u0438\u0442 \u0432 \u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430\u0445 \u2014 \u0440\u0430\u0441\u043F\u0430\u043A\u0443\u0439\u0442\u0435 \u0438 \u043F\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 Stepler \u0432 Applications.",
+    revealFailed:
+      "\u0421\u043A\u0430\u0447\u0430\u043D\u043D\u043E\u0439 \u043A\u043E\u043F\u0438\u0438 \u043D\u0435\u0442 \u2014 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438.",
     checkNow: "Проверить обновления",
     newAvailable: "Готова новая версия",
     checking: "Проверяем…",

@@ -68,6 +68,27 @@ let downloadedUpdateFile = null;
 /** What the header pill is showing right now, replayed to a fresh window. */
 let updateState = { status: "idle" };
 
+/**
+ * Put the downloaded build where a person can actually reach it, and open
+ * Finder on it. electron-updater keeps it under ~/Library/Caches, which is
+ * a fine place for a machine and a hopeless one for anybody else.
+ */
+function revealDownloadedUpdate() {
+  try {
+    if (!downloadedUpdateFile || !existsSync(downloadedUpdateFile))
+      throw new Error("no local copy");
+    const name = `Stepler-${updateState.version || "update"}${extname(downloadedUpdateFile)}`;
+    const target = join(app.getPath("downloads"), name);
+    copyFileSync(downloadedUpdateFile, target);
+    shell.showItemInFolder(target);
+    return { success: true, path: target, name };
+  } catch {
+    // No copy to hand: the website is still better than nothing.
+    shell.openExternal("https://github.com/gepran/stepler/releases/latest");
+    return { success: false };
+  }
+}
+
 function sendUpdateState(next) {
   updateState = { ...next };
   if (mainWindow && !mainWindow.isDestroyed())
@@ -1896,12 +1917,42 @@ function setupIPC() {
     }
   });
 
-  /** Relaunch into the downloaded build. Only meaningful once it is ready. */
+  /**
+   * Relaunch into the downloaded build.
+   *
+   * `quitAndInstall` replaces the app and relaunches it — when it works. On a
+   * build signed ad-hoc rather than with a paid Apple certificate it can
+   * simply decline: no quit, no error, and the 237 MB that was downloaded
+   * stays in a Caches folder nobody would think to look in. So if this process
+   * is still alive a few seconds later, it did not work, and the download is
+   * put somewhere findable instead of left buried.
+   */
   ipcMain.handle("install-update", () => {
     if (!autoUpdater || updateState.status !== "ready")
       return { success: false, error: "No update is ready yet." };
     app.isQuitting = true;
-    setImmediate(() => autoUpdater.quitAndInstall());
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall();
+      } catch (err) {
+        console.warn("quitAndInstall refused:", err.message);
+      }
+    });
+
+    setTimeout(() => {
+      // Gone means it worked; this only runs if it did not.
+      if (!app.isQuitting) return;
+      app.isQuitting = false;
+      const revealed = revealDownloadedUpdate();
+      sendUpdateState({
+        status: "error",
+        error: revealed.success
+          ? `Could not replace itself. ${revealed.name} is in your Downloads.`
+          : "Could not replace itself, and there is no local copy to hand.",
+        version: updateState.version || null,
+      });
+    }, 6000);
+
     return { success: true };
   });
 
@@ -1911,21 +1962,7 @@ function setupIPC() {
    * downloaded, so put a copy somewhere findable and open Finder on it
    * rather than sending someone back to the website to fetch it again.
    */
-  ipcMain.handle("reveal-downloaded-update", () => {
-    try {
-      if (!downloadedUpdateFile || !existsSync(downloadedUpdateFile))
-        throw new Error("no local copy");
-      const name = `Stepler-${updateState.version || "update"}${extname(downloadedUpdateFile)}`;
-      const target = join(app.getPath("downloads"), name);
-      copyFileSync(downloadedUpdateFile, target);
-      shell.showItemInFolder(target);
-      return { success: true, path: target, name };
-    } catch {
-      // No copy to hand: the website is still better than nothing.
-      shell.openExternal("https://github.com/gepran/stepler/releases/latest");
-      return { success: false };
-    }
-  });
+  ipcMain.handle("reveal-downloaded-update", () => revealDownloadedUpdate());
 
   /** Reveal the data folder, so "put your credentials here" is one click. */
   ipcMain.handle("open-data-folder", async () => {

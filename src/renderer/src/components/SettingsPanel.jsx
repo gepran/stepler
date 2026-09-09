@@ -32,6 +32,7 @@ import {
   LogOut,
   Users,
   ArrowUpCircle,
+  FolderOpen,
   Loader2,
   RefreshCw,
 } from "lucide-react";
@@ -292,7 +293,7 @@ const ERROR_KEYS = {
  * than keeping a second idea of what is happening — the two are looking at one
  * download, and the moment they disagree one of them is lying.
  */
-function UpdateCorner() {
+function UpdateCorner({ onRevealed }) {
   const t = useT();
   const [version, setVersion] = useState("");
   const [state, setState] = useState({ status: "idle" });
@@ -320,6 +321,9 @@ function UpdateCorner() {
   const downloading = status === "downloading";
   const ready = status === "ready";
   const failed = status === "error";
+  // The bytes are on disk in both states — a failed install did not un-download
+  // them — so the way to the file is offered in both.
+  const downloaded = ready || (failed && !!state.version);
 
   const [unavailable, setUnavailable] = useState(false);
 
@@ -328,6 +332,16 @@ function UpdateCorner() {
     const res = await ipc?.invoke("check-for-update");
     if (res?.unavailable) setUnavailable(true);
     if (!res?.success) setBusy(false);
+  };
+
+  /** Put the download somewhere findable and open Finder on it. */
+  const reveal = async () => {
+    const res = await ipc?.invoke("reveal-downloaded-update");
+    onRevealed?.(
+      res?.success
+        ? t("update.revealed", { name: res.name })
+        : t("update.revealFailed"),
+    );
   };
 
   const line = unavailable
@@ -368,15 +382,29 @@ function UpdateCorner() {
 
       {/* Once a build is downloaded the only useful button is the one that
           restarts into it — offering "check again" beside it would be
-          offering to look for something already sitting on the disk. */}
-      {ready ? (
-        <button
-          onClick={() => ipc?.invoke("install-update")}
-          className="btn-tactile flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-blue-600"
-        >
-          <ArrowUpCircle size={14} />
-          {t("update.update")}
-        </button>
+          offering to look for something already sitting on the disk.
+          Underneath it, always, the way to the file itself: electron-updater
+          leaves the download in ~/Library/Caches, and an update you cannot
+          find is an update you did not get. */}
+      {downloaded ? (
+        <div className="space-y-1.5">
+          {ready && (
+            <button
+              onClick={() => ipc?.invoke("install-update")}
+              className="btn-tactile flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-blue-600"
+            >
+              <ArrowUpCircle size={14} />
+              {t("update.update")}
+            </button>
+          )}
+          <button
+            onClick={reveal}
+            className="btn-tactile flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[12px] font-semibold text-neutral-600 transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+          >
+            <FolderOpen size={14} />
+            {t("update.reveal")}
+          </button>
+        </div>
       ) : (
         <button
           onClick={check}
@@ -394,6 +422,8 @@ function UpdateCorner() {
     </div>
   );
 }
+
+UpdateCorner.propTypes = { onRevealed: PropTypes.func };
 
 export default function SettingsPanel({
   settings: initialSettings,
@@ -609,7 +639,7 @@ export default function SettingsPanel({
               buried in an About box — it is the first thing anybody is asked
               for when something goes wrong. */}
           <div className="absolute bottom-6 left-6 right-6 space-y-2.5">
-            <UpdateCorner />
+            <UpdateCorner onRevealed={onToast} />
             <button
               onClick={onClose}
               className="btn-tactile flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400"
