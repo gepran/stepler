@@ -93,12 +93,13 @@ function groupByDay(tasks, todayYMD) {
  * end of the list — which is the one place you look for it. The star is a mark
  * on a task now, not a place in the order.
  *
- * The id is the millisecond the task was written, so it sorts chronologically
- * on its own. A legacy id that is not a number falls back to 0 rather than
- * producing NaN, which a comparator treats as "equal to everything" and which
- * scrambles the whole list.
+ * The id starts with the millisecond the task was written, so it sorts
+ * chronologically on its own: parseInt reads that prefix and stops at the
+ * random tail that keeps ids unique. An id with no leading number falls back
+ * to 0 rather than producing NaN, which a comparator treats as "equal to
+ * everything" and which scrambles the whole list.
  */
-const writtenAt = (task) => Number(task.id) || 0;
+const writtenAt = (task) => parseInt(task.id, 10) || 0;
 
 const orderWithin = (list) =>
   [...list].sort((a, b) => {

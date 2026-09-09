@@ -45,27 +45,31 @@ export default function FullScreenSearch({
     if (!q) return [];
     // One flat list: every task carries the day it was written on.
     const today = localYMD(new Date());
-    const all = tasks.map((t) => {
-      const stamp = taskTimestamp(t.id);
+    // The callback parameter is `task`, never `t`: in this component `t` is the
+    // translate function, and a parameter of that name shadows it. That is
+    // exactly how the date label below came to call the task object.
+    const all = tasks.map((task) => {
+      const stamp = taskTimestamp(task.id);
       const ymd = stamp ? localYMD(stamp) : today;
       const isToday = ymd >= today;
       return {
-        ...t,
+        ...task,
         ymd: isToday ? null : ymd,
         dateLabel: isToday ? t("app.today") : labelForYMD(ymd),
       };
     });
     return all
-      .filter((t) => {
+      .filter((task) => {
         // Search everything the note actually carries — the old version only
         // looked at the text and a legacy single-project field.
-        if ((t.text || "").toLowerCase().includes(q)) return true;
-        if ((t.projects || []).some((p) => p.toLowerCase().includes(q)))
+        if ((task.text || "").toLowerCase().includes(q)) return true;
+        if ((task.projects || []).some((p) => p.toLowerCase().includes(q)))
           return true;
-        if ((t.jiraKey || "").toLowerCase().includes(q)) return true;
-        if ((t.attachment?.name || "").toLowerCase().includes(q)) return true;
+        if ((task.jiraKey || "").toLowerCase().includes(q)) return true;
+        if ((task.attachment?.name || "").toLowerCase().includes(q))
+          return true;
         if (
-          (t.subtasks || []).some((st) =>
+          (task.subtasks || []).some((st) =>
             (st.text || "").toLowerCase().includes(q),
           )
         )
@@ -77,7 +81,7 @@ export default function FullScreenSearch({
         return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
       })
       .slice(0, 200);
-  }, [tasks, query]);
+  }, [tasks, query, t]);
 
   useEffect(() => {
     if (selectedIndex >= 0 && resultRefs.current[selectedIndex])
