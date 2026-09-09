@@ -4,7 +4,6 @@ node_modules/
 # Build and output
 dist/
 out/
-build/
 *.exe
 *.dmg
 *.app
@@ -51,3 +50,11 @@ firestore-debug.log
 
 # Lint cache
 .eslintcache
+
+# NOT ignored: build/
+#
+# It reads like output and is not — it is electron-builder's buildResources
+# directory, holding the app icon, the macOS entitlements and the afterSign
+# hook that signs the app ad-hoc. Ignoring it meant a clone could not produce
+# a working build at all, which nobody noticed while every release was made on
+# the one machine that happened to have the files. Output goes to dist/.
