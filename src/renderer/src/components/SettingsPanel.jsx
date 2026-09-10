@@ -538,6 +538,7 @@ const ERROR_KEYS = {
   "auth/network-request-failed": "network",
   // Ours, not Firebase's — raised before the browser is ever opened.
   "sync/google-not-configured": "notConfigured",
+  "sync/google-init": "googleInit",
   "sync/callback-server-down": "callbackServerDown",
   "sync/no-signin-url": "generic",
 };

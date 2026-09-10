@@ -1440,6 +1440,34 @@ async function getGoogle() {
   return googleApi;
 }
 
+/**
+ * Building the client is not instant — the import above takes about 0.75s on a
+ * warm Mac and considerably longer on a cold machine reading 1254 files out of
+ * an asar with a virus scanner watching. Anyone who opened Settings and clicked
+ * inside that window was told this copy had been "built without Google
+ * sign-in", which was a lie about the build and sent people hunting for the
+ * wrong thing. The handlers await this instead of guessing from `oAuth2Client`
+ * being null, and it starts the work itself if nothing has yet — so a click
+ * that arrives before startup got there is served rather than refused.
+ */
+let googleAuthReady = null;
+let googleInitError = null;
+
+function whenGoogleReady() {
+  if (!googleAuthReady)
+    googleAuthReady = initGoogleAuth().catch((err) => {
+      googleInitError = err;
+      console.error("Google init failed:", err.message);
+    });
+  return googleAuthReady;
+}
+
+/** True only when there are genuinely no credentials in this build. */
+function googleIsConfigured() {
+  const { googleClientId, googleClientSecret } = integrationConfig;
+  return !!(googleClientId && googleClientSecret);
+}
+
 async function initGoogleAuth() {
   const { googleClientId, googleClientSecret } = integrationConfig;
   if (!googleClientId || !googleClientSecret) {
@@ -1929,9 +1957,12 @@ function setupIPC() {
 
   ipcMain.handle("sync-status", () => sync.publicStatus());
 
-  ipcMain.handle("sync-signin-google", () => {
-    if (!oAuth2Client)
+  ipcMain.handle("sync-signin-google", async () => {
+    // Wait for the client rather than reading a null as "no credentials".
+    await whenGoogleReady();
+    if (!googleIsConfigured())
       return { success: false, error: "sync/google-not-configured" };
+    if (!oAuth2Client) return { success: false, error: "sync/google-init" };
     // The calendar button has always checked this and the sign-in button never
     // did, so a busy port failed here as a button that flashed and did nothing.
     const fault = oauthPortFault();
@@ -2376,6 +2407,9 @@ function setupIPC() {
   // ---- Google Calendar ----
 
   ipcMain.handle("google-calendar-status", async () => {
+    // Same race as sign-in: asked too early, this reported the integration as
+    // unconfigured and the settings row offered no Connect button at all.
+    await whenGoogleReady();
     if (!oAuth2Client)
       return {
         configured: false,
@@ -2406,11 +2440,17 @@ function setupIPC() {
     };
   });
 
-  ipcMain.handle("google-calendar-auth", () => {
+  ipcMain.handle("google-calendar-auth", async () => {
+    await whenGoogleReady();
+    if (!googleIsConfigured())
+      return {
+        success: false,
+        error: "This copy of Stepler was built without the Google integration.",
+      };
     if (!oAuth2Client)
       return {
         success: false,
-        error: "Google Calendar is not configured on this machine.",
+        error: `Google could not be set up: ${googleInitError?.message || "unknown error"}`,
       };
     const portProblem = oauthPortProblem();
     if (portProblem) return { success: false, error: portProblem };
@@ -3307,15 +3347,20 @@ if (!app.requestSingleInstanceLock()) {
       } catch (err) {
         console.error("Jira init failed:", err.message);
       }
-      initGoogleAuth().catch((err) =>
-        console.error("Google init failed:", err.message),
-      );
+      whenGoogleReady();
     };
-    if (mainWindow && !mainWindow.isDestroyed())
+    // `once` on an event that has already fired never runs, which would leave
+    // both integrations uninitialised until a restart. Ask whether the window
+    // is still loading rather than assuming it is.
+    if (
+      mainWindow &&
+      !mainWindow.isDestroyed() &&
+      mainWindow.webContents.isLoading()
+    )
       mainWindow.webContents.once("did-finish-load", () =>
         setTimeout(initSecrets, 250),
       );
-    else setTimeout(initSecrets, 1500);
+    else setTimeout(initSecrets, 250);
 
     if (!is.dev) {
       // electron-updater is CommonJS; once bundled, the named export only
