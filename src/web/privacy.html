@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Stepler</title>
+    <meta
+      name="description"
+      content="What Stepler stores, what leaves your machine and what never does. Plain English, no lawyers."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="color-scheme" content="light" />
+
+    <style>
+      /* Tokens copied from index.html so this page reads as part of the same
+         site. Only the ones this page actually uses. */
+      :root {
+        --bg: #fbfbfd;
+        --bg-elevated: rgba(255, 255, 255, 0.72);
+        --bg-card: rgba(255, 255, 255, 0.6);
+        --text: #0b0b0f;
+        --text-muted: #6b6b76;
+        --text-faint: #93939e;
+        --line: rgba(10, 10, 20, 0.09);
+
+        --blue: #41a1ff;
+        --violet: #9b6aff;
+        --amber: #ff9a00;
+        --red: #ff3b30;
+        --brand-warm: linear-gradient(135deg, var(--amber), var(--red));
+        --warm-ink: #e2481a;
+        --glow-warm: 255, 92, 26;
+
+        --shadow-sm: 0 1px 2px rgba(12, 12, 25, 0.05);
+        --radius: 18px;
+        --maxw: 780px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 17px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      .wrap {
+        width: 100%;
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+        font-weight: 640;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      /* Nav — same shape and sizes as the front page. */
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--line);
+      }
+      .nav-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 60px;
+        max-width: 1120px;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 660;
+        font-size: 17px;
+        letter-spacing: -0.02em;
+      }
+      .brand svg {
+        width: 26px;
+        height: 26px;
+        flex: none;
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+      }
+      .nav-links a {
+        text-decoration: none;
+        font-size: 14.5px;
+        font-weight: 520;
+        color: var(--text-muted);
+        transition: color 0.18s ease;
+      }
+      .nav-links a:hover {
+        color: var(--text);
+      }
+      .nav-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 15px;
+        border-radius: 999px;
+        background: var(--brand-warm);
+        color: #fff !important;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 6px 18px -6px rgba(var(--glow-warm), 0.6);
+      }
+
+      /* Document */
+      .doc {
+        padding: 72px 0 40px;
+      }
+      .doc h1 {
+        font-size: clamp(34px, 5vw, 46px);
+      }
+      .doc .lede {
+        margin-top: 18px;
+        font-size: 19px;
+        color: var(--text-muted);
+        max-width: 60ch;
+      }
+      .stamp {
+        margin-top: 22px;
+        font-size: 13.5px;
+        color: var(--text-faint);
+      }
+
+      section {
+        padding: 38px 0;
+        border-top: 1px solid var(--line);
+      }
+      section:first-of-type {
+        border-top: none;
+      }
+      section h2 {
+        font-size: 23px;
+        margin-bottom: 14px;
+      }
+      section p + p,
+      section p + ul,
+      section ul + p {
+        margin-top: 14px;
+      }
+      section p {
+        color: var(--text-muted);
+        max-width: 68ch;
+      }
+      section strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 22px;
+        color: var(--text-muted);
+        max-width: 68ch;
+      }
+      li + li {
+        margin-top: 8px;
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 0.88em;
+        background: rgba(10, 10, 20, 0.05);
+        padding: 2px 6px;
+        border-radius: 6px;
+        color: var(--text);
+      }
+
+      /* The one callout: what never happens. */
+      .never {
+        margin-top: 18px;
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 20px 22px;
+      }
+      .never ul {
+        padding-left: 20px;
+      }
+      .never strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+
+      .contact a {
+        color: var(--warm-ink);
+        text-decoration: none;
+        font-weight: 560;
+      }
+      .contact a:hover {
+        text-decoration: underline;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 30px 0 44px;
+      }
+      .foot-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 13.5px;
+        color: var(--text-faint);
+        max-width: 1120px;
+      }
+      .foot-links {
+        display: flex;
+        gap: 20px;
+      }
+
+      @media (max-width: 700px) {
+        .hide-sm {
+          display: none;
+        }
+        .doc {
+          padding-top: 48px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="/">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <defs>
+              <linearGradient id="rt" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#41A1FF" />
+                <stop offset="100%" stop-color="#9B6AFF" />
+              </linearGradient>
+              <linearGradient id="rb" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#FF9A00" />
+                <stop offset="100%" stop-color="#FF3B30" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 30 20 H 65 C 80 20 80 50 65 50 H 30 C 15 50 15 20 30 20 Z"
+              fill="url(#rt)"
+            />
+            <path
+              d="M 35 50 H 70 C 85 50 85 80 70 80 H 35 C 20 80 20 50 35 50 Z"
+              fill="url(#rb)"
+            />
+            <path d="M 35 50 L 65 50 L 50 65 Z" fill="#000" opacity="0.15" />
+          </svg>
+          Stepler
+        </a>
+
+        <nav class="nav-links">
+          <a class="hide-sm" href="/#features">Features</a>
+          <a class="hide-sm" href="/#data">Your data</a>
+          <a
+            href="https://github.com/gepran/stepler"
+            target="_blank"
+            rel="noopener noreferrer"
+            >GitHub</a
+          >
+          <a href="/app">Open app</a>
+          <a class="nav-cta" href="/#download">Download</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap doc">
+      <h1>Privacy Policy</h1>
+      <p class="lede">
+        Stepler is a task list, not an advertising business. This page says
+        exactly what it stores, what leaves your machine, and what never does.
+        No lawyers were involved.
+      </p>
+      <p class="stamp">Last updated 10 September 2026</p>
+
+      <section>
+        <h2>The short version</h2>
+        <p>
+          Everything you write stays on your own disk. Nothing is sent anywhere
+          until you choose to sign in — and if you never sign in, Stepler works
+          fully offline and talks to no one but the update check.
+        </p>
+        <div class="never">
+          <strong>What Stepler never does</strong>
+          <ul>
+            <li>No analytics, no trackers, no advertising, no profiling.</li>
+            <li>Nothing sold, rented or shared with third parties.</li>
+            <li>
+              Your task text is never read by us, and never used to train
+              anything.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>On your machine</h2>
+        <p>
+          The desktop app keeps everything in a plain folder in your user data
+          directory: <code>stepler-data.json</code> for tasks, history and
+          trash, <code>stepler-data.backup.json</code> for the last known-good
+          copy, an <code>attachments/</code> folder for files you attached, and
+          <code>stepler-settings.json</code> for preferences.
+        </p>
+        <p>
+          You can read, copy, back up or delete these files yourself at any
+          time. Deleting the folder deletes your data — there is no hidden
+          second copy.
+        </p>
+      </section>
+
+      <section>
+        <h2>If you sign in: cloud sync</h2>
+        <p>
+          Signing in is optional, and off until you do it. Once you are signed
+          in, Stepler mirrors your tasks to Google Firebase so your other
+          devices see the same list: task text, subtasks, projects, due dates,
+          reminders and any files you attached. Data is stored in Firebase's
+          European multi-region (<code>eur3</code>).
+        </p>
+        <p>
+          <strong>Only you can read it.</strong> Access is enforced by server
+          side security rules, not by the app being polite: a request for
+          another account's tasks is refused by Firebase itself.
+        </p>
+      </section>
+
+      <section>
+        <h2>What signing in tells us about you</h2>
+        <p>
+          Google sign-in asks for three things only:
+          <code>openid</code>, <code>email</code> and <code>profile</code>. That
+          gives Stepler your email address, your name and your profile picture.
+          It gives no access to Gmail, Drive, contacts, photos or anything else
+          in your Google account. You can also sign in with an email and
+          password instead, in which case Google is not involved at all.
+        </p>
+      </section>
+
+      <section>
+        <h2>Working with other people</h2>
+        <p>
+          If you choose a <strong>@handle</strong>, that handle and your display
+          name become visible to other signed-in Stepler users, so they can find
+          you. Your email address is deliberately kept out of that listing:
+          somebody has to already know your address to look you up by it, and
+          the list of addresses cannot be browsed or exported by anyone.
+        </p>
+        <p>
+          When you name someone in a task, that person can see that one task,
+          tick it off, star it, and add or tick subtasks. They cannot edit your
+          words and they cannot delete it. Nothing else in your list is visible
+          to them.
+        </p>
+      </section>
+
+      <section>
+        <h2>Optional connections</h2>
+        <p>
+          <strong>Google Calendar.</strong> Off until you connect it. It asks
+          for the <code>calendar.events</code> permission and uses it only to
+          create and update events for tasks you have given a date. It does not
+          read your calendar for anything else. The access token is stored
+          encrypted on your own machine and can be revoked at any time by
+          disconnecting in Settings, or from your
+          <a
+            href="https://myaccount.google.com/permissions"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Google account permissions</a
+          >.
+        </p>
+        <p>
+          <strong>Jira</strong> and <strong>Apple Reminders</strong> work the
+          same way: switched off until you turn them on, and used only for the
+          one job they are turned on for.
+        </p>
+      </section>
+
+      <section>
+        <h2>Updates</h2>
+        <p>
+          The desktop app asks GitHub whether a newer release exists. That
+          request reaches GitHub and carries nothing about you or your tasks
+          beyond the ordinary network details any download involves.
+        </p>
+      </section>
+
+      <section>
+        <h2>Deleting your data</h2>
+        <p>
+          Local data: delete the folder described above, or use the app's own
+          controls. Cloud data: sign out to stop syncing, and email the address
+          below to have the stored copy erased — it is removed by hand, so
+          expect a reply rather than a silent deletion. A self-service delete
+          button is on the list of things to build.
+        </p>
+      </section>
+
+      <section>
+        <h2>Children</h2>
+        <p>
+          Stepler is not directed at children under 13 and does not knowingly
+          collect anything from them.
+        </p>
+      </section>
+
+      <section>
+        <h2>Changes</h2>
+        <p>
+          If this policy changes in a way that affects what is stored or who can
+          see it, the date at the top changes with it, and the previous wording
+          stays visible in the project's public
+          <a
+            href="https://github.com/gepran/stepler"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Git history</a
+          >.
+        </p>
+      </section>
+
+      <section class="contact">
+        <h2>Contact</h2>
+        <p>
+          Questions, deletion requests, or something on this page that does not
+          match what the app actually does —
+          <a href="mailto:gepran@gmail.com">gepran@gmail.com</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap foot-inner">
+        <span>Stepler — built with Electron, React, Vite and Tailwind.</span>
+        <span class="foot-links">
+          <a href="/">Home</a>
+          <a
+            href="https://github.com/gepran/stepler"
+            target="_blank"
+            rel="noopener noreferrer"
+            >GitHub</a
+          >
+          <a
+            href="https://github.com/gepran"
+            target="_blank"
+            rel="noopener noreferrer"
+            >@gepran</a
+          >
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>

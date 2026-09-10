@@ -33,6 +33,10 @@ const en = {
       tooMany: "Too many attempts. Wait a minute and try again.",
       popupClosed: "The Google window closed before sign-in finished.",
       network: "No connection to the server.",
+      notConfigured:
+        "This copy of Stepler was built without Google sign-in. Sign in with an email and password instead.",
+      callbackServerDown:
+        "Stepler could not open a local port to receive Google's answer, so signing in cannot finish. A firewall or security tool blocking port {port} is the usual cause.",
       generic: "Sign-in failed. Please try again.",
     },
   },
@@ -646,6 +650,10 @@ const ka = {
       tooMany: "ზედმეტი მცდელობა. დაელოდე წუთი.",
       popupClosed: "Google-ის ფანჯარა დაიხურა შესვლამდე.",
       network: "სერვერთან კავშირი არ არის.",
+      notConfigured:
+        "Stepler-ის ეს ვერსია Google-ით შესვლის გარეშეა აწყობილი. შედი ელფოსტითა და პაროლით.",
+      callbackServerDown:
+        "Stepler-მა ვერ გახსნა ლოკალური პორტი Google-ის პასუხისთვის, ამიტომ შესვლა ვერ დასრულდება. ჩვეულებრივ ამის მიზეზი ფაიერვოლი ან ანტივირუსია, რომელიც პორტ {port}-ს ბლოკავს.",
       generic: "შესვლა ვერ მოხერხდა. სცადე თავიდან.",
     },
   },
@@ -1315,6 +1323,10 @@ const ru = {
       tooMany: "Слишком много попыток. Подожди минуту.",
       popupClosed: "Окно Google закрылось раньше, чем вход завершился.",
       network: "Нет связи с сервером.",
+      notConfigured:
+        "Эта сборка Stepler собрана без входа через Google. Войди по почте и паролю.",
+      callbackServerDown:
+        "Stepler не смог открыть локальный порт для ответа Google, поэтому вход не завершится. Обычно дело в файрволе или антивирусе, блокирующем порт {port}.",
       generic: "Войти не удалось. Попробуй ещё раз.",
     },
   },

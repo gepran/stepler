@@ -27,6 +27,17 @@ export default [
       },
     },
   },
+  // Folded into the main bundle by electron.vite.config.mjs at build time, so
+  // they exist in the built file and nowhere in the source tree.
+  {
+    files: ["src/main/**/*.js"],
+    languageOptions: {
+      globals: {
+        __GOOGLE_CLIENT_ID__: "readonly",
+        __GOOGLE_CLIENT_SECRET__: "readonly",
+      },
+    },
+  },
   {
     files: ["**/*.{js,jsx}"],
     plugins: {

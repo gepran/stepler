@@ -27,6 +27,10 @@ Thumbs.db
 
 # Local env files
 .env
+# Swapping the OAuth client leaves a timestamped copy of the old one behind,
+# and that copy holds a client secret. The bare `.env` rule above does not
+# match it, so name it here rather than trusting anyone to notice.
+.env.bak*
 .env.local
 .env.development.local
 .env.test.local

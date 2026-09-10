@@ -104,14 +104,6 @@ const backupPath = join(USER_DATA, "stepler-data.backup.json");
 const apiInfoPath = join(USER_DATA, "stepler-api.json");
 // Who is signed in for cloud sync, plus the shadow of what this machine has
 // already pushed. Kept out of the settings file because it holds a token.
-/**
- * The one loopback port Google will redirect to. It is registered against the
- * OAuth client as http://127.0.0.1:3000/oauth2callback, and Google matches the
- * redirect URI exactly — a different port comes back as "Error 400:
- * redirect_uri_mismatch" with no hint about which part was wrong.
- */
-const OAUTH_PORT = 3000;
-
 const syncSessionPath = join(USER_DATA, "stepler-sync.json");
 // The Firebase session itself. Separate from the file above because that one is
 // bookkeeping we own, while this is the SDK's own store and its shape is not
@@ -1378,9 +1370,23 @@ function clearSecret(path) {
 
 const CREDENTIALS_PATH = join(USER_DATA, "stepler-integrations.json");
 
+// Replaced by electron.vite.config.mjs at build time. The guard is for the
+// bare-node paths — the CLI and the MCP server import nothing from here, but a
+// future one might, and an undefined identifier would take the app down.
+const BUILT_IN_GOOGLE_CLIENT_ID =
+  typeof __GOOGLE_CLIENT_ID__ === "string" ? __GOOGLE_CLIENT_ID__ : "";
+const BUILT_IN_GOOGLE_CLIENT_SECRET =
+  typeof __GOOGLE_CLIENT_SECRET__ === "string" ? __GOOGLE_CLIENT_SECRET__ : "";
+
 /**
- * Client credentials come from the environment in development, or from a
- * user-owned file in a packaged build (the .env is deliberately not shipped).
+ * Client credentials come from the environment in development, from a
+ * user-owned file if someone has written one, and otherwise from the values
+ * folded into this bundle at build time. That last source is the one an
+ * installed copy actually has: the .env is not shipped, and the credentials
+ * file is something only a developer ever creates by hand.
+ *
+ * The order matters. A hand-written file wins so that anyone pointing Stepler
+ * at their own Google project keeps doing so after an update.
  */
 function loadIntegrationConfig() {
   let fromFile = {};
@@ -1403,9 +1409,13 @@ function loadIntegrationConfig() {
   }
   return {
     googleClientId:
-      fromFile.googleClientId || process.env.GOOGLE_CLIENT_ID || "",
+      fromFile.googleClientId ||
+      process.env.GOOGLE_CLIENT_ID ||
+      BUILT_IN_GOOGLE_CLIENT_ID,
     googleClientSecret:
-      fromFile.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || "",
+      fromFile.googleClientSecret ||
+      process.env.GOOGLE_CLIENT_SECRET ||
+      BUILT_IN_GOOGLE_CLIENT_SECRET,
     jiraClientId: fromFile.jiraClientId || process.env.JIRA_CLIENT_ID || "",
     jiraClientSecret:
       fromFile.jiraClientSecret || process.env.JIRA_CLIENT_SECRET || "",
@@ -1437,11 +1447,11 @@ async function initGoogleAuth() {
     return;
   }
   const google = await getGoogle();
-  oAuth2Client = new google.auth.OAuth2(
-    googleClientId,
-    googleClientSecret,
-    `http://127.0.0.1:${OAUTH_PORT}/oauth2callback`,
-  );
+  // No redirect URI baked in. It is passed per request instead, because the
+  // port is not known until the local server has actually bound one — and
+  // leaving a stale default here would let a missed call site quietly send
+  // people back to a port nothing is listening on.
+  oAuth2Client = new google.auth.OAuth2(googleClientId, googleClientSecret);
   oAuth2Client.on("tokens", (tokens) => {
     const merged = { ...oAuth2Client.credentials, ...tokens };
     oAuth2Client.setCredentials(merged);
@@ -1609,11 +1619,22 @@ async function getJiraAccessToken() {
 
 // --------------- OAuth CSRF state ---------------
 
-const pendingOAuthStates = new Map(); // state -> { kind, expires }
+const pendingOAuthStates = new Map(); // state -> { kind, expires, ...extra }
 
-function newOAuthState(kind) {
+/**
+ * `extra` is how a flow parks anything that belongs to this one attempt and no
+ * other — the PKCE verifier, above all. Kept here rather than in a module
+ * variable because two flows can be mid-authorization at once: connecting
+ * Calendar while a sign-in tab is still open used to overwrite one verifier
+ * with the other, and whichever came back second failed on a bad code.
+ */
+function newOAuthState(kind, extra) {
   const state = randomBytes(16).toString("hex");
-  pendingOAuthStates.set(state, { kind, expires: Date.now() + 10 * 60 * 1000 });
+  pendingOAuthStates.set(state, {
+    kind,
+    expires: Date.now() + 10 * 60 * 1000,
+    ...extra,
+  });
   for (const [k, v] of pendingOAuthStates)
     if (v.expires < Date.now()) pendingOAuthStates.delete(k);
   return state;
@@ -1626,15 +1647,38 @@ function oauthKindOf(state) {
   return entry.kind;
 }
 
+/** The entry if this state is genuinely pending for `kind`, else null. */
 function consumeOAuthState(state, kind) {
   const entry = pendingOAuthStates.get(state);
-  if (!entry || entry.kind !== kind || entry.expires < Date.now()) return false;
+  if (!entry || entry.kind !== kind || entry.expires < Date.now()) return null;
   pendingOAuthStates.delete(state);
-  return true;
+  return entry;
 }
 
 function redirectUri(path) {
   return `http://127.0.0.1:${apiInfo.port || loadSettings().apiPort}${path}`;
+}
+
+/**
+ * Where Google sends people back. A Desktop OAuth client accepts any loopback
+ * port — Google ignores the port when it matches a loopback redirect — so this
+ * follows whatever port the local server actually got. The old fixed 3000 came
+ * from a Web-type client, which matches the URI exactly and answers anything
+ * else with "Error 400: redirect_uri_mismatch".
+ */
+function oauthRedirectUri() {
+  return apiInfo.port
+    ? `http://127.0.0.1:${apiInfo.port}/oauth2callback`
+    : null;
+}
+
+/** One verifier per authorization attempt, sized to Google's 43–128 range. */
+function newCodeVerifier() {
+  return randomBytes(64).toString("base64url").slice(0, 128);
+}
+
+function codeChallenge(verifier) {
+  return createHash("sha256").update(verifier).digest("base64url");
 }
 
 function jiraAuthUrl() {
@@ -1661,23 +1705,20 @@ function jiraAuthUrl() {
 }
 
 /**
- * PKCE, one verifier per authorization attempt. Google documents that an
- * installed app "cannot keep secrets", so the proof is what actually ties the
- * code back to this process rather than a client secret on disk.
+ * PKCE. Google documents that an installed app "cannot keep secrets", so this
+ * proof — not the client secret sitting inside the app bundle — is what ties
+ * the returned code back to this process.
  */
-let googleCodeVerifier = null;
-
 function googleAuthUrl() {
-  if (!oAuth2Client) return null;
-  googleCodeVerifier = randomBytes(48).toString("base64url").slice(0, 128);
-  const challenge = createHash("sha256")
-    .update(googleCodeVerifier)
-    .digest("base64url");
+  const redirect_uri = oauthRedirectUri();
+  if (!oAuth2Client || !redirect_uri) return null;
+  const verifier = newCodeVerifier();
   return oAuth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    state: newOAuthState("google"),
-    code_challenge: challenge,
+    redirect_uri,
+    state: newOAuthState("google", { verifier, redirect_uri }),
+    code_challenge: codeChallenge(verifier),
     code_challenge_method: "S256",
     scope: [
       "https://www.googleapis.com/auth/calendar.events",
@@ -1890,15 +1931,14 @@ function setupIPC() {
 
   ipcMain.handle("sync-signin-google", () => {
     if (!oAuth2Client)
-      return {
-        success: false,
-        error: "Google is not configured on this machine.",
-      };
-    if (!apiInfo.port)
-      return { success: false, error: "Local callback server is not running." };
+      return { success: false, error: "sync/google-not-configured" };
+    // The calendar button has always checked this and the sign-in button never
+    // did, so a busy port failed here as a button that flashed and did nothing.
+    const fault = oauthPortFault();
+    if (fault)
+      return { success: false, error: fault, vars: { port: apiPortSetting() } };
     const url = firebaseAuthUrl();
-    if (!url)
-      return { success: false, error: "Could not build the sign-in URL." };
+    if (!url) return { success: false, error: "sync/no-signin-url" };
     shell.openExternal(url);
     return { success: true };
   });
@@ -2910,18 +2950,27 @@ function startAPIServer() {
     return send(404, { error: "Not Found" });
   });
 
+  // A taken port used to mean no local server at all, which took the CLI and
+  // Google sign-in down with it — and port 3000 is taken often enough on a
+  // developer's machine to make that a real failure rather than a theoretical
+  // one. Now it costs a line in the log. The preferred port is still tried
+  // first, because Jira registers its callback URL by exact port and only that
+  // one keeps working.
+  let usedFallback = false;
   server.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
+    if (err.code === "EADDRINUSE" && !usedFallback) {
+      usedFallback = true;
       console.warn(
-        `Local API port ${settings.apiPort} is already in use — the CLI and OAuth callbacks are unavailable until it is free.`,
+        `Local API port ${settings.apiPort} is taken — asking the OS for a free one. Jira's callback expects ${settings.apiPort} and will need it back.`,
       );
-    } else {
-      console.error("API server error:", err.message);
+      server.listen(0, "127.0.0.1");
+      return;
     }
+    console.error("API server error:", err.message);
     apiInfo.port = null;
   });
 
-  server.listen(settings.apiPort, "127.0.0.1", () => {
+  server.on("listening", () => {
     apiInfo.port = server.address().port;
     try {
       writeJsonAtomic(apiInfoPath, { port: apiInfo.port, token }, PRIVATE_FILE);
@@ -2932,13 +2981,21 @@ function startAPIServer() {
       `Local API listening on http://127.0.0.1:${apiInfo.port} (token required)`,
     );
   });
+
+  server.listen(settings.apiPort, "127.0.0.1");
+}
+
+/** The port the settings ask for, which is not always the one we ended up on. */
+function apiPortSetting() {
+  return loadSettings().apiPort;
 }
 
 async function handleGoogleCallback(url, send) {
   const urlObj = new URL(url, "http://127.0.0.1");
   const code = urlObj.searchParams.get("code");
   const state = urlObj.searchParams.get("state");
-  if (!consumeOAuthState(state, "google"))
+  const pending = consumeOAuthState(state, "google");
+  if (!pending)
     return send(
       400,
       "<h1>Authentication failed</h1><p>Invalid or expired request.</p>",
@@ -2947,11 +3004,14 @@ async function handleGoogleCallback(url, send) {
   if (!code || !oAuth2Client)
     return send(400, "<h1>No code provided</h1>", "text/html");
   try {
+    // Google checks the redirect against the one the authorization started
+    // with, so it has to be the stored one rather than whatever port the
+    // server happens to hold now.
     const { tokens } = await oAuth2Client.getToken({
       code,
-      ...(googleCodeVerifier ? { codeVerifier: googleCodeVerifier } : {}),
+      redirect_uri: pending.redirect_uri,
+      codeVerifier: pending.verifier,
     });
-    googleCodeVerifier = null;
     oAuth2Client.setCredentials(tokens);
     saveSecret(GCAL_TOKEN_PATH, tokens);
     // Connecting the account is the whole point of connecting it, so start
@@ -3015,23 +3075,33 @@ async function handleJiraCallback(url, send) {
  * returns no id_token at all and Firebase has nothing to accept.
  */
 /**
- * Google will only send people back to the port registered with the OAuth
- * client, so if this app could not take that port the sign-in cannot work.
- * Saying so here beats opening a browser tab that ends on Google's own
- * "Access blocked" page, which tells the person nothing they can act on.
+ * Any loopback port will do now, so the only thing that can still block a sign
+ * in is having no listener at all — which means the preferred port was taken
+ * *and* the fallback to a free one also failed. That is a firewall or a
+ * security tool, not a port clash, so the message says so. Checking here beats
+ * opening a browser tab that ends on Google's "Access blocked" page, which
+ * tells the person nothing they can act on.
  */
+function oauthPortFault() {
+  return apiInfo.port ? null : "sync/callback-server-down";
+}
+
+/** The same fault as a sentence, for the callers that show text directly. */
 function oauthPortProblem() {
-  if (apiInfo.port === OAUTH_PORT) return null;
-  if (!apiInfo.port)
-    return `Stepler needs port ${OAUTH_PORT} for Google sign-in, and its local server is not running.`;
-  return `Google sign-in needs port ${OAUTH_PORT}, but something else is using it and Stepler fell back to ${apiInfo.port}. Free port ${OAUTH_PORT} and restart Stepler.`;
+  if (!oauthPortFault()) return null;
+  return `Stepler could not open a local port to receive Google's answer, so signing in cannot finish. A firewall or security tool is the usual cause.`;
 }
 
 function firebaseAuthUrl() {
-  if (!oAuth2Client) return null;
+  const redirect_uri = oauthRedirectUri();
+  if (!oAuth2Client || !redirect_uri) return null;
+  const verifier = newCodeVerifier();
   return oAuth2Client.generateAuthUrl({
     prompt: "select_account",
-    state: newOAuthState("firebase"),
+    redirect_uri,
+    state: newOAuthState("firebase", { verifier, redirect_uri }),
+    code_challenge: codeChallenge(verifier),
+    code_challenge_method: "S256",
     scope: ["openid", "email", "profile"],
   });
 }
@@ -3040,7 +3110,8 @@ async function handleFirebaseCallback(url, send) {
   const urlObj = new URL(url, "http://127.0.0.1");
   const code = urlObj.searchParams.get("code");
   const state = urlObj.searchParams.get("state");
-  if (!consumeOAuthState(state, "firebase"))
+  const pending = consumeOAuthState(state, "firebase");
+  if (!pending)
     return send(
       400,
       "<h1>Sign-in failed</h1><p>Invalid or expired request.</p>",
@@ -3049,7 +3120,11 @@ async function handleFirebaseCallback(url, send) {
   if (!code || !oAuth2Client)
     return send(400, "<h1>No code provided</h1>", "text/html");
   try {
-    const { tokens } = await oAuth2Client.getToken({ code });
+    const { tokens } = await oAuth2Client.getToken({
+      code,
+      redirect_uri: pending.redirect_uri,
+      codeVerifier: pending.verifier,
+    });
     if (!tokens.id_token)
       return send(
         500,

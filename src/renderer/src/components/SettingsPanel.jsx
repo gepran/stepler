@@ -354,6 +354,7 @@ function SyncSection() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [errorVars, setErrorVars] = useState(null);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -369,9 +370,13 @@ function SyncSection() {
   const withBusy = async (run) => {
     setBusy(true);
     setError(null);
+    setErrorVars(null);
     try {
       const res = await run();
-      if (res && res.success === false) setError(res.error || "");
+      if (res && res.success === false) {
+        setError(res.error || "");
+        setErrorVars(res.vars || null);
+      }
     } finally {
       setBusy(false);
     }
@@ -496,7 +501,7 @@ function SyncSection() {
 
             {error && (
               <p className="mt-3 text-center text-xs leading-snug text-red-600 dark:text-red-400">
-                {t(`auth.errors.${ERROR_KEYS[error] || "generic"}`)}
+                {authErrorText(t, error, errorVars)}
               </p>
             )}
           </>
@@ -504,6 +509,21 @@ function SyncSection() {
       </Card>
     </section>
   );
+}
+
+/**
+ * Every failure that was not a known Firebase code came out as "Sign-in failed.
+ * Please try again." — including the two that no amount of trying again would
+ * fix. Anything unrecognised is shown as it arrived instead: a sentence someone
+ * can act on beats a polished dead end.
+ */
+function authErrorText(t, error, vars) {
+  const key = ERROR_KEYS[error];
+  if (key) return t(`auth.errors.${key}`, vars || undefined);
+  // An unknown auth/* code is Firebase's own, and its raw form means nothing
+  // to the person reading it.
+  if (/^auth\//.test(error)) return t("auth.errors.generic");
+  return error || t("auth.errors.generic");
 }
 
 /** Firebase reports failures as machine codes; people need sentences. */
@@ -516,6 +536,10 @@ const ERROR_KEYS = {
   "auth/weak-password": "weakPassword",
   "auth/too-many-requests": "tooMany",
   "auth/network-request-failed": "network",
+  // Ours, not Firebase's — raised before the browser is ever opened.
+  "sync/google-not-configured": "notConfigured",
+  "sync/callback-server-down": "callbackServerDown",
+  "sync/no-signin-url": "generic",
 };
 
 /**

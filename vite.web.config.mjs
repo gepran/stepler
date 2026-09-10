@@ -47,6 +47,9 @@ export default defineConfig({
       input: {
         site: resolve("src/web/index.html"),
         app: resolve("src/web/app.html"),
+        // Google will not publish an OAuth consent screen without a public
+        // privacy policy, so this page is a shipping requirement, not a nicety.
+        privacy: resolve("src/web/privacy.html"),
       },
     },
   },
