@@ -25,10 +25,20 @@ const en = {
     syncing: "Syncing…",
     synced: "Synced",
     offline: "Offline — saved here, will sync later",
+    setPassword: "Set a password",
+    changePassword: "Change password",
+    newPassword: "New password",
+    currentPassword: "Current password",
+    passwordSaved: "Password saved.",
+    setPasswordBlurb:
+      "Give {email} a password as well, so you can sign in either way — with Google, or with an email and password.",
+    changePasswordBlurb: "Type the password you use now, then the new one.",
     errors: {
       invalidEmail: "That does not look like an email address.",
-      wrongPassword: "Wrong email or password.",
-      emailInUse: "That email already has an account. Try signing in.",
+      wrongPassword:
+        "Wrong email or password. If you made this account with Google, use the Google button \u2014 then add a password in Settings.",
+      emailInUse:
+        "That email already has an account \u2014 sign in instead. If you made it with Google, use the Google button, then add a password in Settings.",
       weakPassword: "Use at least six characters.",
       tooMany: "Too many attempts. Wait a minute and try again.",
       popupClosed: "The Google window closed before sign-in finished.",
@@ -39,6 +49,14 @@ const en = {
         "Google sign-in could not start up. Restart Stepler and try again.",
       callbackServerDown:
         "Stepler could not open a local port to receive Google's answer, so signing in cannot finish. A firewall or security tool blocking port {port} is the usual cause.",
+      requiresRecentLogin:
+        "For your security, sign in again before changing your password.",
+      providerAlreadyLinked:
+        "This account already has a password. Use Change password.",
+      credentialInUse: "That email belongs to a different account.",
+      differentCredential:
+        "That email is already signed up a different way. Use the other button.",
+      currentPasswordNeeded: "Type your current password first.",
       generic: "Sign-in failed. Please try again.",
     },
   },
@@ -250,6 +268,14 @@ const en = {
     toastInvited: "Invitation sent",
     toastAccepted: "Connected",
     toastRemoved: "Disconnected",
+    someone: "Someone",
+    newMentions: "{count} new mentions",
+    notifyMe: "Tell me about mentions",
+    notifyWhileOpen:
+      "Only while this tab is open \u2014 a browser cannot be woken.",
+    notifyOn: "On",
+    notifyBlocked: "Blocked",
+    notifyEnable: "Turn on",
   },
   settings: {
     sync: {
@@ -345,6 +371,8 @@ const en = {
       pin: "Pin to the top",
       rename: "Rename",
       removeSaved: "Remove from the saved list",
+      color: "Colour",
+      exists: "That project already exists.",
     },
     integrations: {
       title: "Integrations",
@@ -644,10 +672,20 @@ const ka = {
     syncing: "სინქრონიზაცია…",
     synced: "დასინქრონიზდა",
     offline: "ქსელი არ არის — შენახულია, მოგვიანებით დასინქრონდება",
+    setPassword: "პაროლის დაყენება",
+    changePassword: "პაროლის შეცვლა",
+    newPassword: "ახალი პაროლი",
+    currentPassword: "მიმდინარე პაროლი",
+    passwordSaved: "პაროლი შენახულია.",
+    setPasswordBlurb:
+      "დაუყენე {email}-ს პაროლიც, რომ ორივენაირად შეძლო შესვლა — Google-ითაც და ელფოსტითა და პაროლითაც.",
+    changePasswordBlurb: "აკრიფე ახლანდელი პაროლი, შემდეგ ახალი.",
     errors: {
       invalidEmail: "ეს ელფოსტის მისამართს არ ჯგავს.",
-      wrongPassword: "არასწორი ელფოსტა ან პაროლი.",
-      emailInUse: "ამ ელფოსტაზე ანგარიში უკვე არსებობს. სცადე შესვლა.",
+      wrongPassword:
+        "არასწორი ელფოსტა ან პაროლი. თუ ანგარიში Google-ით შექმენი, გამოიყენე Google-ის ღილაკი — შემდეგ პაროლი პარამეტრებში დაამატე.",
+      emailInUse:
+        "ამ ელფოსტაზე ანგარიში უკვე არსებობს — შედი. თუ ის Google-ით შექმენი, გამოიყენე Google-ის ღილაკი, შემდეგ კი პარამეტრებში პაროლი დაამატე.",
       weakPassword: "საჭიროა მინიმუმ 6 სიმბოლო.",
       tooMany: "ზედმეტი მცდელობა. დაელოდე წუთი.",
       popupClosed: "Google-ის ფანჯარა დაიხურა შესვლამდე.",
@@ -658,6 +696,13 @@ const ka = {
         "Google-ით შესვლა ვერ ჩაიტვირთა. გადატვირთე Stepler და სცადე თავიდან.",
       callbackServerDown:
         "Stepler-მა ვერ გახსნა ლოკალური პორტი Google-ის პასუხისთვის, ამიტომ შესვლა ვერ დასრულდება. ჩვეულებრივ ამის მიზეზი ფაიერვოლი ან ანტივირუსია, რომელიც პორტ {port}-ს ბლოკავს.",
+      requiresRecentLogin: "უსაფრთხოებისთვის პაროლის შეცვლამდე ხელახლა შედი.",
+      providerAlreadyLinked:
+        "ამ ანგარიშს პაროლი უკვე აქვს. გამოიყენე „პაროლის შეცვლა“.",
+      credentialInUse: "ეს ელფოსტა სხვა ანგარიშს ეკუთვნის.",
+      differentCredential:
+        "ეს ელფოსტა უკვე სხვანაირად არის რეგისტრირებული. გამოიყენე მეორე ღილაკი.",
+      currentPasswordNeeded: "ჯერ ახლანდელი პაროლი აკრიფე.",
       generic: "შესვლა ვერ მოხერხდა. სცადე თავიდან.",
     },
   },
@@ -928,6 +973,14 @@ const ka = {
     toastAccepted:
       "\u10D3\u10D0\u10D9\u10D0\u10D5\u10E8\u10D8\u10E0\u10D3\u10D8\u10D7",
     toastRemoved: "\u10D2\u10D0\u10DC\u10D7\u10D8\u10E8\u10D3\u10D8\u10D7",
+    someone: "ვიღაცამ",
+    newMentions: "{count} ახალი ხსენება",
+    notifyMe: "შემატყობინე ხსენებებზე",
+    notifyWhileOpen:
+      "მხოლოდ სანამ ეს ჩანართი ღიაა — ბრაუზერის გაღვიძება შეუძლებელია.",
+    notifyOn: "ჩართულია",
+    notifyBlocked: "დაბლოკილია",
+    notifyEnable: "ჩართვა",
   },
   settings: {
     sync: {
@@ -1019,6 +1072,8 @@ const ka = {
       pin: "თავში მიმაგრება",
       rename: "სახელის შეცვლა",
       removeSaved: "შენახული სიიდან ამოღება",
+      color: "ფერი",
+      exists: "ასეთი პროექტი უკვე არსებობს.",
     },
     integrations: {
       title: "ინტეგრაციები",
@@ -1319,10 +1374,21 @@ const ru = {
     syncing: "Синхронизация…",
     synced: "Синхронизировано",
     offline: "Нет сети — сохранено, синхронизируется позже",
+    setPassword: "Задать пароль",
+    changePassword: "Сменить пароль",
+    newPassword: "Новый пароль",
+    currentPassword: "Текущий пароль",
+    passwordSaved: "Пароль сохранён.",
+    setPasswordBlurb:
+      "Задайте пароль для {email} — тогда входить можно будет и через Google, и по почте с паролем.",
+    changePasswordBlurb:
+      "Введите пароль, которым пользуетесь сейчас, а затем новый.",
     errors: {
       invalidEmail: "Это не похоже на адрес почты.",
-      wrongPassword: "Неверная почта или пароль.",
-      emailInUse: "На эту почту аккаунт уже есть. Попробуй войти.",
+      wrongPassword:
+        "Неверная почта или пароль. Если аккаунт создан через Google, войдите кнопкой Google — а пароль потом задайте в настройках.",
+      emailInUse:
+        "На эту почту аккаунт уже есть — войдите в него. Если он создан через Google, войдите кнопкой Google, а потом задайте пароль в настройках.",
       weakPassword: "Нужно хотя бы шесть символов.",
       tooMany: "Слишком много попыток. Подожди минуту.",
       popupClosed: "Окно Google закрылось раньше, чем вход завершился.",
@@ -1333,6 +1399,14 @@ const ru = {
         "Вход через Google не смог запуститься. Перезапусти Stepler и попробуй ещё раз.",
       callbackServerDown:
         "Stepler не смог открыть локальный порт для ответа Google, поэтому вход не завершится. Обычно дело в файрволе или антивирусе, блокирующем порт {port}.",
+      requiresRecentLogin:
+        "В целях безопасности войдите заново, прежде чем менять пароль.",
+      providerAlreadyLinked:
+        "У этого аккаунта пароль уже есть. Нажмите «Сменить пароль».",
+      credentialInUse: "Эта почта принадлежит другому аккаунту.",
+      differentCredential:
+        "Эта почта уже зарегистрирована другим способом. Войдите второй кнопкой.",
+      currentPasswordNeeded: "Сначала введите текущий пароль.",
       generic: "Войти не удалось. Попробуй ещё раз.",
     },
   },
@@ -1567,6 +1641,14 @@ const ru = {
     toastInvited:
       "\u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E",
     toastAccepted: "\u0421\u0432\u044F\u0437\u0430\u043B\u0438\u0441\u044C",
+    someone: "Кто-то",
+    newMentions: "Новых упоминаний: {count}",
+    notifyMe: "Сообщать об упоминаниях",
+    notifyWhileOpen:
+      "Только пока эта вкладка открыта — разбудить браузер нельзя.",
+    notifyOn: "Включено",
+    notifyBlocked: "Запрещено",
+    notifyEnable: "Включить",
     toastRemoved:
       "\u0421\u0432\u044F\u0437\u044C \u0440\u0430\u0437\u043E\u0440\u0432\u0430\u043D\u0430",
   },
@@ -1661,6 +1743,8 @@ const ru = {
       pin: "Закрепить сверху",
       rename: "Переименовать",
       removeSaved: "Убрать из сохранённых",
+      color: "Цвет",
+      exists: "Такой проект уже есть.",
     },
     integrations: {
       title: "Интеграции",

@@ -108,3 +108,32 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+/**
+ * Clicking a mention notification should land on the app, not on a second copy
+ * of it.
+ *
+ * An open tab is focused wherever one exists — `includeUncontrolled` matters,
+ * because a tab loaded before this worker took over is not controlled by it
+ * and would otherwise be invisible here, leaving somebody with the app already
+ * open staring at a duplicate. Only when there is genuinely nothing open is a
+ * window opened, at the same path the manifest starts at.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || APP;
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windows) => {
+        for (const client of windows) {
+          // Both /app and /login are the same page, so either counts as "the
+          // app is already open".
+          const path = new URL(client.url).pathname;
+          if (path === APP || path.startsWith(`${APP}/`) || path === "/login")
+            return client.focus();
+        }
+        return clients.openWindow(target);
+      }),
+  );
+});

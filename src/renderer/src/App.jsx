@@ -1487,6 +1487,7 @@ export default function App() {
           onAddSubtask={(id) => searchAction(id, setAddingSubtaskId)}
           onRemind={(id) => searchAction(id, setSettingReminderId)}
           onAssignProject={(id) => searchAction(id, setAssigningProjectId)}
+          availableProjects={availableProjects}
         />
       )}
       <Sidebar

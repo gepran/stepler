@@ -24,6 +24,8 @@ import {
   subscribeConnections,
   subscribeMentions,
 } from "../renderer/src/lib/collab-store";
+import { translate } from "../renderer/src/lib/i18n";
+import { announceMentions } from "./notify";
 
 export const ensureProfile = (user) => ensureProfileRaw(db, user);
 export const searchProfiles = (term, opts) => searchProfilesRaw(db, term, opts);
@@ -108,7 +110,18 @@ export function useCollab(user) {
     return subscribeMentions(
       db,
       uid,
-      (list) => setLoaded((cur) => ({ ...cur, uid, mentions: list })),
+      (list, meta) => {
+        // Announced from the snapshot callback, never from rendered state:
+        // `mentions` collapses to NOBODY for a frame whenever the account
+        // changes, so a diff computed from what is on screen sees empty → full
+        // on sign-in and would announce the whole backlog.
+        announceMentions(uid, list, meta, {
+          one: (m) =>
+            `${m.fromName || m.fromUsername || m.fromEmail || translate("collab.someone")} ${translate("collab.mentionedYou")}`,
+          many: (count) => translate("collab.newMentions", { count }),
+        });
+        setLoaded((cur) => ({ ...cur, uid, mentions: list }));
+      },
       (err) => {
         console.warn("Mentions failed:", err.code, err.message);
         setError(err.message);

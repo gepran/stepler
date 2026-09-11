@@ -296,3 +296,83 @@
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Label chips
+   ---------------------------------------------------------------------------
+   A task's "#label" carries a colour now. The hue arrives as --label on the
+   element; the tint and the ink are worked out here, because the same hue has
+   to sit on a near-white page and on a near-black one and an inline style
+   cannot ask which of the two it is in.
+
+   The mix ratios are fixed rather than per-hue. 60% ink against near-black is
+   what drags amber — far and away the brightest of the eight and the only one
+   that fails at a lighter mix — up to readable contrast at 11px, and every
+   other hue has contrast to spare at the same ratio.
+
+   The theme selectors are the pair used for the scrollbar above, for the same
+   reason: the desktop window follows the machine, the web app writes its own
+   choice onto <html>. */
+.label-chip {
+  --label: #8e8e93;
+  /* The plain declarations come first and are what a browser without
+     color-mix() keeps — Safari only got it in 16.2, and a browser that cannot
+     parse a value drops that one declaration rather than the rule, so an
+     older Safari lands on a readable grey chip instead of an invisible one.
+     Everything after this overrides it wherever color-mix() is understood.
+
+     54% ink against near-black is not a round number: it is what drags amber
+     and lime, the two brightest of the ten and the only two that fail at a
+     lighter mix, over 4.5:1 at 11px. Measured, not guessed. */
+  background-color: rgba(142, 142, 147, 0.12);
+  color: #4b4b52;
+  border: 1px solid rgba(142, 142, 147, 0.22);
+  background-color: color-mix(in srgb, var(--label) 12%, transparent);
+  color: color-mix(in srgb, var(--label) 54%, #101018);
+  border: 1px solid color-mix(in srgb, var(--label) 22%, transparent);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.label-chip:hover {
+  background-color: color-mix(in srgb, var(--label) 20%, transparent);
+  border-color: color-mix(in srgb, var(--label) 38%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .label-chip {
+    /* Same reasoning as the light rule, and it matters more here: without a
+       plain pair first, a browser with no color-mix() drops all three and the
+       chip keeps the LIGHT fallback — dark ink on a near-black page. */
+    background-color: rgba(160, 160, 168, 0.2);
+    color: #d4d4dc;
+    border-color: rgba(160, 160, 168, 0.3);
+    background-color: color-mix(in srgb, var(--label) 20%, transparent);
+    color: color-mix(in srgb, var(--label) 68%, #ffffff);
+    border-color: color-mix(in srgb, var(--label) 30%, transparent);
+  }
+  :root:not([data-theme="light"]) .label-chip:hover {
+    background-color: color-mix(in srgb, var(--label) 30%, transparent);
+    border-color: color-mix(in srgb, var(--label) 46%, transparent);
+  }
+}
+
+[data-theme="dark"] .label-chip {
+  background-color: rgba(160, 160, 168, 0.2);
+  color: #d4d4dc;
+  border-color: rgba(160, 160, 168, 0.3);
+  background-color: color-mix(in srgb, var(--label) 20%, transparent);
+  color: color-mix(in srgb, var(--label) 68%, #ffffff);
+  border-color: color-mix(in srgb, var(--label) 30%, transparent);
+}
+[data-theme="dark"] .label-chip:hover {
+  background-color: color-mix(in srgb, var(--label) 30%, transparent);
+  border-color: color-mix(in srgb, var(--label) 46%, transparent);
+}
+
+/* The solid form: the swatch in Settings and the dot beside a label in the
+   sidebar, where the hue is the whole point and there is no text on it. */
+.label-dot {
+  background-color: var(--label);
+}

@@ -26,13 +26,13 @@
 
 ## 📥 Installing on macOS
 
-The first launch after downloading is blocked. On macOS 15 and later the dialog says **“Apple could not verify Stepler is free of malware”** and offers only *Move to Trash* and *Done*; older versions say **“Stepler is damaged and can’t be opened”**. The app is not damaged and there is nothing wrong with it: macOS quarantines anything downloaded from a browser, and Gatekeeper refuses to run it because Stepler is signed ad-hoc rather than with a paid Apple Developer certificate.
+The first launch after downloading is blocked. On macOS 15 and later the dialog says **“Apple could not verify Stepler is free of malware”** and offers only _Move to Trash_ and _Done_; older versions say **“Stepler is damaged and can’t be opened”**. The app is not damaged and there is nothing wrong with it: macOS quarantines anything downloaded from a browser, and Gatekeeper refuses to run it because Stepler is signed ad-hoc rather than with a paid Apple Developer certificate.
 
 **On macOS 15 (Sequoia) and later** — the right-click trick no longer works, Apple removed it:
 
 1. Click **Done**.
 2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
-3. Next to *“Stepler was blocked to protect your Mac”*, click **Open Anyway**, then authenticate.
+3. Next to _“Stepler was blocked to protect your Mac”_, click **Open Anyway**, then authenticate.
 
 **On macOS 14 (Sonoma) and earlier** — right-click the app in Applications, choose **Open**, then **Open** again.
 
@@ -95,7 +95,7 @@ has no dependencies, and needs nothing but `node`.
 
 The app writes this line out for you, with the right path for wherever it is
 installed: **Settings → Integrations → Claude Code, Codex, Cursor**, then
-*Copy*. By hand it is:
+_Copy_. By hand it is:
 
 ```bash
 # Installed the app:

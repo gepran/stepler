@@ -8,6 +8,7 @@ import {
   formatTaskDateTime,
   dueDateLabel,
 } from "../lib/format";
+import { colorForLabel, labelStyle } from "../lib/labels";
 import {
   attachmentSrc,
   isMissing,
@@ -343,7 +344,8 @@ function TaskItem({
               {projects.map((proj) => (
                 <div
                   key={proj}
-                  className="group/proj flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-500 dark:bg-neutral-800/60 dark:text-neutral-400"
+                  style={labelStyle(colorForLabel(proj, availableProjects))}
+                  className="label-chip group/proj flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
                 >
                   <Hash size={10} />
                   <span>{proj}</span>
@@ -783,9 +785,14 @@ function TaskItem({
                             }}
                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:bg-[#9B6AFF]/10 hover:text-[#9B6AFF] dark:text-neutral-400"
                           >
-                            <Hash
-                              size={11}
-                              className="shrink-0 text-[#9B6AFF]/50"
+                            {/* The dot is how you recognise a label in this
+                                list at a glance — the same hue the chip on
+                                the task will have. */}
+                            <span
+                              style={labelStyle(
+                                colorForLabel(project.name, availableProjects),
+                              )}
+                              className="label-dot h-2 w-2 shrink-0 rounded-full"
                             />
                             <span className="truncate">{project.name}</span>
                           </button>

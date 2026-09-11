@@ -2,6 +2,7 @@ import { useState } from "react";
 import PropTypes from "prop-types";
 import { Settings, Layers } from "lucide-react";
 import { translatePlural as tPlural, useT } from "../lib/i18n";
+import { colorForLabel, labelStyle } from "../lib/labels";
 import SteplerLogo from "./SteplerLogo";
 
 /**
@@ -106,7 +107,12 @@ export default function Sidebar({
                       : "bg-neutral-50 dark:bg-neutral-800/40 border-neutral-200/60 dark:border-neutral-700/40 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 text-neutral-600 dark:text-neutral-400 hover:shadow-md"
                   }`}
                 >
-                  <div className="w-2.5 h-2.5 rounded-full bg-violet-500 mr-3 shrink-0" />
+                  <div
+                    style={labelStyle(
+                      colorForLabel(project.name, availableProjects),
+                    )}
+                    className="label-dot w-2.5 h-2.5 rounded-full mr-3 shrink-0"
+                  />
                   <span className="text-sm font-medium truncate mr-2">
                     {project.name}
                   </span>
@@ -202,7 +208,12 @@ export default function Sidebar({
                   name: project.name,
                 })}
               >
-                <div className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+                <div
+                  style={labelStyle(
+                    colorForLabel(project.name, availableProjects),
+                  )}
+                  className="label-dot w-2.5 h-2.5 rounded-full"
+                />
                 {projectTasksCount > 0 && (
                   <div className="absolute -right-0.5 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-neutral-600 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900 dark:bg-neutral-400 dark:text-neutral-950">
                     {projectTasksCount > 99 ? "99+" : projectTasksCount}

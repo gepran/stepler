@@ -38,6 +38,22 @@ export default [
       },
     },
   },
+  // The service worker runs in neither the browser's window nor Node, and its
+  // own globals are in no preset here — without this the notificationclick
+  // handler is a wall of no-undef.
+  {
+    files: ["src/web/public/sw.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        caches: "readonly",
+        clients: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
   {
     files: ["**/*.{js,jsx}"],
     plugins: {

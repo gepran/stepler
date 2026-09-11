@@ -331,7 +331,19 @@ export function subscribeConnections(db, uid, onChange, onError) {
 // Mentions
 // ---------------------------------------------------------------------------
 
-/** Live list of the tasks other people have addressed to me. */
+/**
+ * Live list of the tasks other people have addressed to me.
+ *
+ * `onChange` is handed the snapshot's own metadata alongside the list, the way
+ * subscribeTasks already does. Firestore replays its IndexedDB copy before the
+ * server answers, and on a cold cache that first reply is an empty list — so
+ * anything deciding "this one is new" needs to know which of the two it is
+ * looking at, or it announces the whole backlog the first time the server
+ * speaks. Both callers need it: the desktop's cache is in memory rather than
+ * IndexedDB, but Firestore still raises an empty snapshot from it the moment
+ * it decides it is offline, which is a launch on a train announcing a
+ * fortnight of mentions.
+ */
 export function subscribeMentions(db, uid, onChange, onError) {
   return onSnapshot(
     mentionsRef(db, uid),
@@ -343,7 +355,10 @@ export function subscribeMentions(db, uid, onChange, onError) {
         // two cannot disagree about what is on your list.
         if (!data.dismissed) list.push(data);
       });
-      onChange(list);
+      onChange(list, {
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites,
+      });
     },
     (err) => onError?.(err),
   );

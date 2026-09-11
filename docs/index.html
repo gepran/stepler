@@ -959,11 +959,12 @@
             <summary>Opening it the first time on macOS</summary>
             <p>
               macOS blocks it the first time. On macOS 15 and later the dialog
-              says <b>“Apple could not verify Stepler is free of malware”</b>
-              and offers only <i>Move to Trash</i> and <i>Done</i>; older
-              versions say <b>“Stepler is damaged”</b>. It is not damaged —
-              anything downloaded from a browser is quarantined, and Stepler is
-              signed ad-hoc rather than with a paid Apple certificate.
+              says
+              <b>“Apple could not verify Stepler is free of malware”</b> and
+              offers only <i>Move to Trash</i> and <i>Done</i>; older versions
+              say <b>“Stepler is damaged”</b>. It is not damaged — anything
+              downloaded from a browser is quarantined, and Stepler is signed
+              ad-hoc rather than with a paid Apple certificate.
             </p>
             <p>
               <b>macOS 15 (Sequoia) and later:</b> click <b>Done</b>, then open
@@ -979,7 +980,9 @@
             <p>
               Once only, either way: updates installed from inside the app are
               never quarantined. From a terminal, on any version:
-              <code>xattr -dr com.apple.quarantine /Applications/Stepler.app</code>
+              <code
+                >xattr -dr com.apple.quarantine /Applications/Stepler.app</code
+              >
             </p>
           </details>
           <details class="firstrun">

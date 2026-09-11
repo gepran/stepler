@@ -38,14 +38,35 @@ const googleClientSecret =
   process.env.GOOGLE_CLIENT_SECRET || buildEnv.GOOGLE_CLIENT_SECRET || "";
 
 // A build missing these looks perfect on the machine that made it and is
-// broken for everyone who installs it. That trade is only worth making on
-// purpose, so make the build say it out loud.
-if (!googleClientId || !googleClientSecret)
-  console.warn(
-    "\n  ⚠  No GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET found in .env or the\n" +
-      "     environment. This build ships WITHOUT Google sign-in — everyone\n" +
-      "     who installs it will only be able to sign in by email.\n",
-  );
+// broken for everyone who installs it. 1.3.12 shipped exactly that to both
+// platforms: the warning that used to live here scrolled past unread, the
+// artifacts were uploaded, and every person who downloaded one was told
+// "This copy of Stepler was built without Google sign-in".
+//
+// So `electron-vite build` now refuses. Development still only warns, because
+// a contributor without the credentials must still be able to run the app —
+// and build/beforePack.cjs re-checks the built file before it is packaged,
+// which is the check that catches a stale `out/` left by an earlier
+// credential-less build.
+const missingGoogle = !googleClientId || !googleClientSecret;
+// `preview` is not a lighter mode — electron-vite runs the identical
+// production build before serving it (its `preview()` calls `build()` unless
+// asked not to), and `npm run start` is exactly that. Only `dev` is allowed to
+// carry on with a warning, so a contributor without credentials can still run
+// the app without leaving a credential-less bundle in out/ for a later
+// `npx electron-builder` to package.
+const isBuild = ["build", "preview"].some((cmd) => process.argv.includes(cmd));
+if (missingGoogle) {
+  const message =
+    "No GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET found in .env or the " +
+    "environment. This build ships WITHOUT Google sign-in — everyone who " +
+    "installs it will only be able to sign in by email.";
+  if (isBuild && process.env.STEPLER_ALLOW_NO_GOOGLE !== "1")
+    throw new Error(
+      `${message}\nSet STEPLER_ALLOW_NO_GOOGLE=1 to build one on purpose.`,
+    );
+  console.warn(`\n  ⚠  ${message}\n`);
+}
 
 export default defineConfig({
   main: {

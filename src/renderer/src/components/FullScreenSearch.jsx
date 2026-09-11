@@ -15,6 +15,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import { useT } from "../lib/i18n";
+import { colorForLabel, labelStyle } from "../lib/labels";
 
 export default function FullScreenSearch({
   onClose,
@@ -26,6 +27,7 @@ export default function FullScreenSearch({
   onAddSubtask,
   onRemind,
   onAssignProject,
+  availableProjects,
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
@@ -221,7 +223,8 @@ export default function FullScreenSearch({
                     {(task.projects || []).map((p) => (
                       <span
                         key={p}
-                        className="flex shrink-0 items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                        style={labelStyle(colorForLabel(p, availableProjects))}
+                        className="label-chip flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium"
                       >
                         <Hash size={11} />
                         {p}
@@ -345,4 +348,5 @@ FullScreenSearch.propTypes = {
   onAddSubtask: PropTypes.func.isRequired,
   onRemind: PropTypes.func.isRequired,
   onAssignProject: PropTypes.func.isRequired,
+  availableProjects: PropTypes.array,
 };

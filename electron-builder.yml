@@ -56,6 +56,7 @@ linux:
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
+beforePack: build/beforePack.cjs
 afterSign: build/afterSign.cjs
 npmRebuild: false
 publish:

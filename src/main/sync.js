@@ -16,13 +16,17 @@
 
 import { initializeApp } from "firebase/app";
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   initializeAuth,
+  linkWithCredential,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as fbSignOut,
+  updatePassword,
 } from "firebase/auth";
 import {
   collection,
@@ -92,6 +96,15 @@ let filesPending = false;
 let myProfile = null;
 let connections = [];
 let mentions = [];
+// The mentions listener's first callback hands over the whole backlog at once,
+// so without a baseline every launch would announce every unread mention the
+// account has ever kept. `mentionsPrimed` records that the baseline has been
+// taken; `notifiedMentions` is the per-session record of what has already been
+// announced, kept append-only because a dismissed mention leaves the list
+// without its document going anywhere.
+let mentionsPrimed = false;
+let mentionsPrimedFromServer = false;
+let notifiedMentions = new Set();
 // Who each task has already been delivered to. Read once per session and kept
 // patched, so a push does not go back to Firestore for it every time.
 let sentMap = null;
@@ -329,6 +342,11 @@ export function publicStatus() {
     email: status.email,
     state: status.state,
     error: status.error,
+    // Read off the live user rather than kept in `status`: linking a password
+    // does not fire onAuthStateChanged — the uid has not changed — so a copy
+    // here would still say "no password" on an account that has just been
+    // given one. `auth` is null until ensureApp() has run.
+    providers: (auth?.currentUser?.providerData || []).map((p) => p.providerId),
   };
 }
 
@@ -460,6 +478,7 @@ export function initSync({
   applyRemote,
   onStatus,
   onCollab,
+  onMention,
   readToken,
   writeToken,
   readAuth,
@@ -472,6 +491,7 @@ export function initSync({
     applyRemote,
     onStatus,
     onCollab,
+    onMention,
     readToken,
     writeToken,
     readAuth,
@@ -796,7 +816,61 @@ function resetCollab() {
   connections = [];
   mentions = [];
   sentMap = null;
+  // Signing in as somebody else must take a fresh baseline, or that account's
+  // whole backlog arrives as news.
+  mentionsPrimed = false;
+  mentionsPrimedFromServer = false;
+  notifiedMentions = new Set();
   emitCollab();
+}
+
+/**
+ * Tell the window when somebody has just addressed a task to this account.
+ *
+ * Three things make this harder than "the list changed":
+ *
+ * The first callback carries the entire backlog. An account that has ignored
+ * eleven mentions for a fortnight would get eleven notifications every time it
+ * launched, so the first callback only takes the baseline and says nothing —
+ * whatever its length, including zero, or an account with nothing waiting
+ * would never prime and its first real mention would arrive unguarded.
+ *
+ * The same mention arrives again and again. The author's delivery pass runs on
+ * every one of their pushes and rewrites each still-current mention in place,
+ * which bumps the server timestamp and fires this listener with byte-identical
+ * content. So novelty is decided by the id crossing from absent-or-read to
+ * present-and-unread — never by the snapshot arriving, and never by a
+ * timestamp.
+ *
+ * And it can arrive in a burst: accepting a connection makes every task that
+ * already holds your handle deliverable at once. Several at a time are
+ * announced as one line rather than as a stack of notifications.
+ */
+function announceNewMentions(list, meta) {
+  const incoming = (list || []).filter((m) => !m.read);
+  const fromServer = meta ? !meta.fromCache : true;
+  // The baseline is taken twice. Firestore raises a snapshot from its own
+  // (here, in-memory and therefore EMPTY) cache as soon as it decides it is
+  // offline — about ten seconds in — so a launch on a train primes against
+  // nothing, and every mention the account has ever kept arrives as news the
+  // moment the connection comes up. Priming again on the first snapshot that
+  // actually came from the server is what closes that.
+  if (!mentionsPrimed || (!mentionsPrimedFromServer && fromServer)) {
+    mentionsPrimed = true;
+    if (fromServer) mentionsPrimedFromServer = true;
+    for (const m of incoming) notifiedMentions.add(String(m.id));
+    return;
+  }
+  const fresh = incoming.filter((m) => !notifiedMentions.has(String(m.id)));
+  if (!fresh.length) return;
+  for (const m of fresh) notifiedMentions.add(String(m.id));
+  deps?.onMention?.(
+    fresh.map((m) => ({
+      id: String(m.id),
+      text: String(m.text || ""),
+      from: m.fromName || m.fromUsername || m.fromEmail || "",
+    })),
+  );
 }
 
 /**
@@ -844,7 +918,8 @@ async function startCollab(user) {
   unsubscribeMentions = subscribeMentions(
     db,
     uid,
-    (list) => {
+    (list, meta) => {
+      announceNewMentions(list, meta);
       mentions = list;
       emitCollab();
       // Knowing what was addressed to you is what makes the echoes
@@ -1126,6 +1201,71 @@ export async function signInGoogleIdToken(idToken) {
     return { success: true };
   } catch (err) {
     setStatus({ state: "off", error: err.code || err.message });
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+/**
+ * Give this account a password, or change the one it has.
+ *
+ * Somebody who signed in with Google has no password at all, and Firebase
+ * keeps one account per address — so signing up again with the same email is
+ * not a second account, it is the error "that email already has an account".
+ * The way through is to add a password to the account that already exists,
+ * which is what `linkWithCredential` does, and after that either button works.
+ *
+ * The two halves need different calls and fail differently:
+ *
+ * Adding one is `linkWithCredential`, and it does NOT need a recent sign-in —
+ * so a Google account, whose session here may be weeks old, can be given a
+ * password without a browser round-trip.
+ *
+ * Changing one is `updatePassword`, and it DOES: the server reads `auth_time`
+ * out of the token and a refresh does not move it. On a desktop session kept
+ * alive on disk for weeks that check fails essentially always, so the current
+ * password is asked for and used to re-authenticate first rather than waiting
+ * for the failure.
+ *
+ * The address is never a parameter. `linkWithCredential` with a different one
+ * silently makes THAT the account's sign-in address, which would strand the
+ * person on a login they never chose.
+ */
+export async function setAccountPassword({ password, currentPassword }) {
+  ensureApp();
+  const user = auth?.currentUser;
+  if (!user) return { success: false, error: "not-signed-in" };
+  if (!user.email) return { success: false, error: "sync/no-email" };
+  if (typeof password !== "string" || password.length < 6)
+    return { success: false, error: "auth/weak-password" };
+
+  const hasPassword = (user.providerData || []).some(
+    (p) => p.providerId === "password",
+  );
+
+  try {
+    if (hasPassword) {
+      if (typeof currentPassword !== "string" || !currentPassword)
+        return { success: false, error: "sync/current-password-needed" };
+      await reauthenticateWithCredential(
+        user,
+        EmailAuthProvider.credential(user.email, currentPassword),
+      );
+      await updatePassword(user, password);
+    } else {
+      await linkWithCredential(
+        user,
+        EmailAuthProvider.credential(user.email, password),
+      );
+    }
+    // Nothing tells the window on its own: no uid changed, so no auth-state
+    // listener runs and the panel would go on offering "Set a password" for an
+    // account that now has one.
+    await user.reload().catch(() => {});
+    deps?.onStatus?.(publicStatus());
+    return { success: true };
+  } catch (err) {
+    // Deliberately NOT through setStatus: a mistyped password here must not
+    // leave a sticky error on the status the sidebar reads.
     return { success: false, error: err.code || err.message };
   }
 }

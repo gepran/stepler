@@ -1105,6 +1105,26 @@ async function grabSelectedText() {
   return text.length > 5000 ? text.slice(0, 5000) : text;
 }
 
+/**
+ * One OS notification, from anywhere in this process.
+ *
+ * This used to live inside the `show-notification` IPC handler, which made it
+ * reachable only from the window. Mentions arrive on the Firestore listener in
+ * this process, with no window involved and sometimes with no window at all,
+ * so the body moved out here and the handler became a one-line caller.
+ */
+function notify(title, body) {
+  if (!Notification.isSupported()) return false;
+  const n = new Notification({
+    title: String(title || "Stepler").slice(0, 120),
+    body: String(body || "").slice(0, 500),
+    silent: false,
+  });
+  n.on("click", showWindow);
+  n.show();
+  return true;
+}
+
 function showWindow() {
   if (!mainWindow) createWindow();
   if (!mainWindow) return;
@@ -1150,6 +1170,20 @@ async function toggleWindowFromHotkey() {
 function menuText(key) {
   const lang = loadSettings().language;
   return translations[lang]?.menu?.[key] ?? translations.en.menu[key];
+}
+
+/**
+ * The same lookup for the notification a mention raises. It carries its own
+ * fallback because this text is written here rather than in the window, and a
+ * missing key must not put a dotted path in an OS notification.
+ */
+function collabText(key, fallback) {
+  const lang = loadSettings().language;
+  return (
+    translations[lang]?.collab?.[key] ??
+    translations.en.collab?.[key] ??
+    fallback
+  );
 }
 
 function buildMenu() {
@@ -1985,6 +2019,17 @@ function setupIPC() {
 
   ipcMain.handle("sync-signout", () => sync.signOutSync());
 
+  // Any renderer code can invoke any channel — there is no whitelist in the
+  // preload — so the arguments are checked here as well as in the form.
+  ipcMain.handle("sync-set-password", async (_, { password, current } = {}) => {
+    if (typeof password !== "string")
+      return { success: false, error: "auth/weak-password" };
+    return sync.setAccountPassword({
+      password,
+      currentPassword: typeof current === "string" ? current : "",
+    });
+  });
+
   // ---- collaboration ----
   //
   // The window holds no Firestore session of its own, so every one of these is
@@ -2318,17 +2363,9 @@ function setupIPC() {
     return { success: res.ok, error: res.error };
   });
 
-  ipcMain.handle("show-notification", (_, { title, body }) => {
-    if (!Notification.isSupported()) return false;
-    const n = new Notification({
-      title: String(title || "Stepler").slice(0, 120),
-      body: String(body || "").slice(0, 500),
-      silent: false,
-    });
-    n.on("click", showWindow);
-    n.show();
-    return true;
-  });
+  ipcMain.handle("show-notification", (_, { title, body }) =>
+    notify(title, body),
+  );
 
   ipcMain.handle("export-tasks", async (_, data) => {
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -3213,6 +3250,27 @@ function startSync() {
     onCollab: (snapshot) => {
       if (mainWindow && !mainWindow.isDestroyed())
         mainWindow.webContents.send("collab-snapshot", snapshot);
+    },
+    // Nothing is suppressed while the window is in front: the badge is easy
+    // to miss and a task somebody addressed to you is worth the interruption
+    // either way — the same call the reminder path makes.
+    onMention: (fresh) => {
+      if (!fresh?.length) return;
+      if (fresh.length === 1) {
+        const [m] = fresh;
+        const who = m.from || collabText("someone", "Someone");
+        notify(`${who} ${collabText("mentionedYou", "mentioned you")}`, m.text);
+        return;
+      }
+      // A burst — accepting a connection can make a dozen old tasks
+      // deliverable at once — is one line, not a stack of notifications.
+      notify(
+        "Stepler",
+        collabText("newMentions", "{count} new mentions").replace(
+          "{count}",
+          String(fresh.length),
+        ),
+      );
     },
     readToken: async () => loadSecret(syncSessionPath),
     writeToken: async (obj) =>

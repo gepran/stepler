@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import {
   ArrowUpCircle,
+  Bell,
   LogOut,
   Monitor,
   Moon,
@@ -20,6 +21,8 @@ import {
 } from "./collab";
 import { THEMES, setTheme, useTheme } from "./theme";
 import { applyUpdate, checkForUpdate } from "./update";
+import { requestNotifyPermission, useNotifyPermission } from "./notify";
+import AccountPassword from "./AccountPassword";
 import {
   LANGUAGES,
   setLanguage,
@@ -47,6 +50,7 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
   const t = useT();
   const language = useLanguage();
   const theme = useTheme();
+  const notify = useNotifyPermission();
   const [deleted, setDeleted] = useState([]);
   const [notice, setNotice] = useState(null);
   // idle → checking → current | available | failed
@@ -155,6 +159,7 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
                 {t("auth.signOut")}
               </button>
             </div>
+            <AccountPassword user={user} />
           </section>
 
           <section>
@@ -194,6 +199,42 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
               onRemove={remove}
               onToast={toast}
             />
+
+            {/* A browser can only show this while a tab is open — there is no
+                push behind it — so the row says what it is rather than
+                pretending to be a switch that works when the browser is
+                closed. Clicking is what makes the request legal: Safari
+                refuses one that did not come from a gesture. */}
+            {notify !== "unsupported" && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-neutral-200 px-3.5 py-3 dark:border-neutral-800">
+                <Bell size={15} className="shrink-0 text-neutral-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] text-neutral-700 dark:text-neutral-200">
+                    {t("collab.notifyMe")}
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-neutral-400 dark:text-neutral-500">
+                    {t("collab.notifyWhileOpen")}
+                  </p>
+                </div>
+                {notify === "granted" ? (
+                  <span className="shrink-0 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    {t("collab.notifyOn")}
+                  </span>
+                ) : notify === "denied" ? (
+                  <span className="shrink-0 text-[12px] text-neutral-400">
+                    {t("collab.notifyBlocked")}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => requestNotifyPermission()}
+                    className="shrink-0 cursor-pointer rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[12px] font-semibold text-white dark:bg-neutral-100 dark:text-neutral-900"
+                  >
+                    {t("collab.notifyEnable")}
+                  </button>
+                )}
+              </div>
+            )}
           </section>
 
           {/* This used to be a read-only line saying the browser decides.

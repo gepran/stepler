@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   Check,
+  Hash,
   ImageOff,
   LogOut,
   Monitor,
@@ -64,6 +65,8 @@ import {
   useLanguage,
   useT,
 } from "../renderer/src/lib/i18n";
+import { colorForLabel, labelStyle } from "../renderer/src/lib/labels";
+import { requestNotifyPermission, setUnreadTitle } from "./notify";
 
 /**
  * A task belongs to the day it was written on and stays there — the same rule
@@ -264,6 +267,9 @@ Lightbox.propTypes = {
 function TaskRow({ task, uid, onOpen }) {
   const t = useT();
   const subtasks = orderSubtasks(task.subtasks || []);
+  // Clearing the last label deletes the key from the document rather than
+  // leaving an empty array, so this is never safe to read bare.
+  const labels = task.projects || [];
   return (
     <div className="group flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50">
       <button
@@ -306,6 +312,25 @@ function TaskRow({ task, uid, onOpen }) {
           )}
           {formatTaskText(task.text)}
         </div>
+
+        {/* The desktop app has drawn these for a long time and they already
+            ride along in the task document — the browser simply never showed
+            them. Read-only here: a browser tab has no project vocabulary to
+            pick from, so there is nothing to add one WITH. */}
+        {labels.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {labels.map((label) => (
+              <span
+                key={label}
+                style={labelStyle(colorForLabel(label))}
+                className="label-chip flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+              >
+                <Hash size={10} />
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
 
         {task.attachment && (
           <Attachment
@@ -415,6 +440,7 @@ TaskRow.propTypes = {
     completed: PropTypes.bool,
     priority: PropTypes.bool,
     attachment: PropTypes.object,
+    projects: PropTypes.arrayOf(PropTypes.string),
     subtasks: PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -774,6 +800,12 @@ function Timeline({ user, collab, onOpenSettings }) {
               onClick={() => {
                 const next = !mentionsOnly;
                 setMentionsOnly(next);
+                // The only gesture in this app that is about mentions, and a
+                // gesture is the only thing Safari will accept a permission
+                // request from — an effect or the arrival of a mention is too
+                // late, there is nothing to attach it to by then. Asking a
+                // second time is a no-op once an answer exists.
+                requestNotifyPermission();
                 // Opening the filter is the moment they have been read —
                 // they are all on screen and nothing else would ever clear
                 // the badge.
@@ -1329,6 +1361,14 @@ export default function App() {
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
   useAuthRoute(user);
+
+  // The count in the browser tab. It has to live above the two early returns
+  // below — a hook cannot be skipped — which also means it clears itself on
+  // the signed-out screen, where `collab` has nobody to report.
+  const unreadCount = collab.unread.length;
+  useEffect(() => {
+    setUnreadTitle(user ? unreadCount : 0);
+  }, [user, unreadCount]);
 
   if (user === undefined) {
     return (

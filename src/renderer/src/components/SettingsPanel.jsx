@@ -11,6 +11,12 @@ import {
   useT,
 } from "../lib/i18n";
 import {
+  LABEL_COLORS,
+  colorForLabel,
+  labelStyle,
+  projectName,
+} from "../lib/labels";
+import {
   BookOpen,
   X,
   SunMedium,
@@ -356,6 +362,10 @@ function SyncSection() {
   const [error, setError] = useState(null);
   const [errorVars, setErrorVars] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [passwordDone, setPasswordDone] = useState(false);
 
   useEffect(() => {
     ipc?.invoke("sync-status").then((s) => s && setStatus(s));
@@ -377,10 +387,15 @@ function SyncSection() {
         setError(res.error || "");
         setErrorVars(res.vars || null);
       }
+      return res;
     } finally {
       setBusy(false);
     }
   };
+
+  // `providers` is read off the live Firebase user every time the status is
+  // built, so this flips the moment a password is linked.
+  const hasPassword = (status.providers || []).includes("password");
 
   const dot =
     status.state === "synced"
@@ -426,6 +441,105 @@ function SyncSection() {
                 {status.error}
               </p>
             )}
+
+            {/* Google and email are one account, not two. Somebody who signed
+                in with Google and then tried to sign up with a password was
+                told the address was taken — which was true and useless. This
+                is the way out: put a password on the account that already
+                exists, and either button works afterwards. */}
+            <div className="mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+              {!showPasswordForm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordForm(true);
+                    setError(null);
+                    setPasswordDone(false);
+                  }}
+                  className="btn-tactile w-full cursor-pointer rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 dark:border-neutral-700 dark:text-neutral-200"
+                >
+                  {hasPassword
+                    ? t("auth.changePassword")
+                    : t("auth.setPassword")}
+                </button>
+              ) : (
+                <>
+                  <p className="mb-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+                    {hasPassword
+                      ? t("auth.changePasswordBlurb")
+                      : t("auth.setPasswordBlurb", {
+                          email: status.email || "",
+                        })}
+                  </p>
+                  {hasPassword && (
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder={t("auth.currentPassword")}
+                      className="mb-2 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder={t("auth.newPassword")}
+                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        newPassword.length < 6 ||
+                        (hasPassword && !currentPassword)
+                      }
+                      onClick={async () => {
+                        setPasswordDone(false);
+                        const res = await withBusy(() =>
+                          ipc?.invoke("sync-set-password", {
+                            password: newPassword,
+                            current: currentPassword,
+                          }),
+                        );
+                        if (res?.success) {
+                          setPasswordDone(true);
+                          setNewPassword("");
+                          setCurrentPassword("");
+                          setShowPasswordForm(false);
+                        }
+                      }}
+                      className="btn-tactile shrink-0 cursor-pointer rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 dark:bg-orange-500"
+                    >
+                      {busy ? t("auth.working") : t("common.save")}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordForm(false);
+                      setNewPassword("");
+                      setCurrentPassword("");
+                      setError(null);
+                    }}
+                    className="mt-3 w-full cursor-pointer text-center text-xs text-neutral-500 hover:text-orange-500"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </>
+              )}
+              {passwordDone && (
+                <p className="mt-3 text-center text-xs text-emerald-600 dark:text-emerald-400">
+                  {t("auth.passwordSaved")}
+                </p>
+              )}
+              {error && (
+                <p className="mt-3 text-center text-xs leading-snug text-red-600 dark:text-red-400">
+                  {authErrorText(t, error, errorVars)}
+                </p>
+              )}
+            </div>
           </>
         ) : (
           <>
@@ -541,6 +655,13 @@ const ERROR_KEYS = {
   "sync/google-init": "googleInit",
   "sync/callback-server-down": "callbackServerDown",
   "sync/no-signin-url": "generic",
+  "sync/current-password-needed": "currentPasswordNeeded",
+  "sync/no-email": "generic",
+  "auth/requires-recent-login": "requiresRecentLogin",
+  "auth/provider-already-linked": "providerAlreadyLinked",
+  "auth/credential-already-in-use": "credentialInUse",
+  "auth/user-token-expired": "requiresRecentLogin",
+  "auth/invalid-user-token": "requiresRecentLogin",
 };
 
 /**
@@ -701,8 +822,13 @@ export default function SettingsPanel({
   const [recording, setRecording] = useState(false);
   const [recordError, setRecordError] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
-  const [editingProjectIdx, setEditingProjectIdx] = useState(null);
+  // Keyed by name, not by position: deleting a row shortens the array and
+  // shifts every later index, which would leave an open editor or an open
+  // palette pointing at whichever project slid into that slot.
+  const [editingProjectKey, setEditingProjectKey] = useState(null);
   const [editingProjectName, setEditingProjectName] = useState("");
+  const [colorPickerKey, setColorPickerKey] = useState(null);
+
   const [activeTab, setActiveTab] = useState("general");
   const recorderRef = useRef(null);
 
@@ -812,18 +938,79 @@ export default function SettingsPanel({
 
   const projects = settings.projects || [];
 
+  /**
+   * Change the saved project list against the copy the app is holding, not the
+   * one this panel rendered from.
+   *
+   * `updateSetting({projects})` replaces the array wholesale, so writing back a
+   * stale copy is not a display bug, it is a delete: anything added since this
+   * panel last heard about the settings disappears. Reading first costs one IPC
+   * round trip and closes that window — and `mutate` is handed the live array,
+   * so it must match on NAME rather than on the index this row rendered at.
+   */
+  const updateProjects = useCallback(
+    async (mutate) => {
+      const live = (await ipc?.invoke("get-settings")) || {};
+      const next = mutate(live.projects || []);
+      if (next) await updateSetting({ projects: next });
+    },
+    [updateSetting],
+  );
+
+  /**
+   * Exactly, not case-insensitively. Everywhere else in the app a label is its
+   * literal string — `rememberProjects` dedupes with an exact Set, the sidebar
+   * filters with `projects.includes(name)` — so `Work` and `work` really are
+   * two labels with two sets of tasks. A loose match here made one row's
+   * delete take the other away with it, and one row's colour repaint both.
+   */
+  const sameName = (project, name) => projectName(project) === String(name);
+
+  /**
+   * Patch one saved project, found by name. A very old settings file holds
+   * bare strings; spreading one would scatter its characters across the entry,
+   * so a string is replaced by a fresh object rather than spread — and every
+   * other key it carries, `color` included, survives a rename or a pin.
+   */
+  const patchProject = (name, patch) =>
+    updateProjects((list) => {
+      // A rename onto a name that already exists would leave two rows every
+      // later click treats as one. Refuse it the way adding one is refused.
+      if (typeof patch !== "function" && patch.name && patch.name !== name) {
+        if (list.some((p) => sameName(p, patch.name))) {
+          onToast?.(t("settings.projects.exists"), "error");
+          return null;
+        }
+      }
+      return list.map((p) => {
+        if (!sameName(p, name)) return p;
+        const base = typeof p === "string" ? {} : p;
+        // A function patch reads the LIVE entry, which is what a toggle needs:
+        // `!favorite` off the rendered row writes the same value twice when
+        // somebody clicks the star faster than the round trip.
+        const fields = typeof patch === "function" ? patch(base) : patch;
+        return { ...base, name: projectName(p), ...fields };
+      });
+    });
+
   const handleAddProject = () => {
     const name = newProjectName.trim();
     if (!name) return;
-    const exists = projects.some(
-      (p) => (typeof p === "string" ? p : p.name) === name,
-    );
-    if (exists) {
-      onToast?.("That project already exists", "error");
+    // Checked against what is on screen first, so a duplicate leaves the typed
+    // name in the field to be corrected. The check inside the callback is the
+    // one that is actually authoritative, against the live list.
+    if (projects.some((p) => sameName(p, name))) {
+      onToast?.(t("settings.projects.exists"), "error");
       return;
     }
-    updateSetting({ projects: [...projects, { name, isFavorite: false }] });
     setNewProjectName("");
+    updateProjects((list) => {
+      if (list.some((p) => sameName(p, name))) {
+        onToast?.(t("settings.projects.exists"), "error");
+        return null;
+      }
+      return [...list, { name, isFavorite: false }];
+    });
   };
 
   const tabs = {
@@ -1166,123 +1353,148 @@ export default function SettingsPanel({
                     </p>
                   )}
                   {projects.map((project, idx) => {
-                    const name =
-                      typeof project === "string" ? project : project.name;
+                    const name = projectName(project);
                     const favorite =
                       typeof project === "object" && project.isFavorite;
+                    const colour = colorForLabel(name, projects);
                     return (
                       <div
                         key={`${name}-${idx}`}
-                        className="group flex items-center justify-between rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3.5 py-2.5 transition-colors hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30"
+                        className="group rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3.5 py-2.5 transition-colors hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30"
                       >
-                        {editingProjectIdx === idx ? (
-                          <div className="flex flex-1 items-center gap-2">
-                            <input
-                              type="text"
-                              autoFocus
-                              value={editingProjectName}
-                              onChange={(e) =>
-                                setEditingProjectName(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  const next = editingProjectName.trim();
-                                  if (next) {
-                                    const updated = [...projects];
-                                    updated[idx] = {
-                                      name: next,
-                                      isFavorite: !!favorite,
-                                    };
-                                    updateSetting({ projects: updated });
+                        <div className="flex items-center justify-between">
+                          {editingProjectKey === name ? (
+                            <div className="flex flex-1 items-center gap-2">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingProjectName}
+                                onChange={(e) =>
+                                  setEditingProjectName(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const next = editingProjectName.trim();
+                                    if (next)
+                                      patchProject(name, { name: next });
+                                    setEditingProjectKey(null);
                                   }
-                                  setEditingProjectIdx(null);
-                                }
-                                if (e.key === "Escape")
-                                  setEditingProjectIdx(null);
-                              }}
-                              className="flex-1 bg-transparent text-[13.5px] font-semibold text-neutral-800 outline-none dark:text-neutral-100"
-                            />
-                            <button
-                              onClick={() => {
-                                const next = editingProjectName.trim();
-                                if (next) {
-                                  const updated = [...projects];
-                                  updated[idx] = {
-                                    name: next,
-                                    isFavorite: !!favorite,
-                                  };
-                                  updateSetting({ projects: updated });
-                                }
-                                setEditingProjectIdx(null);
-                              }}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30"
-                            >
-                              <Check size={15} />
-                            </button>
-                            <button
-                              onClick={() => setEditingProjectIdx(null)}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 dark:bg-neutral-800"
-                            >
-                              <X size={15} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200/70 dark:bg-neutral-900 dark:ring-neutral-700">
-                                <Hash size={15} className="text-neutral-400" />
+                                  if (e.key === "Escape")
+                                    setEditingProjectKey(null);
+                                }}
+                                className="flex-1 bg-transparent text-[13.5px] font-semibold text-neutral-800 outline-none dark:text-neutral-100"
+                              />
+                              <button
+                                onClick={() => {
+                                  const next = editingProjectName.trim();
+                                  if (next) patchProject(name, { name: next });
+                                  setEditingProjectKey(null);
+                                }}
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30"
+                              >
+                                <Check size={15} />
+                              </button>
+                              <button
+                                onClick={() => setEditingProjectKey(null)}
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 dark:bg-neutral-800"
+                              >
+                                <X size={15} />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3">
+                                {/* The square was decoration; now it is the
+                                  colour this label wears everywhere, and
+                                  clicking it is how you change that. */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setColorPickerKey(
+                                      colorPickerKey === name ? null : name,
+                                    )
+                                  }
+                                  style={labelStyle(colour)}
+                                  title={t("settings.projects.color")}
+                                  aria-label={t("settings.projects.color")}
+                                  className="label-chip flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg shadow-sm"
+                                >
+                                  <Hash size={15} />
+                                </button>
+                                <span className="text-[13.5px] font-semibold text-neutral-800 dark:text-neutral-100">
+                                  {name}
+                                </span>
                               </div>
-                              <span className="text-[13.5px] font-semibold text-neutral-800 dark:text-neutral-100">
-                                {name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                  onClick={() => {
+                                    patchProject(name, (live) => ({
+                                      isFavorite: !live.isFavorite,
+                                    }));
+                                  }}
+                                  className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                                    favorite
+                                      ? "bg-amber-50 text-amber-500 dark:bg-amber-900/20"
+                                      : "text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                  }`}
+                                  title={t("settings.projects.pin")}
+                                >
+                                  <Star
+                                    size={15}
+                                    fill={favorite ? "currentColor" : "none"}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingProjectKey(name);
+                                    setEditingProjectName(name);
+                                  }}
+                                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                  title={t("settings.projects.rename")}
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    updateProjects((list) =>
+                                      list.filter((p) => !sameName(p, name)),
+                                    )
+                                  }
+                                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                                  title={t("settings.projects.removeSaved")}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* The palette opens UNDER the row rather than as a
+                            popover over it. The settings body scrolls, and an
+                            absolutely positioned menu is painted inside that
+                            scroller — z-index does not lift anything out of an
+                            overflow box, so the picker on the lower rows would
+                            simply have been cut off. */}
+                        {colorPickerKey === name && (
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-200/70 pt-2.5 dark:border-neutral-700/60">
+                            {LABEL_COLORS.map((swatch) => (
                               <button
+                                key={swatch}
+                                type="button"
                                 onClick={() => {
-                                  const updated = [...projects];
-                                  updated[idx] = {
-                                    name,
-                                    isFavorite: !favorite,
-                                  };
-                                  updateSetting({ projects: updated });
+                                  patchProject(name, { color: swatch });
+                                  setColorPickerKey(null);
                                 }}
-                                className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-                                  favorite
-                                    ? "bg-amber-50 text-amber-500 dark:bg-amber-900/20"
-                                    : "text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                style={labelStyle(swatch)}
+                                className={`label-dot h-5 w-5 cursor-pointer rounded-full transition-transform hover:scale-110 ${
+                                  swatch.toLowerCase() === colour.toLowerCase()
+                                    ? "ring-2 ring-neutral-900 ring-offset-2 dark:ring-neutral-100 dark:ring-offset-neutral-800"
+                                    : ""
                                 }`}
-                                title={t("settings.projects.pin")}
-                              >
-                                <Star
-                                  size={15}
-                                  fill={favorite ? "currentColor" : "none"}
-                                />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingProjectIdx(idx);
-                                  setEditingProjectName(name);
-                                }}
-                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                                title={t("settings.projects.rename")}
-                              >
-                                <Edit2 size={15} />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  updateSetting({
-                                    projects: projects.filter(
-                                      (_, i) => i !== idx,
-                                    ),
-                                  })
-                                }
-                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                                title={t("settings.projects.removeSaved")}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          </>
+                              />
+                            ))}
+                          </div>
                         )}
                       </div>
                     );

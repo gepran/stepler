@@ -91,8 +91,25 @@ jobs:
           fi
           echo "TAG=v$version" >> "$GITHUB_ENV"
 
+      - name: Check it still compiles
+        run: npm run lint
+
+      # THE credentials. `.env` is not in the repository and a runner has no
+      # copy of it, so without these two secrets the Vite `define` folds empty
+      # strings into the main bundle and every installed copy answers the
+      # Google button with "This copy of Stepler was built without Google
+      # sign-in". That is exactly what 1.3.12 shipped: the hand-made builds
+      # had the credentials, the tag push rebuilt without them, and
+      # `gh release upload --clobber` below replaced the good binaries with
+      # the broken ones on both platforms.
+      #
+      # build/beforePack.cjs now refuses to package a bundle without them, so
+      # a missing secret fails the release instead of shipping one.
       - name: Build the app
         run: npm run build
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
       - name: Package
         run: npx electron-builder ${{ matrix.args }} --publish never

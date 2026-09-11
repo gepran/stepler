@@ -15,24 +15,7 @@ import {
   useLanguage,
 } from "../renderer/src/lib/i18n";
 import SteplerLogo from "../renderer/src/components/SteplerLogo";
-
-/**
- * Firebase reports failures as machine codes. Showing "auth/invalid-credential"
- * to someone who mistyped a password is not an error message, so each code a
- * person can actually cause maps to a sentence that says what to do about it.
- */
-const ERROR_KEYS = {
-  "auth/invalid-email": "invalidEmail",
-  "auth/invalid-credential": "wrongPassword",
-  "auth/wrong-password": "wrongPassword",
-  "auth/user-not-found": "wrongPassword",
-  "auth/email-already-in-use": "emailInUse",
-  "auth/weak-password": "weakPassword",
-  "auth/too-many-requests": "tooMany",
-  "auth/popup-closed-by-user": "popupClosed",
-  "auth/cancelled-popup-request": "popupClosed",
-  "auth/network-request-failed": "network",
-};
+import { authErrorKey } from "./auth-errors";
 
 /**
  * A popup is the nicer flow — it keeps the page and anything typed on it — but
@@ -58,8 +41,7 @@ export default function AuthScreen() {
   const isSignUp = mode === "signUp";
 
   function report(err) {
-    const key = ERROR_KEYS[err?.code] || "generic";
-    setError(t(`auth.errors.${key}`));
+    setError(t(`auth.errors.${authErrorKey(err?.code)}`));
     // The mapped sentence is for the person; the code is for whoever debugs it.
     console.warn("Sign-in failed:", err?.code, err?.message);
   }

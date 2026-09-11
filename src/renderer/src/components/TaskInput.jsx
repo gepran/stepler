@@ -15,6 +15,7 @@ import {
   attachmentSrc,
 } from "../lib/attachments";
 import { localYMD, ymdToDate } from "../lib/format";
+import { colorForLabel, labelStyle, projectName } from "../lib/labels";
 import { ipc } from "../lib/attachments";
 import {
   X,
@@ -364,7 +365,8 @@ const TaskInput = forwardRef(function TaskInput(
                 {draftProjects.map((p) => (
                   <div
                     key={p}
-                    className="flex items-center gap-1.5 rounded-full border border-[#9B6AFF]/20 bg-[#9B6AFF]/10 px-3 py-1.5 text-xs font-medium text-[#9B6AFF]"
+                    style={labelStyle(colorForLabel(p, availableProjects))}
+                    className="label-chip flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
                   >
                     <Hash size={14} />
                     {p}
@@ -372,7 +374,7 @@ const TaskInput = forwardRef(function TaskInput(
                       onClick={() =>
                         setDraftProjects((prev) => prev.filter((x) => x !== p))
                       }
-                      className="ml-1 text-[#9B6AFF]/50 hover:text-[#9B6AFF]"
+                      className="ml-1 opacity-60 hover:opacity-100"
                       title={t("task.removeProject")}
                     >
                       <X size={14} />
@@ -497,9 +499,9 @@ const TaskInput = forwardRef(function TaskInput(
                     {t("input.projects")}
                   </div>
                   {availableProjects.map((project) => {
-                    const name =
-                      typeof project === "string" ? project : project.name;
+                    const name = projectName(project);
                     const isSelected = draftProjects.includes(name);
+                    const colour = colorForLabel(name, availableProjects);
                     return (
                       <button
                         key={name}
@@ -510,12 +512,20 @@ const TaskInput = forwardRef(function TaskInput(
                               : [...prev, name],
                           )
                         }
-                        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all active:scale-95 ${
+                        style={labelStyle(colour)}
+                        /* Unselected keeps the neutral pill and says which
+                           label it is with a dot; selected fills with the
+                           label's own colour, so the two states cannot be
+                           confused the way two tints of one hue can. */
+                        className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all active:scale-95 ${
                           isSelected
-                            ? "border-[#9B6AFF]/30 bg-[#9B6AFF]/10 text-[#9B6AFF] shadow-sm"
-                            : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
+                            ? "label-chip shadow-sm"
+                            : "border border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-800 dark:bg-[#1a1a1a] dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200"
                         }`}
                       >
+                        {!isSelected && (
+                          <span className="label-dot h-1.5 w-1.5 shrink-0 rounded-full" />
+                        )}
                         {name}
                       </button>
                     );
