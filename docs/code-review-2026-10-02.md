@@ -174,8 +174,10 @@ Desktop/web/Firebase `npm run test:all` также проходит без ош�
 тестов, iOS SDK, Firebase config/rules и приватных tooling-директорий в app.asar.
 SHA-256: `d723d4e06bd2c2e5f794a1e72a9f3889c9c43948fedc2c1a0c086535bd8e06bc`.
 
-Production deployment в этом обновлении относится к Firebase hosting и правилам.
-DMG собирается для локальной установки; новый публичный GitHub binary release
-не создаётся. Ссылки сайта на установщики остаются на последнем существующем
-релизе с соответствующим файлом, поэтому `/download/*` не получает ссылок на
-несуществующий публичный v1.3.14.
+Тег `v1.3.14` опубликован для проверенного коммита `df4f16a`.
+[GitHub Release](https://github.com/gepran/stepler/releases/tag/v1.3.14) содержит
+универсальный macOS DMG (Intel + Apple Silicon), Windows x64 installer,
+ZIP/blockmap и манифесты автоматического обновления.
+[Release workflow](https://github.com/gepran/stepler/actions/runs/37110140358)
+завершился успешно для обеих платформ и публикации. Ссылки `/download/mac` и
+`/download/windows` обновлены на существующие установщики v1.3.14.
