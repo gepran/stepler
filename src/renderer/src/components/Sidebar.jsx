@@ -73,7 +73,7 @@ export default function Sidebar({
             <Layers size={13} className="mr-2" /> {t("sidebar.projects")}
           </div>
 
-          <div className="space-y-2 pb-6">
+          <div data-project-list="sidebar-expanded" className="space-y-2 pb-6">
             <div
               onClick={() => onProjectClick?.(null)}
               className={`btn-tactile group flex items-center p-3 rounded-xl transition-all cursor-pointer border shadow-sm ${
@@ -93,13 +93,14 @@ export default function Sidebar({
 
             <div className="my-2 border-t border-neutral-100 dark:border-neutral-800" />
 
-            {availableProjects.map((project, idx) => {
+            {availableProjects.map((project) => {
               const projectTasksCount = tasks.filter((t) =>
                 t.projects?.includes(project.name),
               ).length;
               return (
                 <div
-                  key={idx}
+                  key={project.name}
+                  data-project-name={project.name}
                   onClick={() => onProjectClick?.(project.name)}
                   className={`btn-tactile group flex items-center p-3 rounded-xl transition-all cursor-pointer border shadow-sm ${
                     selectedProject === project.name
@@ -176,7 +177,10 @@ export default function Sidebar({
         <div className="shrink-0 flex justify-center py-4">
           <SteplerLogo size={50} />
         </div>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center py-2 space-y-3 pb-6">
+        <div
+          data-project-list="sidebar-collapsed"
+          className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center py-2 space-y-3 pb-6"
+        >
           <div
             onClick={() => onProjectClick?.(null)}
             className={`btn-tactile group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors ${
@@ -191,13 +195,14 @@ export default function Sidebar({
 
           <div className="w-8 border-t border-neutral-100 dark:border-neutral-800" />
 
-          {availableProjects.map((project, idx) => {
+          {availableProjects.map((project) => {
             const projectTasksCount = tasks.filter((t) =>
               t.projects?.includes(project.name),
             ).length;
             return (
               <div
-                key={idx}
+                key={project.name}
+                data-project-name={project.name}
                 onClick={() => onProjectClick?.(project.name)}
                 className={`btn-tactile group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors ${
                   selectedProject === project.name

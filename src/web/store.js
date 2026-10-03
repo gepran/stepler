@@ -2,14 +2,15 @@ import {
   collection,
   deleteField,
   doc,
-  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { createSubtaskQueue } from "../renderer/src/lib/subtask-queue";
+import { commitSubtaskCompletion } from "../renderer/src/lib/task-cloud";
+import { auth, db } from "./firebase";
 import { localYMD, taskTimestamp } from "../renderer/src/lib/format";
 import { newTaskId } from "../renderer/src/lib/ids";
 
@@ -21,6 +22,17 @@ import { newTaskId } from "../renderer/src/lib/ids";
  */
 const tasksRef = (uid) => collection(db, "users", uid, "tasks");
 const taskRef = (uid, id) => doc(db, "users", uid, "tasks", id);
+
+const subtaskQueue = createSubtaskQueue({
+  storage: {
+    getItem: (key) => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value),
+  },
+  isOnline: () => navigator.onLine,
+  isAuthorized: (uid) => auth.currentUser?.uid === uid,
+  newId: () => crypto.randomUUID(),
+  commit: (uid, operation) => commitSubtaskCompletion(db, uid, operation),
+});
 
 /** The day a task belongs to, derived the same way the desktop app derives it. */
 export function ymdForTask(id) {
@@ -38,23 +50,54 @@ export function ymdForTask(id) {
  * would helpfully resurrect the task on its next sync.
  */
 export function subscribeTasks(uid, onChange, onError) {
-  return onSnapshot(
+  let current;
+  const emit = () => {
+    if (!current) return;
+    try {
+      onChange({ ...current, tasks: subtaskQueue.overlay(uid, current.tasks) });
+    } catch (error) {
+      onError?.(error);
+    }
+  };
+  const retry = () =>
+    subtaskQueue.flush(uid).catch((error) => onError?.(error));
+  const stopQueue = subtaskQueue.watch(uid, emit);
+  const onStorage = (event) => {
+    if (event.key === `stepler.subtask-edits.${uid}`) {
+      emit();
+      retry();
+    }
+  };
+  window.addEventListener("online", retry);
+  window.addEventListener("storage", onStorage);
+  const retryTimer = setInterval(retry, 30_000);
+  const stopSnapshot = onSnapshot(
     tasksRef(uid),
     (snap) => {
       const active = [];
       const deleted = [];
       snap.forEach((d) => {
         const data = { ...d.data(), id: d.id };
-        (data.deleted ? deleted : active).push(data);
+        if (!data.purged) (data.deleted ? deleted : active).push(data);
       });
-      onChange({
+      current = {
         tasks: active,
         deletedTasks: deleted,
         fromCache: snap.metadata.fromCache,
-      });
+      };
+      emit();
+      retry();
     },
     (err) => onError?.(err),
   );
+  retry();
+  return () => {
+    stopSnapshot();
+    stopQueue();
+    window.removeEventListener("online", retry);
+    window.removeEventListener("storage", onStorage);
+    clearInterval(retryTimer);
+  };
 }
 
 /**
@@ -100,12 +143,9 @@ export function setPriority(uid, id, priority) {
 }
 
 /**
- * Subtasks ride inside the task document as an array, so ticking one off means
- * writing the whole array back. The array is passed in rather than re-read from
- * the server: the caller is already rendering it, and a read here would cost a
- * round trip and still fail offline — which is precisely where this app is
- * meant to keep working. Every other field on the subtask is carried over
- * untouched, so an attachment the desktop knows about survives a tap here.
+ * A durable operation overlays the local view while offline. Once connected,
+ * a transaction changes that child's completion in the latest server array,
+ * retaining edits and additions from another device.
  */
 export async function setSubtaskCompleted(
   uid,
@@ -114,28 +154,15 @@ export async function setSubtaskCompleted(
   subtaskId,
   completed,
 ) {
-  const target = taskRef(uid, id);
-  let base = subtasks || [];
-  try {
-    // Online this is the server's copy; offline it comes straight out of the
-    // IndexedDB cache and resolves rather than rejecting. Either way it is
-    // fresher than the array this row was rendered from, which matters because
-    // the write below replaces the whole array — a stale one would delete a
-    // subtask another device added in the meantime.
-    const snap = await getDoc(target);
-    if (snap.exists() && Array.isArray(snap.data().subtasks))
-      base = snap.data().subtasks;
-  } catch (err) {
-    console.warn("Could not re-read the subtasks:", err.code || err.message);
-  }
-  const next = base.map((st) =>
-    // A legacy row can be missing its id entirely, and String(undefined) would
-    // then match every other id-less subtask at once.
-    st.id != null && String(st.id) === String(subtaskId)
-      ? { ...st, completed: !!completed }
-      : st,
-  );
-  return updateDoc(target, stamp({ subtasks: next }));
+  if (
+    subtaskId == null ||
+    !(subtasks || []).some(
+      (child) => child.id != null && String(child.id) === String(subtaskId),
+    )
+  )
+    return;
+  subtaskQueue.enqueue(uid, id, subtaskId, completed);
+  return subtaskQueue.flush(uid);
 }
 
 export function setText(uid, id, text) {

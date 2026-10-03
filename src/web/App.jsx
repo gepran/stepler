@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { orderTasks } from "../renderer/src/lib/task-order";
 import { auth } from "./firebase";
 import {
   addTask,
@@ -102,13 +103,7 @@ function groupByDay(tasks, todayYMD) {
  * to 0 rather than producing NaN, which a comparator treats as "equal to
  * everything" and which scrambles the whole list.
  */
-const writtenAt = (task) => parseInt(task.id, 10) || 0;
-
-const orderWithin = (list) =>
-  [...list].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? -1 : 1;
-    return writtenAt(a) - writtenAt(b);
-  });
+const orderWithin = orderTasks;
 
 /**
  * Finished subtasks settle to the top the way finished tasks do, and the rest
@@ -1411,6 +1406,7 @@ export default function App() {
       </header>
 
       <Timeline
+        key={user.uid}
         user={user}
         collab={collab}
         onOpenSettings={() => setShowSettings(true)}
@@ -1418,6 +1414,7 @@ export default function App() {
 
       {showSettings && (
         <SettingsModal
+          key={user.uid}
           user={user}
           collab={collab}
           onClose={() => setShowSettings(false)}

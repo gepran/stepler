@@ -31,15 +31,17 @@ import {
   updateDoc,
   where,
   writeBatch,
+  runTransaction,
 } from "firebase/firestore";
+import { mergeSubtasks } from "./task-merge.js";
 import {
   connectionLabel,
   handleCandidates,
   normalizeHandle,
   resolveMentions,
   usernameFromEmail,
-} from "./collab";
-import { newTaskId } from "./ids";
+} from "./collab.js";
+import { newTaskId } from "./ids.js";
 
 export { connectionLabel, resolveMentions };
 
@@ -353,6 +355,17 @@ export function subscribeMentions(db, uid, onChange, onError) {
         const data = { ...d.data(), id: d.id };
         // Dismissed rows are filtered here rather than in each app, so the
         // two cannot disagree about what is on your list.
+        if (Array.isArray(data.subtasks)) {
+          data.subtasks = data.subtasks
+            .filter((st) => st && typeof st === "object" && st.id != null)
+            .slice(0, 500)
+            .map((st) => ({
+              ...st,
+              id: String(st.id),
+              text: typeof st.text === "string" ? st.text.slice(0, 20000) : "",
+              completed: !!st.completed,
+            }));
+        } else data.subtasks = [];
         if (!data.dismissed) list.push(data);
       });
       onChange(list, {
@@ -398,9 +411,8 @@ export const MENTION_EDITABLE = ["completed", "priority", "subtasks"];
  * laptop to wake up and copy the change back would mean a subtask that
  * vanishes the moment you add it. So both are written, with the same values.
  *
- * Settled with allSettled rather than all: the two writes are independent, and
- * one of them failing (a connection dropped between us, say) must not leave
- * the other unsent.
+ * One atomic batch keeps the two copies in step. If access to the author's
+ * task was revoked, the recipient's copy must not pretend the edit succeeded.
  */
 export async function updateMentionedTask(db, { meUid, mention, patch }) {
   const taskId = String(mention?.taskId || mention?.id || "");
@@ -415,18 +427,22 @@ export async function updateMentionedTask(db, { meUid, mention, patch }) {
   }
   if (!Object.keys(clean).length) return false;
 
-  const results = await Promise.allSettled([
-    updateDoc(doc(db, "users", author, "tasks", taskId), stamp(clean)),
-    setDoc(mentionRef(db, meUid, taskId), stamp(clean), { merge: true }),
-  ]);
-  for (const r of results) {
-    if (r.status === "rejected")
-      console.warn(
-        "A mention edit did not land:",
-        r.reason?.code || r.reason?.message,
+  await runTransaction(db, async (transaction) => {
+    const target = doc(db, "users", author, "tasks", taskId);
+    const snapshot = await transaction.get(target);
+    const patch = { ...clean };
+    if (patch.subtasks)
+      patch.subtasks = mergeSubtasks(
+        mention.subtasks || [],
+        patch.subtasks,
+        snapshot.data()?.subtasks || [],
       );
-  }
-  return results.some((r) => r.status === "fulfilled");
+    transaction.update(target, stamp(patch));
+    transaction.set(mentionRef(db, meUid, taskId), stamp(patch), {
+      merge: true,
+    });
+  });
+  return true;
 }
 
 /**

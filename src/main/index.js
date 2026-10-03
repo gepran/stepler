@@ -19,12 +19,23 @@ import {
 import { join, basename, extname } from "path";
 import { translations } from "../renderer/src/lib/translations";
 import { newTaskId } from "../renderer/src/lib/ids";
+import {
+  normalizeProjects,
+  projectNamesInData,
+  rewriteProjectInData,
+} from "../renderer/src/lib/projects";
+import {
+  applyProjectOperation,
+  normalizeProjectState,
+  projectNameInState,
+} from "../renderer/src/lib/project-state";
 import { pathToFileURL } from "url";
 import {
   readFileSync,
   writeFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   unlinkSync,
   renameSync,
   copyFileSync,
@@ -319,25 +330,41 @@ function loadSettings() {
   } catch {
     settingsCache = { ...defaults };
   }
+  settingsCache.projects = normalizeProjects(settingsCache.projects);
   return settingsCache;
 }
 
 function saveSettings(partial) {
   const merged = { ...loadSettings(), ...partial };
-  settingsCache = merged;
+  merged.projects = normalizeProjects(merged.projects);
   try {
     // Holds apiToken, so it is written owner-only.
     writeJsonAtomic(settingsPath, merged, PRIVATE_FILE);
   } catch (err) {
     console.error("Failed to persist settings:", err.message);
+    throw err;
   }
+  settingsCache = merged;
+  if (mainWindow && !mainWindow.isDestroyed())
+    mainWindow.webContents.send("settings-updated", publicSettings(merged));
   return merged;
 }
 
 /** Settings safe to hand to the renderer (never the API token). */
 function publicSettings(s = loadSettings()) {
-  const { apiToken, windowBounds, ...rest } = s; // eslint-disable-line no-unused-vars
-  return { ...rest, apiConfigured: !!apiToken };
+  const rest = { ...s };
+  for (const key of [
+    "apiToken",
+    "windowBounds",
+    "projectSyncQueue",
+    "projectRemoved",
+    "projectRenames",
+    "projectSyncUid",
+    "projectDeviceId",
+    "projectSequence",
+  ])
+    delete rest[key];
+  return { ...rest, apiConfigured: !!s.apiToken };
 }
 
 // --------------- App data persistence ---------------
@@ -348,9 +375,11 @@ const dataDefaults = {
   deletedTasks: [],
   currentDate: null,
   firedReminders: [],
+  purgedTasks: [],
 };
 
 let dataCache = null;
+let accountEpoch = 0;
 let saveTimer = null;
 let dirty = false;
 // Two different failures, and confusing them is what destroyed data before.
@@ -365,7 +394,12 @@ function readDataFile(path) {
   const raw = readFileSync(path, "utf-8");
   if (!raw.trim()) throw new Error("empty");
   const parsed = JSON.parse(raw);
-  if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    throw new Error("not an object");
+  for (const key of ["tasks", "history", "deletedTasks", "purgedTasks"]) {
+    if (parsed[key] !== undefined && !Array.isArray(parsed[key]))
+      throw new Error(`invalid ${key} list`);
+  }
   return parsed;
 }
 
@@ -489,10 +523,87 @@ function flushAppData() {
 function broadcastData() {
   if (!mainWindow || mainWindow.isDestroyed() || !dataCache) return;
   mainWindow.webContents.send("app-data-updated", {
+    accountEpoch,
+    firedReminders: dataCache.firedReminders,
     tasks: dataCache.tasks,
     history: dataCache.history,
     deletedTasks: dataCache.deletedTasks,
   });
+}
+
+/** Preserve each account's offline data before switching the active profile. */
+export function selectLocalAccount(uid) {
+  if (typeof uid !== "string" || !uid) throw new Error("Account required");
+  const settings = loadSettings();
+  if (settings.dataOwnerUid === uid) return;
+  flushAppData();
+  if (dirty || loadBlocked)
+    throw new Error("Save the current account before switching profiles");
+  const directory = join(USER_DATA, "accounts");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const profilePath = (owner) =>
+    join(directory, `${createHash("sha256").update(owner).digest("hex")}.json`);
+  const fields = [
+    "projects",
+    "projectRemoved",
+    "projectRenames",
+    "projectSyncQueue",
+    "projectSyncUid",
+  ];
+  const projectSettings = Object.fromEntries(
+    fields.map((key) => [
+      key,
+      settings[key] ?? (key === "projectSyncUid" ? null : []),
+    ]),
+  );
+  writeJsonAtomic(
+    profilePath(settings.dataOwnerUid || "guest"),
+    { data: loadAppData(), settings: projectSettings },
+    PRIVATE_FILE,
+  );
+  // First sign-in adopts the existing offline timeline. Subsequent account
+  // changes load an isolated profile instead of uploading the previous one.
+  const previousData = loadAppData();
+  try {
+    if (settings.dataOwnerUid) {
+      const target = profilePath(uid);
+      const saved = existsSync(target)
+        ? JSON.parse(readFileSync(target, "utf8"))
+        : {
+            data: dataDefaults,
+            settings: {
+              projects: [],
+              projectRemoved: [],
+              projectRenames: [],
+              projectSyncQueue: [],
+              projectSyncUid: null,
+            },
+          };
+      dataCache = sanitizeDataShape(saved.data);
+      settingsCache = { ...settings, ...saved.settings };
+      dirty = true;
+      flushAppData();
+      if (dirty) throw new Error("Could not save the selected account profile");
+    }
+    if (settings.dataOwnerUid) copyFileSync(dataPath, backupPath);
+    saveSettings({ dataOwnerUid: uid });
+  } catch (error) {
+    dataCache = previousData;
+    settingsCache = settings;
+    dirty = true;
+    flushAppData();
+    try {
+      writeJsonAtomic(backupPath, previousData);
+    } catch (backupError) {
+      console.error(
+        "Could not restore the account backup:",
+        backupError.message,
+      );
+    }
+    throw error;
+  }
+  accountEpoch += 1;
+  broadcastData();
 }
 
 /** Everything in a stored blob as one flat list, keyed by id. */
@@ -502,6 +613,7 @@ function indexTasks(data) {
   (data?.tasks || []).forEach(add);
   (data?.history || []).forEach((d) => (d?.tasks || []).forEach(add));
   (data?.deletedTasks || []).forEach(add);
+  (data?.purgedTasks || []).forEach(add);
   return m;
 }
 
@@ -561,6 +673,7 @@ function stampChangedTasks(prev, next, now) {
   walk(next.tasks);
   (next.history || []).forEach((d) => walk(d?.tasks));
   walk(next.deletedTasks);
+  walk(next.purgedTasks);
   return stamped;
 }
 
@@ -574,10 +687,59 @@ function saveAppData(partial, opts = {}) {
   const merged = { ...prev, ...partial };
   if (!opts.fromCloud) stampChangedTasks(prev, merged, Date.now());
   dataCache = merged;
+  const saved = loadSettings().projects;
+  const state = applyProjectOperation(
+    {
+      projects: saved,
+      removed: loadSettings().projectRemoved,
+      renames: loadSettings().projectRenames,
+    },
+    {
+      type: "remember",
+      names: projectNamesInData(merged),
+    },
+  );
+  if (state.projects.length !== saved.length) {
+    queueProjectOperation(
+      {
+        type: "remember",
+        names: state.projects.filter(
+          (p) => !saved.some((old) => old.name === p.name),
+        ),
+      },
+      state,
+    );
+  }
   dirty = true;
   if (!saveTimer) saveTimer = setTimeout(flushAppData, 400);
   if (!opts.fromCloud) sync.notifyLocalChange();
   return dataCache;
+}
+
+function queueProjectOperation(operation, state) {
+  const deviceId = loadSettings().projectDeviceId || randomUUID();
+  const sequence = (loadSettings().projectSequence || 0) + 1;
+  const clean = {
+    id: `${deviceId}:${sequence}`,
+    deviceId,
+    sequence,
+    type: operation.type,
+  };
+  for (const key of ["name", "nextName", "color"])
+    if (typeof operation[key] === "string")
+      clean[key] = operation[key].slice(0, 80);
+  if (operation.type === "remember")
+    clean.names = normalizeProjects(operation.names);
+  const settings = saveSettings({
+    projectDeviceId: deviceId,
+    projectSequence: sequence,
+    projects: state.projects,
+    projectRemoved: state.removed,
+    projectRenames: state.renames,
+    projectSyncQueue: [...(loadSettings().projectSyncQueue || []), clean],
+  });
+  sync.notifyLocalChange();
+  return settings;
 }
 
 // --------------- Attachments on disk ---------------
@@ -779,35 +941,17 @@ function sanitizeAttachment(a) {
 }
 
 function sanitizeSubtask(st) {
-  if (!st || typeof st !== "object") return null;
-  const out = {
-    id: st.id != null ? String(st.id) : String(Date.now()),
-    text: typeof st.text === "string" ? st.text.slice(0, 20000) : "",
-    completed: !!st.completed,
-  };
-  const att = sanitizeAttachment(st.attachment);
-  if (att) out.attachment = att;
-  // A task dragged into another becomes a subtask and brings its fields with
-  // it. They are kept rather than dropped here, because the two integration
-  // ids among them are the only handles the app has for removing the calendar
-  // event and the reminder it already created.
-  for (const k of [
-    "priority",
-    "dueDate",
-    "reminder",
-    "projects",
-    "gcalEventId",
-    "gcalLink",
-    "appleReminderId",
-    "jiraKey",
-    "jiraLink",
-  ])
-    if (st[k] !== undefined && st[k] !== null) out[k] = st[k];
-  return out;
+  if (!st || typeof st !== "object" || st.mention) return null;
+  const { subtasks, ...flat } = st;
+  void subtasks;
+  return sanitizeTask({
+    ...flat,
+    id: st.id != null ? String(st.id) : newTaskId(),
+  });
 }
 
 function sanitizeTask(t) {
-  if (!t || typeof t !== "object") return null;
+  if (!t || typeof t !== "object" || t.mention) return null;
   const out = {
     id: t.id != null ? String(t.id) : newTaskId(),
     text:
@@ -819,6 +963,10 @@ function sanitizeTask(t) {
     completed: !!t.completed,
     priority: !!t.priority,
   };
+  if (t.purged === true) out.purged = true;
+  if (Number.isFinite(t.sortOrder)) out.sortOrder = t.sortOrder;
+  if (typeof t.ymd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.ymd))
+    out.ymd = t.ymd;
   // Sync bookkeeping. This function is a whitelist, so anything not named here
   // is dropped — and it runs on every write from the CLI and the MCP server.
   if (typeof t.updatedAt === "number") out.updatedAt = t.updatedAt;
@@ -833,7 +981,7 @@ function sanitizeTask(t) {
     ...new Set(
       projects
         .filter((p) => typeof p === "string" && p.trim())
-        .map((p) => p.slice(0, 80)),
+        .map((p) => p.trim().slice(0, 80)),
     ),
   ].slice(0, 25);
   if (cleanProjects.length) out.projects = cleanProjects;
@@ -889,6 +1037,9 @@ function sanitizeDataShape(data) {
       })
       .filter(Boolean),
     deletedTasks: (Array.isArray(data.deletedTasks) ? data.deletedTasks : [])
+      .map(sanitizeTask)
+      .filter(Boolean),
+    purgedTasks: (Array.isArray(data.purgedTasks) ? data.purgedTasks : [])
       .map(sanitizeTask)
       .filter(Boolean),
     firedReminders: Array.isArray(data.firedReminders)
@@ -1289,7 +1440,7 @@ function createWindow() {
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: false,
@@ -1304,7 +1455,11 @@ function createWindow() {
     if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized())
       return;
     const b = mainWindow.getNormalBounds();
-    saveSettings({ windowBounds: b });
+    try {
+      saveSettings({ windowBounds: b });
+    } catch {
+      // Resizing must remain usable if the settings disk is temporarily full.
+    }
   };
   mainWindow.on("resized", persistBounds);
   mainWindow.on("moved", persistBounds);
@@ -1958,9 +2113,32 @@ end tell`);
 // --------------- IPC handlers ---------------
 
 function setupIPC() {
-  ipcMain.handle("get-settings", () => publicSettings());
+  // Privileged handlers accept only our app's top-level frame. Attachment
+  // previews and any child frame have no authority over files or credentials.
+  const handle = (channel, listener) =>
+    ipcMain.handle(channel, (event, ...args) => {
+      if (
+        !mainWindow ||
+        event.sender !== mainWindow.webContents ||
+        event.senderFrame !== mainWindow.webContents.mainFrame
+      )
+        throw new Error("Untrusted IPC sender");
+      const expected =
+        is.dev && process.env.ELECTRON_RENDERER_URL
+          ? process.env.ELECTRON_RENDERER_URL
+          : pathToFileURL(join(__dirname, "../renderer/index.html")).href;
+      const actual = new URL(event.senderFrame.url);
+      if (
+        is.dev && process.env.ELECTRON_RENDERER_URL
+          ? actual.origin !== new URL(expected).origin
+          : actual.href.split("#")[0] !== expected
+      )
+        throw new Error("Untrusted IPC origin");
+      return listener(event, ...args);
+    });
+  handle("get-settings", () => publicSettings());
 
-  ipcMain.handle("update-settings", (_, partial) => {
+  handle("update-settings", (_, partial) => {
     if (!partial || typeof partial !== "object") return publicSettings();
     const allowed = [
       "hotkey",
@@ -1976,6 +2154,8 @@ function setupIPC() {
     ];
     const clean = {};
     for (const key of allowed) if (key in partial) clean[key] = partial[key];
+    if (clean.projects !== undefined)
+      clean.projects = normalizeProjects(clean.projects);
     const settings = saveSettings(clean);
     let hotkeyOk = true;
     if (clean.hotkey !== undefined) hotkeyOk = registerHotkey(settings.hotkey);
@@ -1987,11 +2167,48 @@ function setupIPC() {
     return { ...publicSettings(settings), hotkeyOk };
   });
 
+  handle("mutate-project", (_, operation) => {
+    try {
+      const state = applyProjectOperation(
+        {
+          projects: loadSettings().projects,
+          removed: loadSettings().projectRemoved,
+          renames: loadSettings().projectRenames,
+        },
+        operation,
+      );
+      const projects = state.projects;
+      if (["rename", "remove"].includes(operation.type)) {
+        const name = operation.name.trim().slice(0, 80);
+        const nextName =
+          operation.type === "rename"
+            ? operation.nextName.trim().slice(0, 80)
+            : null;
+        // Update assignments everywhere, including history, nested rows and
+        // trash, before remembering names from the resulting dataset.
+        settingsCache = {
+          ...loadSettings(),
+          projects,
+          projectRemoved: state.removed,
+          projectRenames: state.renames,
+        };
+        saveAppData(rewriteProjectInData(loadAppData(), name, nextName));
+        flushAppData();
+        broadcastData();
+        mainWindow?.webContents.send("project-changed", { name, nextName });
+      }
+      const settings = publicSettings(queueProjectOperation(operation, state));
+      return { success: true, settings };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // ---- cloud sync ----
 
-  ipcMain.handle("sync-status", () => sync.publicStatus());
+  handle("sync-status", () => sync.publicStatus());
 
-  ipcMain.handle("sync-signin-google", async () => {
+  handle("sync-signin-google", async () => {
     // Wait for the client rather than reading a null as "no credentials".
     await whenGoogleReady();
     if (!googleIsConfigured())
@@ -2008,20 +2225,17 @@ function setupIPC() {
     return { success: true };
   });
 
-  ipcMain.handle(
-    "sync-signin-email",
-    async (_, { email, password, create }) => {
-      if (typeof email !== "string" || typeof password !== "string")
-        return { success: false, error: "auth/invalid-email" };
-      return sync.signInEmail(email.trim(), password, !!create);
-    },
-  );
+  handle("sync-signin-email", async (_, { email, password, create }) => {
+    if (typeof email !== "string" || typeof password !== "string")
+      return { success: false, error: "auth/invalid-email" };
+    return sync.signInEmail(email.trim(), password, !!create);
+  });
 
-  ipcMain.handle("sync-signout", () => sync.signOutSync());
+  handle("sync-signout", () => sync.signOutSync());
 
-  // Any renderer code can invoke any channel — there is no whitelist in the
-  // preload — so the arguments are checked here as well as in the form.
-  ipcMain.handle("sync-set-password", async (_, { password, current } = {}) => {
+  // The preload restricts channels; validate each allowed channel's arguments
+  // here as well as in the form.
+  handle("sync-set-password", async (_, { password, current } = {}) => {
     if (typeof password !== "string")
       return { success: false, error: "auth/weak-password" };
     return sync.setAccountPassword({
@@ -2035,56 +2249,56 @@ function setupIPC() {
   // The window holds no Firestore session of its own, so every one of these is
   // a thin pass-through to the engine that does.
 
-  ipcMain.handle("collab-snapshot", () => sync.collabSnapshot());
+  handle("collab-snapshot", () => sync.collabSnapshot());
 
-  ipcMain.handle("collab-search", (_, term) =>
+  handle("collab-search", (_, term) =>
     typeof term === "string" ? sync.collabSearch(term) : [],
   );
 
-  ipcMain.handle("collab-invite", (_, person) =>
+  handle("collab-invite", (_, person) =>
     person?.uid
       ? sync.collabInvite(person)
       : { success: false, error: "no-target" },
   );
 
-  ipcMain.handle("collab-accept", (_, person) =>
+  handle("collab-accept", (_, person) =>
     person?.uid
       ? sync.collabAccept(person)
       : { success: false, error: "no-target" },
   );
 
-  ipcMain.handle("collab-remove", (_, uid) =>
+  handle("collab-remove", (_, uid) =>
     typeof uid === "string"
       ? sync.collabRemove(uid)
       : { success: false, error: "no-target" },
   );
 
   // No id means "all of them", which is what opening the mention filter does.
-  ipcMain.handle("collab-mark-read", (_, id) =>
+  handle("collab-mark-read", (_, id) =>
     sync.collabMarkRead(typeof id === "string" ? id : null),
   );
 
   // Edits to a task somebody else wrote. The engine checks the mention really
   // exists before writing anything, and the Firestore rules check it again.
-  ipcMain.handle("collab-edit-mention", (_, { taskId, patch } = {}) =>
+  handle("collab-edit-mention", (_, { taskId, patch } = {}) =>
     taskId && patch && typeof patch === "object"
       ? sync.collabEditMention(String(taskId), patch)
       : { success: false, error: "bad-request" },
   );
 
-  ipcMain.handle("collab-add-mention-subtask", (_, { taskId, text } = {}) =>
+  handle("collab-add-mention-subtask", (_, { taskId, text } = {}) =>
     taskId && typeof text === "string"
       ? sync.collabAddMentionSubtask(String(taskId), text)
       : { success: false, error: "bad-request" },
   );
 
-  ipcMain.handle("collab-dismiss-mention", (_, taskId) =>
+  handle("collab-dismiss-mention", (_, taskId) =>
     taskId
       ? sync.collabDismissMention(String(taskId))
       : { success: false, error: "bad-request" },
   );
 
-  ipcMain.handle(
+  handle(
     "collab-toggle-mention-subtask",
     (_, { taskId, subtaskId, completed } = {}) =>
       taskId && subtaskId != null
@@ -2096,22 +2310,53 @@ function setupIPC() {
         : { success: false, error: "bad-request" },
   );
 
-  ipcMain.handle("hide-window", () => {
+  handle("hide-window", () => {
     hideWindow();
     return true;
   });
 
-  ipcMain.handle("load-app-data", () => loadAppData());
+  handle("load-app-data", () => ({ ...loadAppData(), accountEpoch }));
 
-  ipcMain.handle("save-app-data", (_, partial) => {
+  handle("save-app-data", (_, partial) => {
     if (!partial || typeof partial !== "object") return { ok: false };
-    saveAppData(partial);
+    if (accountEpoch > 0 && partial.accountEpoch !== accountEpoch)
+      return { ok: false, error: "Stale account snapshot" };
+    const clean = { ...partial };
+    delete clean.accountEpoch;
+    saveAppData(sanitizeDataShape({ ...loadAppData(), ...clean }));
     return { ok: true };
+  });
+
+  handle("purge-deleted-tasks", (_, ids = null) => {
+    const data = loadAppData();
+    const selected = Array.isArray(ids) ? new Set(ids) : null;
+    const rows = data.deletedTasks.filter(
+      (task) => !selected || selected.has(task.id),
+    );
+    const existing = new Map(
+      (data.purgedTasks || []).map((task) => [task.id, task]),
+    );
+    for (const task of rows)
+      existing.set(task.id, {
+        id: task.id,
+        text: "",
+        completed: false,
+        priority: false,
+        purged: true,
+        ...(task.ymd ? { ymd: task.ymd } : {}),
+      });
+    saveAppData({
+      deletedTasks: data.deletedTasks.filter((task) => !rows.includes(task)),
+      purgedTasks: [...existing.values()],
+    });
+    flushAppData();
+    broadcastData();
+    return { success: true };
   });
 
   // ---- attachments ----
 
-  ipcMain.handle("save-attachment", (_, { bytes, name, type }) => {
+  handle("save-attachment", (_, { bytes, name, type }) => {
     try {
       if (!bytes || bytes.byteLength === undefined)
         return { success: false, error: "no data" };
@@ -2130,13 +2375,13 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("read-attachment", (_, { id }) => {
+  handle("read-attachment", (_, { id }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     return { success: true, bytes: readFileSync(p) };
   });
 
-  ipcMain.handle("copy-attachment-image", (_, { id }) => {
+  handle("copy-attachment-image", (_, { id }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     const img = loadNativeImage(p);
@@ -2145,7 +2390,7 @@ function setupIPC() {
     return { success: true };
   });
 
-  ipcMain.handle("copy-task", (_, { text, attachmentId }) => {
+  handle("copy-task", (_, { text, attachmentId }) => {
     const body = String(text || "");
     const p = attachmentId ? attachmentPath(attachmentId) : null;
     if (p && existsSync(p)) {
@@ -2159,14 +2404,13 @@ function setupIPC() {
     return { success: true, withImage: false };
   });
 
-  ipcMain.handle("copy-attachment-file", (_, { id, name }) => {
+  handle("copy-attachment-file", (_, { id, name }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     try {
       // Copy out under the original filename so a paste in Finder/Explorer
       // produces a sensibly named file.
-      const dir = join(tmpdir(), "stepler-clipboard");
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const dir = mkdtempSync(join(tmpdir(), "stepler-clipboard-"));
       const target = join(dir, sanitizeFileName(name || basename(p)));
       copyFileSync(p, target);
       if (isMac) {
@@ -2183,7 +2427,7 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("save-attachment-to-disk", async (_, { id, name }) => {
+  handle("save-attachment-to-disk", async (_, { id, name }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     const fileName = sanitizeFileName(name || basename(p));
@@ -2202,12 +2446,11 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("open-file-attachment", async (_, { id, name }) => {
+  handle("open-file-attachment", async (_, { id, name }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     try {
-      const dir = join(tmpdir(), "stepler-attachments");
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const dir = mkdtempSync(join(tmpdir(), "stepler-attachments-"));
       const target = join(dir, sanitizeFileName(name || basename(p)));
       copyFileSync(p, target);
       await markAsForeign(target);
@@ -2226,15 +2469,15 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("open-external", (_, url) => {
+  handle("open-external", (_, url) => {
     if (!isSafeExternalUrl(url)) return { success: false, error: "unsafe url" };
     shell.openExternal(url);
     return { success: true };
   });
 
-  ipcMain.handle("get-update-state", () => updateState);
+  handle("get-update-state", () => updateState);
 
-  ipcMain.handle("get-app-version", () => app.getVersion());
+  handle("get-app-version", () => app.getVersion());
 
   /**
    * Check now, because somebody asked.
@@ -2245,7 +2488,7 @@ function setupIPC() {
    * wondering about it. The result arrives through the same update-state
    * channel the automatic checks use, so there is one path to keep working.
    */
-  ipcMain.handle("check-for-update", async () => {
+  handle("check-for-update", async () => {
     // No updater at all: a dev run, or a build where the module is missing.
     if (!autoUpdater) return { success: false, unavailable: true };
     // Already downloading or ready — asking again would only restart a
@@ -2277,7 +2520,7 @@ function setupIPC() {
    * is still alive a few seconds later, it did not work, and the download is
    * put somewhere findable instead of left buried.
    */
-  ipcMain.handle("install-update", () => {
+  handle("install-update", () => {
     if (!autoUpdater || updateState.status !== "ready")
       return { success: false, error: "No update is ready yet." };
     app.isQuitting = true;
@@ -2312,10 +2555,10 @@ function setupIPC() {
    * downloaded, so put a copy somewhere findable and open Finder on it
    * rather than sending someone back to the website to fetch it again.
    */
-  ipcMain.handle("reveal-downloaded-update", () => revealDownloadedUpdate());
+  handle("reveal-downloaded-update", () => revealDownloadedUpdate());
 
   /** Reveal the data folder, so "put your credentials here" is one click. */
-  ipcMain.handle("open-data-folder", async () => {
+  handle("open-data-folder", async () => {
     const err = await shell.openPath(USER_DATA);
     return err ? { success: false, error: err } : { success: true };
   });
@@ -2329,7 +2572,7 @@ function setupIPC() {
    * asar, which is why electron-builder unpacks it), and in development it is
    * next to package.json.
    */
-  ipcMain.handle("agent-setup", () => {
+  handle("agent-setup", () => {
     const scriptPath = app.isPackaged
       ? join(process.resourcesPath, "app.asar.unpacked", "stepler-mcp.mjs")
       : join(app.getAppPath(), "stepler-mcp.mjs");
@@ -2342,14 +2585,14 @@ function setupIPC() {
     };
   });
 
-  ipcMain.handle("copy-text", (_, text) => {
+  handle("copy-text", (_, text) => {
     clipboard.writeText(String(text ?? ""));
     return { success: true };
   });
 
   // ---- misc ----
 
-  ipcMain.handle("start-dictation", async () => {
+  handle("start-dictation", async () => {
     if (!isMac) return { success: false, error: "macOS only" };
     if (!canSendKeystrokes())
       return {
@@ -2363,11 +2606,9 @@ function setupIPC() {
     return { success: res.ok, error: res.error };
   });
 
-  ipcMain.handle("show-notification", (_, { title, body }) =>
-    notify(title, body),
-  );
+  handle("show-notification", (_, { title, body }) => notify(title, body));
 
-  ipcMain.handle("export-tasks", async (_, data) => {
+  handle("export-tasks", async (_, data) => {
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: "Export Tasks",
       defaultPath: `stepler-export-${localYMD(new Date())}.json`,
@@ -2407,7 +2648,7 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("import-tasks", async () => {
+  handle("import-tasks", async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: "Import Tasks",
       filters: [{ name: "JSON Files", extensions: ["json"] }],
@@ -2443,7 +2684,7 @@ function setupIPC() {
 
   // ---- Google Calendar ----
 
-  ipcMain.handle("google-calendar-status", async () => {
+  handle("google-calendar-status", async () => {
     // Same race as sign-in: asked too early, this reported the integration as
     // unconfigured and the settings row offered no Connect button at all.
     await whenGoogleReady();
@@ -2477,7 +2718,7 @@ function setupIPC() {
     };
   });
 
-  ipcMain.handle("google-calendar-auth", async () => {
+  handle("google-calendar-auth", async () => {
     await whenGoogleReady();
     if (!googleIsConfigured())
       return {
@@ -2501,7 +2742,7 @@ function setupIPC() {
     return { success: true };
   });
 
-  ipcMain.handle("google-calendar-disconnect", () => {
+  handle("google-calendar-disconnect", () => {
     if (oAuth2Client) oAuth2Client.setCredentials({});
     clearSecret(GCAL_TOKEN_PATH);
     return { success: true };
@@ -2527,7 +2768,7 @@ function setupIPC() {
         oAuth2Client.credentials?.refresh_token)
     );
 
-  ipcMain.handle(
+  handle(
     "google-calendar-create-event",
     async (_, { text, dateString, reminderTime }) => {
       if (!loadSettings().calendarSync)
@@ -2569,7 +2810,7 @@ function setupIPC() {
     },
   );
 
-  ipcMain.handle(
+  handle(
     "google-calendar-update-event",
     async (_, { eventId, text, dateString, reminderTime }) => {
       if (!gcalReady() || !eventId)
@@ -2606,7 +2847,7 @@ function setupIPC() {
     },
   );
 
-  ipcMain.handle("google-calendar-delete-event", async (_, { eventId }) => {
+  handle("google-calendar-delete-event", async (_, { eventId }) => {
     if (!gcalReady() || !eventId)
       return { success: false, error: "Not connected." };
     const google = await getGoogle();
@@ -2621,19 +2862,19 @@ function setupIPC() {
 
   // ---- Apple Reminders ----
 
-  ipcMain.handle("apple-reminders-create-event", (_, payload) =>
+  handle("apple-reminders-create-event", (_, payload) =>
     remindersCreate(payload || {}),
   );
-  ipcMain.handle("apple-reminders-update-event", (_, payload) =>
+  handle("apple-reminders-update-event", (_, payload) =>
     remindersUpdate(payload || {}),
   );
-  ipcMain.handle("apple-reminders-delete-event", (_, { reminderId }) =>
+  handle("apple-reminders-delete-event", (_, { reminderId }) =>
     remindersDelete(reminderId),
   );
 
   // ---- Jira ----
 
-  ipcMain.handle("jira-status", () => ({
+  handle("jira-status", () => ({
     // OAuth needs credentials this machine may not have; an API token needs
     // nothing but the token, so the card is never "not set up" for it.
     configured: true,
@@ -2646,7 +2887,7 @@ function setupIPC() {
     email: jiraBasic?.email || null,
   }));
 
-  ipcMain.handle("jira-auth", () => {
+  handle("jira-auth", () => {
     const url = jiraAuthUrl();
     if (!url)
       return {
@@ -2663,7 +2904,7 @@ function setupIPC() {
    * usable client secret; a token the person makes themselves is the honest
    * way in. Verified against /myself before it is stored.
    */
-  ipcMain.handle("jira-connect-token", async (_, payload) => {
+  handle("jira-connect-token", async (_, payload) => {
     const parsed = parseJiraSite(payload?.siteUrl);
     if (!parsed)
       return {
@@ -2703,7 +2944,7 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle("jira-disconnect", () => {
+  handle("jira-disconnect", () => {
     jiraAuthToken = null;
     jiraBasic = null;
     clearSecret(JIRA_TOKEN_PATH);
@@ -2722,11 +2963,11 @@ function setupIPC() {
       return { success: false, error: err.message };
     }
   };
-  ipcMain.handle("jira-get-projects", jiraProjects);
-  ipcMain.handle("jira-fetch-projects", jiraProjects);
+  handle("jira-get-projects", jiraProjects);
+  handle("jira-fetch-projects", jiraProjects);
 
   /** Boards a project has, so the sprint list has something to hang off. */
-  ipcMain.handle("jira-get-boards", async (_, { projectKey }) => {
+  handle("jira-get-boards", async (_, { projectKey }) => {
     if (!projectKey) return { success: false, error: "No project" };
     try {
       const res = await jiraApi(
@@ -2740,7 +2981,7 @@ function setupIPC() {
   });
 
   /** Only sprints you can still put work into. */
-  ipcMain.handle("jira-get-sprints", async (_, { boardId }) => {
+  handle("jira-get-sprints", async (_, { boardId }) => {
     if (!boardId) return { success: false, error: "No board" };
     try {
       const res = await jiraApi(
@@ -2753,58 +2994,55 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle(
-    "jira-create-issue",
-    async (_, { text, projectKey, sprintId }) => {
-      if (!projectKey) return { success: false, error: "No project" };
-      try {
-        const res = await jiraApi("/rest/api/3/issue", {
-          method: "POST",
-          body: JSON.stringify({
-            fields: {
-              project: { key: projectKey },
-              summary: String(text || "").slice(0, 250),
-              issuetype: { name: "Task" },
-            },
-          }),
-        });
-        const data = res.body;
-        if (!data?.key)
-          return {
-            success: false,
-            error:
-              data?.errorMessages?.join(", ") ||
-              Object.values(data?.errors || {}).join(", ") ||
-              res.error ||
-              "Failed to create issue",
-          };
-
-        // The sprint is a second call: creating an issue cannot set it
-        // directly without knowing the site's sprint custom field id.
-        let sprintError = null;
-        if (sprintId) {
-          const moved = await jiraApi(
-            `/rest/agile/1.0/sprint/${encodeURIComponent(sprintId)}/issue`,
-            { method: "POST", body: JSON.stringify({ issues: [data.key] }) },
-          );
-          if (!moved.ok)
-            sprintError = moved.error || "could not add it to the sprint";
-        }
-
-        const site =
-          jiraBasic?.siteUrl ||
-          `https://${String(data.self || "").split("/")[2]}`;
+  handle("jira-create-issue", async (_, { text, projectKey, sprintId }) => {
+    if (!projectKey) return { success: false, error: "No project" };
+    try {
+      const res = await jiraApi("/rest/api/3/issue", {
+        method: "POST",
+        body: JSON.stringify({
+          fields: {
+            project: { key: projectKey },
+            summary: String(text || "").slice(0, 250),
+            issuetype: { name: "Task" },
+          },
+        }),
+      });
+      const data = res.body;
+      if (!data?.key)
         return {
-          success: true,
-          key: data.key,
-          link: site ? `${site}/browse/${data.key}` : null,
-          sprintError,
+          success: false,
+          error:
+            data?.errorMessages?.join(", ") ||
+            Object.values(data?.errors || {}).join(", ") ||
+            res.error ||
+            "Failed to create issue",
         };
-      } catch (err) {
-        return { success: false, error: err.message };
+
+      // The sprint is a second call: creating an issue cannot set it
+      // directly without knowing the site's sprint custom field id.
+      let sprintError = null;
+      if (sprintId) {
+        const moved = await jiraApi(
+          `/rest/agile/1.0/sprint/${encodeURIComponent(sprintId)}/issue`,
+          { method: "POST", body: JSON.stringify({ issues: [data.key] }) },
+        );
+        if (!moved.ok)
+          sprintError = moved.error || "could not add it to the sprint";
       }
-    },
-  );
+
+      const site =
+        jiraBasic?.siteUrl ||
+        `https://${String(data.self || "").split("/")[2]}`;
+      return {
+        success: true,
+        key: data.key,
+        link: site ? `${site}/browse/${data.key}` : null,
+        sprintError,
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 // --------------- Local HTTP API (for the CLI) ---------------
@@ -2820,10 +3058,6 @@ function tokensMatch(provided, expected) {
 
 function startAPIServer() {
   const settings = loadSettings();
-  if (!settings.apiEnabled) {
-    console.log("Local API disabled in settings.");
-    return;
-  }
   let token = settings.apiToken;
   if (!token) {
     token = randomBytes(24).toString("hex");
@@ -2856,7 +3090,12 @@ function startAPIServer() {
 
     // No CORS headers at all, and anything a browser sends (Origin present) is
     // rejected outright — a web page must not be able to read local notes.
-    if (req.headers.origin) return send(403, { error: "Forbidden" });
+    if (
+      !loadSettings().apiEnabled ||
+      req.headers.origin ||
+      req.headers["sec-fetch-site"]
+    )
+      return send(403, { error: "Forbidden" });
     const auth = req.headers.authorization || "";
     if (!auth.startsWith("Bearer ") || !tokensMatch(auth.slice(7), token))
       return send(401, { error: "Unauthorized" });
@@ -2934,7 +3173,12 @@ function startAPIServer() {
     }
 
     if (method === "PATCH" && url.startsWith("/api/tasks/")) {
-      const id = decodeURIComponent(url.slice("/api/tasks/".length));
+      let id;
+      try {
+        id = decodeURIComponent(url.slice("/api/tasks/".length));
+      } catch {
+        return send(400, { error: "Invalid task id" });
+      }
       let body = "";
       req.on("data", (c) => {
         body += c;
@@ -3003,7 +3247,12 @@ function startAPIServer() {
     }
 
     if (method === "DELETE" && url.startsWith("/api/tasks/")) {
-      const id = decodeURIComponent(url.slice("/api/tasks/".length));
+      let id;
+      try {
+        id = decodeURIComponent(url.slice("/api/tasks/".length));
+      } catch {
+        return send(400, { error: "Invalid task id" });
+      }
       const data = loadAppData();
       const task = data.tasks.find((t) => t.id === id);
       if (!task) return send(404, { error: "Task not found" });
@@ -3234,7 +3483,56 @@ async function handleFirebaseCallback(url, send) {
  */
 function startSync() {
   sync.initSync({
+    selectAccount: selectLocalAccount,
     getData: () => loadAppData(),
+    getProjects: (uid) => ({
+      projects: loadSettings().projects,
+      queue: loadSettings().projectSyncQueue || [],
+      initialized: loadSettings().projectSyncUid === uid,
+    }),
+    applyProjects: (incoming, acknowledged, initialized, uid) => {
+      const queue = (loadSettings().projectSyncQueue || []).filter(
+        (operation) =>
+          !acknowledged.includes(operation.id) &&
+          !(
+            operation.deviceId &&
+            incoming.clocks?.[operation.deviceId] >= operation.sequence
+          ),
+      );
+      let state = normalizeProjectState(incoming);
+      for (const operation of queue) {
+        try {
+          state = applyProjectOperation(state, operation);
+        } catch {
+          /* obsolete operation */
+        }
+      }
+      let data = loadAppData();
+      const names = new Set([
+        ...projectNamesInData(data),
+        ...loadSettings().projects.map((p) => p.name),
+      ]);
+      let changed = false;
+      for (const name of names) {
+        const nextName = projectNameInState(name, state);
+        if (nextName === name) continue;
+        data = rewriteProjectInData(data, name, nextName);
+        mainWindow?.webContents.send("project-changed", { name, nextName });
+        changed = true;
+      }
+      saveSettings({
+        projects: state.projects,
+        projectRemoved: state.removed,
+        projectRenames: state.renames,
+        projectSyncQueue: queue,
+        ...(initialized ? { projectSyncUid: uid } : {}),
+      });
+      if (changed) {
+        saveAppData(data);
+        flushAppData();
+        broadcastData();
+      }
+    },
     applyRemote: (next) => {
       // The one ingress carrying bytes another account wrote. Every other way
       // into this file — the JSON import, the local HTTP API — runs the same

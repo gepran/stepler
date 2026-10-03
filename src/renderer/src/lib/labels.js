@@ -68,15 +68,12 @@ export function savedColor(project) {
  * otherwise the one its name hashes to.
  *
  * `projects` may hold bare strings, so every read goes through the guards
- * above rather than reaching for `.color` on something that has none. Matching
- * is case-insensitive because the same word typed two ways is one label to the
- * person who typed it.
+ * above rather than reaching for `.color` on something that has none. Saved
+ * overrides use the same exact identity as the project list and task filters.
  */
 export function colorForLabel(name, projects) {
   const clean = String(name || "");
-  const saved = (projects || []).find(
-    (p) => projectName(p).toLowerCase() === clean.toLowerCase(),
-  );
+  const saved = (projects || []).find((p) => projectName(p) === clean);
   return (
     savedColor(saved) ||
     LABEL_COLORS[hashName(clean.toLowerCase()) % LABEL_COLORS.length]

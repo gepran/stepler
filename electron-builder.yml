@@ -13,11 +13,11 @@ files:
   # default one, so any new top-level file or folder in the repo lands inside
   # the app unless it is named here — including private tooling directories.
   - "!{.gstack,.claude,.firebase,.github}"
-  - "!{.firebaserc,firebase.json,firestore.rules,firestore.indexes.json,storage.rules}"
+  - "!{.firebaserc,firebase.json,firebase.test.json,firestore.rules,firestore.indexes.json,storage.rules}"
   - "!{dist-web,vite.web.config.mjs,src/web}"
   # stepler-cli.mjs deliberately stays: it shipped before, and the MCP
   # server next to it is shipped on purpose for the same reason.
-  - "!{index.js,.eslintcache}"
+  - "!{index.js,.eslintcache,tests,scripts,ios}"
 asarUnpack:
   - resources/**
   # A plain `node` cannot run a file from inside an asar, and pointing a

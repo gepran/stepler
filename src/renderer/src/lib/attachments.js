@@ -72,9 +72,8 @@ export async function persistAttachment(pending) {
     console.error("Could not store attachment:", res?.error);
   } catch (err) {
     console.error("Could not store attachment:", err);
-  } finally {
-    releasePending(pending);
   }
+  // The draft owns its preview URL and releases it only on success/cancel.
   return null;
 }
 

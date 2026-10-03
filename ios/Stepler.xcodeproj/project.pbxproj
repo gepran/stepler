@@ -1,0 +1,613 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		185B5A63B942F76AEA1086EF /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5582E148DEAD0B990B128E5 /* Models.swift */; };
+		22C69F8BAE8185B5EE6BCF75 /* ReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B65DC10ECF21DDCD7206AD1 /* ReminderService.swift */; };
+		3189CB27D63935D1AA620E0E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 56B6D509C1FBB5213F4EA9C7 /* GoogleService-Info.plist */; };
+		3546BAF5CD65724A0C49F0EA /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 3B8A61588A07929708AD0AB8 /* FirebaseAuth */; };
+		438BC5CE0EADA67FA0D8751F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30797B0C7AAA8856911CC46C /* SettingsView.swift */; };
+		4A62ADE1D9E12D66202DBB17 /* SteplerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C86C23A7E6E15B41961CA /* SteplerApp.swift */; };
+		5BA74CB3C6707B46BD91782B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8431CE55E36B0351EC18D6A4 /* ContentView.swift */; };
+		6054951430743E674F7D89E9 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 08EF9E12E3E5150AE2EAF182 /* FirebaseFirestore */; };
+		6D73718DB9393B735CFE4D44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C84175BB886077B9496BD646 /* Assets.xcassets */; };
+		87A7A3C4D016A568DFC01C6C /* SteplerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797085FDA6ABB9E6681080E8 /* SteplerUITests.swift */; };
+		A0447A64A487AA1FE6E28F7A /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3480907E34CDD71B41E4EF0 /* AppStore.swift */; };
+		B19DADA70A40AA06A86DBB53 /* Collaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF33EBFAA83FEE5FE6B8694F /* Collaboration.swift */; };
+		E0DC6EE0A7C83886325B66D4 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 4D847E633A4E696C4B6A4BA1 /* GoogleSignIn */; };
+		FABD3C0AF52E4007BD8448CB /* SteplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B512B042294F4215F5A041B /* SteplerTests.swift */; };
+		FF9B1E2C3F313BB3DE2ADD2C /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 591E7CE342DDF063980B890D /* FirebaseStorage */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7E1F7E2228AFD90797FAFFB4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 23E3F4098BF6019FCACFD3F9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 664E71F2767BDFBE37F592BE;
+			remoteInfo = Stepler;
+		};
+		B03391F7E121B074D1B766EC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 23E3F4098BF6019FCACFD3F9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 664E71F2767BDFBE37F592BE;
+			remoteInfo = Stepler;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		30797B0C7AAA8856911CC46C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		3B512B042294F4215F5A041B /* SteplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteplerTests.swift; sourceTree = "<group>"; };
+		56B6D509C1FBB5213F4EA9C7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		62496EF0EA5B02834C194520 /* Stepler.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stepler.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		774308D07F7B754ACDB30B2D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		797085FDA6ABB9E6681080E8 /* SteplerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteplerUITests.swift; sourceTree = "<group>"; };
+		8431CE55E36B0351EC18D6A4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		9B65DC10ECF21DDCD7206AD1 /* ReminderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderService.swift; sourceTree = "<group>"; };
+		A88C86C23A7E6E15B41961CA /* SteplerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteplerApp.swift; sourceTree = "<group>"; };
+		BE0ED03307B4869F3AD13FA1 /* SteplerUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteplerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C84175BB886077B9496BD646 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CFE70A357580A1679EDD26A8 /* SteplerTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteplerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D5582E148DEAD0B990B128E5 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		DF33EBFAA83FEE5FE6B8694F /* Collaboration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Collaboration.swift; sourceTree = "<group>"; };
+		F3480907E34CDD71B41E4EF0 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0E947A4790988F99738694C8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3546BAF5CD65724A0C49F0EA /* FirebaseAuth in Frameworks */,
+				6054951430743E674F7D89E9 /* FirebaseFirestore in Frameworks */,
+				FF9B1E2C3F313BB3DE2ADD2C /* FirebaseStorage in Frameworks */,
+				E0DC6EE0A7C83886325B66D4 /* GoogleSignIn in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		020B783CC80347E5C30D3DC8 /* SteplerTests */ = {
+			isa = PBXGroup;
+			children = (
+				3B512B042294F4215F5A041B /* SteplerTests.swift */,
+			);
+			path = SteplerTests;
+			sourceTree = "<group>";
+		};
+		2E88FE265316381A5C3B256B /* SteplerUITests */ = {
+			isa = PBXGroup;
+			children = (
+				797085FDA6ABB9E6681080E8 /* SteplerUITests.swift */,
+			);
+			path = SteplerUITests;
+			sourceTree = "<group>";
+		};
+		5E0E448F2F366E63428EA249 = {
+			isa = PBXGroup;
+			children = (
+				6EB82EF37CA3B1D3C3ED24C9 /* Stepler */,
+				020B783CC80347E5C30D3DC8 /* SteplerTests */,
+				2E88FE265316381A5C3B256B /* SteplerUITests */,
+				EE15C1751090271A41A5FF69 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6EB82EF37CA3B1D3C3ED24C9 /* Stepler */ = {
+			isa = PBXGroup;
+			children = (
+				F3480907E34CDD71B41E4EF0 /* AppStore.swift */,
+				C84175BB886077B9496BD646 /* Assets.xcassets */,
+				DF33EBFAA83FEE5FE6B8694F /* Collaboration.swift */,
+				8431CE55E36B0351EC18D6A4 /* ContentView.swift */,
+				56B6D509C1FBB5213F4EA9C7 /* GoogleService-Info.plist */,
+				774308D07F7B754ACDB30B2D /* Info.plist */,
+				D5582E148DEAD0B990B128E5 /* Models.swift */,
+				9B65DC10ECF21DDCD7206AD1 /* ReminderService.swift */,
+				30797B0C7AAA8856911CC46C /* SettingsView.swift */,
+				A88C86C23A7E6E15B41961CA /* SteplerApp.swift */,
+			);
+			path = Stepler;
+			sourceTree = "<group>";
+		};
+		EE15C1751090271A41A5FF69 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				62496EF0EA5B02834C194520 /* Stepler.app */,
+				CFE70A357580A1679EDD26A8 /* SteplerTests.xctest */,
+				BE0ED03307B4869F3AD13FA1 /* SteplerUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		216F6CF7326D15A263A7CFD5 /* SteplerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 763BED4E23DE93FE90BD04AC /* Build configuration list for PBXNativeTarget "SteplerUITests" */;
+			buildPhases = (
+				808E70DD1CBEAB62CF862E08 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E69970E512C9F84442DD1153 /* PBXTargetDependency */,
+			);
+			name = SteplerUITests;
+			packageProductDependencies = (
+			);
+			productName = SteplerUITests;
+			productReference = BE0ED03307B4869F3AD13FA1 /* SteplerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		664E71F2767BDFBE37F592BE /* Stepler */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 98F9BD363862B9147F3F2272 /* Build configuration list for PBXNativeTarget "Stepler" */;
+			buildPhases = (
+				1979A41FE65EBE2E8E33BCC7 /* Sources */,
+				F4AE85183FC2E046C6A9ACDA /* Resources */,
+				0E947A4790988F99738694C8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Stepler;
+			packageProductDependencies = (
+				3B8A61588A07929708AD0AB8 /* FirebaseAuth */,
+				08EF9E12E3E5150AE2EAF182 /* FirebaseFirestore */,
+				591E7CE342DDF063980B890D /* FirebaseStorage */,
+				4D847E633A4E696C4B6A4BA1 /* GoogleSignIn */,
+			);
+			productName = Stepler;
+			productReference = 62496EF0EA5B02834C194520 /* Stepler.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E027CAEB4BA1B88A0501E484 /* SteplerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C8A2A148DBF1C8CF28D32302 /* Build configuration list for PBXNativeTarget "SteplerTests" */;
+			buildPhases = (
+				DFA74541CA076F05CA9DAE12 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CE54F9200DAF470F94D7BF16 /* PBXTargetDependency */,
+			);
+			name = SteplerTests;
+			packageProductDependencies = (
+			);
+			productName = SteplerTests;
+			productReference = CFE70A357580A1679EDD26A8 /* SteplerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		23E3F4098BF6019FCACFD3F9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					216F6CF7326D15A263A7CFD5 = {
+						DevelopmentTeam = CQCZ5G8D6H;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 664E71F2767BDFBE37F592BE;
+					};
+					664E71F2767BDFBE37F592BE = {
+						DevelopmentTeam = CQCZ5G8D6H;
+						ProvisioningStyle = Automatic;
+					};
+					E027CAEB4BA1B88A0501E484 = {
+						DevelopmentTeam = CQCZ5G8D6H;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8DE9B5E1C77D38E9BA0BD5C3 /* Build configuration list for PBXProject "Stepler" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5E0E448F2F366E63428EA249;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				43D4A9BA18C9347A5C0FDED5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				6958B1274ADEB25297DCB4EC /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = EE15C1751090271A41A5FF69 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				664E71F2767BDFBE37F592BE /* Stepler */,
+				E027CAEB4BA1B88A0501E484 /* SteplerTests */,
+				216F6CF7326D15A263A7CFD5 /* SteplerUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F4AE85183FC2E046C6A9ACDA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6D73718DB9393B735CFE4D44 /* Assets.xcassets in Resources */,
+				3189CB27D63935D1AA620E0E /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1979A41FE65EBE2E8E33BCC7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0447A64A487AA1FE6E28F7A /* AppStore.swift in Sources */,
+				B19DADA70A40AA06A86DBB53 /* Collaboration.swift in Sources */,
+				5BA74CB3C6707B46BD91782B /* ContentView.swift in Sources */,
+				185B5A63B942F76AEA1086EF /* Models.swift in Sources */,
+				22C69F8BAE8185B5EE6BCF75 /* ReminderService.swift in Sources */,
+				438BC5CE0EADA67FA0D8751F /* SettingsView.swift in Sources */,
+				4A62ADE1D9E12D66202DBB17 /* SteplerApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		808E70DD1CBEAB62CF862E08 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				87A7A3C4D016A568DFC01C6C /* SteplerUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DFA74541CA076F05CA9DAE12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FABD3C0AF52E4007BD8448CB /* SteplerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CE54F9200DAF470F94D7BF16 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 664E71F2767BDFBE37F592BE /* Stepler */;
+			targetProxy = 7E1F7E2228AFD90797FAFFB4 /* PBXContainerItemProxy */;
+		};
+		E69970E512C9F84442DD1153 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 664E71F2767BDFBE37F592BE /* Stepler */;
+			targetProxy = B03391F7E121B074D1B766EC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		518BD31371F097CDD02E8DD8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.SteplerUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Stepler;
+			};
+			name = Release;
+		};
+		7EC028EDBE375CC917EDB635 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.SteplerTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stepler.app/Stepler";
+			};
+			name = Debug;
+		};
+		8458EE12B04A1C6AC2498AB9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.SteplerUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Stepler;
+			};
+			name = Debug;
+		};
+		8DD185BE44FFBEA3F0582046 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.SteplerTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stepler.app/Stepler";
+			};
+			name = Release;
+		};
+		A2BA0DE629F461F558E31825 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = CQCZ5G8D6H;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.3.14;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A8E4D26CBEF2D50A3F4FACF5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Stepler/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.app.ios;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F8CF6586ACC1D194084270B3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Stepler/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stepler.app.ios;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FA49CD2DCF0120B2506F7A5A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = CQCZ5G8D6H;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.3.14;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		763BED4E23DE93FE90BD04AC /* Build configuration list for PBXNativeTarget "SteplerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8458EE12B04A1C6AC2498AB9 /* Debug */,
+				518BD31371F097CDD02E8DD8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8DE9B5E1C77D38E9BA0BD5C3 /* Build configuration list for PBXProject "Stepler" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA49CD2DCF0120B2506F7A5A /* Debug */,
+				A2BA0DE629F461F558E31825 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		98F9BD363862B9147F3F2272 /* Build configuration list for PBXNativeTarget "Stepler" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8E4D26CBEF2D50A3F4FACF5 /* Debug */,
+				F8CF6586ACC1D194084270B3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C8A2A148DBF1C8CF28D32302 /* Build configuration list for PBXNativeTarget "SteplerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7EC028EDBE375CC917EDB635 /* Debug */,
+				8DD185BE44FFBEA3F0582046 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		43D4A9BA18C9347A5C0FDED5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.19.1;
+			};
+		};
+		6958B1274ADEB25297DCB4EC /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		08EF9E12E3E5150AE2EAF182 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43D4A9BA18C9347A5C0FDED5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		3B8A61588A07929708AD0AB8 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43D4A9BA18C9347A5C0FDED5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		4D847E633A4E696C4B6A4BA1 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6958B1274ADEB25297DCB4EC /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		591E7CE342DDF063980B890D /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43D4A9BA18C9347A5C0FDED5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 23E3F4098BF6019FCACFD3F9 /* Project object */;
+}

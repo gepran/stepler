@@ -120,6 +120,8 @@ function TaskItem({
   const [editingSubtaskId, setEditingSubtaskId] = useState(null);
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [pendingSubtask, setPendingSubtask] = useState(null);
+  const [savingSubtask, setSavingSubtask] = useState(false);
+  const savingSubtaskRef = useRef(false);
   const [activeHandleId, setActiveHandleId] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const caretRef = useRef(null);
@@ -153,13 +155,24 @@ function TaskItem({
     setEditingId(task.id);
   };
 
-  const commitSubtask = (keepOpen) => {
-    if (newSubtaskText.trim() || pendingSubtask) {
-      addSubtask(task.id, newSubtaskText, pendingSubtask);
-      setNewSubtaskText("");
-      setPendingSubtask(null);
+  const commitSubtask = async (keepOpen) => {
+    if (savingSubtaskRef.current) return;
+    savingSubtaskRef.current = true;
+    setSavingSubtask(true);
+    try {
+      if (newSubtaskText.trim() || pendingSubtask) {
+        if (
+          (await addSubtask(task.id, newSubtaskText, pendingSubtask)) === false
+        )
+          return;
+        setNewSubtaskText("");
+        setPendingSubtask(null);
+      }
+      if (!keepOpen) setAddingSubtaskId(null);
+    } finally {
+      savingSubtaskRef.current = false;
+      setSavingSubtask(false);
     }
-    if (!keepOpen) setAddingSubtaskId(null);
   };
 
   const handleSubtaskPaste = (e) => {
@@ -510,7 +523,10 @@ function TaskItem({
                   onDrop={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleDropAction(e, "task", task.id);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const position =
+                      e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
+                    handleDropAction(e, "subtask", st.id, position, task.id);
                   }}
                 >
                   {/* Tree guides: a trunk in the parent checkbox's column and
@@ -675,6 +691,7 @@ function TaskItem({
               <input
                 autoFocus
                 value={newSubtaskText}
+                disabled={savingSubtask}
                 onChange={(e) => setNewSubtaskText(e.target.value)}
                 onPaste={handleSubtaskPaste}
                 onKeyDown={(e) => {

@@ -74,6 +74,7 @@ const TaskInput = forwardRef(function TaskInput(
     setIsExpanded,
     availableProjects,
     onOpenSettings,
+    onCreateProject,
     onToast,
     jiraStatus,
     jiraProjects,
@@ -86,6 +87,8 @@ const TaskInput = forwardRef(function TaskInput(
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [value, setValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [isFocused, setIsFocused] = useState(false);
 
   const [draftProjects, setDraftProjects] = useState([]);
@@ -122,6 +125,14 @@ const TaskInput = forwardRef(function TaskInput(
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
+    changeProject: ({ name, nextName }) =>
+      setDraftProjects((prev) => [
+        ...new Set(
+          prev.flatMap((p) =>
+            p === name ? (nextName ? [nextName] : []) : [p],
+          ),
+        ),
+      ]),
     /** Text arriving from outside — the selection the hotkey brought along. */
     insertText: (text) => {
       setValue((prev) => (prev ? `${prev}\n${text}` : text));
@@ -180,20 +191,33 @@ const TaskInput = forwardRef(function TaskInput(
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (submittingRef.current) return;
     const text = value.trim();
     if (!text && !pending) return;
-    onSubmit({
-      text,
-      projects: draftProjects,
-      dueDate: draftDate,
-      attachment: pending,
-      jiraProjectKey,
-      jiraSprintId,
-    });
+    submittingRef.current = true;
+    setSubmitting(true);
+    let saved;
+    try {
+      saved = await onSubmit({
+        text,
+        projects: draftProjects,
+        dueDate: draftDate,
+        attachment: pending,
+        jiraProjectKey,
+        jiraSprintId,
+      });
+    } catch {
+      onToast?.(t("collab.failed"), "error");
+      saved = false;
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+    if (saved === false) return;
     setValue("");
     setSuggest(null);
-    setPending(null); // ownership passes to App, which persists it
+    setPending(null); // the file is persisted; release the draft preview
     setDraftProjects([]);
     setDraftDate(null);
     setJiraProjectKey("");
@@ -457,6 +481,7 @@ const TaskInput = forwardRef(function TaskInput(
               onClick={(e) =>
                 refreshSuggest(e.target.value, e.target.selectionStart)
               }
+              disabled={submitting}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onFocus={() => setIsFocused(true)}
@@ -489,6 +514,7 @@ const TaskInput = forwardRef(function TaskInput(
               >
                 {/* Projects */}
                 <div
+                  data-project-list="composer"
                   className="custom-scrollbar-hide flex items-center gap-2 overflow-x-auto pb-0.5"
                   onWheel={(e) => {
                     if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
@@ -505,6 +531,7 @@ const TaskInput = forwardRef(function TaskInput(
                     return (
                       <button
                         key={name}
+                        data-project-name={name}
                         onClick={() =>
                           setDraftProjects((prev) =>
                             isSelected
@@ -537,14 +564,20 @@ const TaskInput = forwardRef(function TaskInput(
                       value={newProjectDraft}
                       onChange={(e) => setNewProjectDraft(e.target.value)}
                       className="w-20 bg-transparent text-xs font-medium text-neutral-600 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
-                      onKeyDown={(e) => {
-                        if (e.key !== "Enter") return;
+                      onKeyDown={async (e) => {
+                        if (e.key !== "Enter" || e.nativeEvent.isComposing)
+                          return;
                         e.preventDefault();
                         e.stopPropagation();
                         const val = newProjectDraft.trim();
-                        if (val && !draftProjects.includes(val))
-                          setDraftProjects((prev) => [...prev, val]);
-                        setNewProjectDraft("");
+                        if (!val) return;
+                        if (await onCreateProject(val)) {
+                          const name = val.slice(0, 80);
+                          setDraftProjects((prev) =>
+                            prev.includes(name) ? prev : [...prev, name],
+                          );
+                          setNewProjectDraft("");
+                        }
                       }}
                     />
                   </div>
@@ -658,7 +691,7 @@ const TaskInput = forwardRef(function TaskInput(
                     )}
                     <button
                       onClick={submit}
-                      disabled={!value.trim() && !pending}
+                      disabled={submitting || (!value.trim() && !pending)}
                       className="btn-tactile ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition-colors hover:bg-neutral-800 disabled:opacity-30 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
                       title={t("input.addTask")}
                     >
@@ -693,6 +726,7 @@ TaskInput.propTypes = {
   setIsExpanded: PropTypes.func.isRequired,
   availableProjects: PropTypes.array.isRequired,
   onOpenSettings: PropTypes.func.isRequired,
+  onCreateProject: PropTypes.func.isRequired,
   onToast: PropTypes.func,
   jiraStatus: PropTypes.object,
   jiraProjects: PropTypes.array,

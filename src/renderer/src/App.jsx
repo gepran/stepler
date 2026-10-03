@@ -19,6 +19,8 @@ import Toasts from "./components/Toasts";
 import { PanelLeft, ChevronDown } from "lucide-react";
 import { localYMD, labelForYMD, taskTimestamp, ymdToDate } from "./lib/format";
 import { newTaskId } from "./lib/ids";
+import { sortProjects, normalizeProjects } from "./lib/projects";
+import { orderTasks, moveTask } from "./lib/task-order";
 import { ipc, persistAttachment } from "./lib/attachments";
 import { useCollab } from "./lib/collab-ipc";
 import { MentionBadge, MentionTaskItem } from "./components/MentionTaskItem";
@@ -64,7 +66,7 @@ function groupByDay(tasks, todayYMD) {
   const byDay = new Map();
   for (const task of tasks) {
     const stamp = taskTimestamp(task.id);
-    let ymd = stamp ? localYMD(stamp) : todayYMD;
+    let ymd = task.ymd || (stamp ? localYMD(stamp) : todayYMD);
     if (ymd > todayYMD) ymd = todayYMD; // clock skew should not invent a future
     if (!byDay.has(ymd)) byDay.set(ymd, []);
     byDay.get(ymd).push(task);
@@ -89,17 +91,12 @@ function groupByDay(tasks, todayYMD) {
  * to 0 rather than producing NaN, which a comparator treats as "equal to
  * everything" and which scrambles the whole list.
  */
-const writtenAt = (task) => parseInt(task.id, 10) || 0;
-
-const orderWithin = (list) =>
-  [...list].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? -1 : 1;
-    return writtenAt(a) - writtenAt(b);
-  });
+const orderWithin = orderTasks;
 
 function minutesOf(hhmm) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ""));
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
 /** One day in the jump bar, 30% smaller than the original strip. */
@@ -142,9 +139,9 @@ export default function App() {
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [todayYMD, setTodayYMD] = useState(() => localYMD(new Date()));
   const [loaded, setLoaded] = useState(false);
+  const [accountEpoch, setAccountEpoch] = useState(null);
   const t = useT();
   const language = useLanguage();
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   const [settings, setSettings] = useState({
@@ -192,6 +189,7 @@ export default function App() {
   const todayRef = useRef(null);
   const tasksEndRef = useRef(null);
   const firedRef = useRef(new Set());
+  const accountEpochRef = useRef(null);
   const tasksRef = useRef(tasks);
   const settingsRef = useRef(settings);
 
@@ -226,22 +224,18 @@ export default function App() {
     [language, todayYMD],
   );
 
-  // --- Projects available across settings, tasks and history ---
-  const availableProjects = useMemo(() => {
-    const map = new Map();
-    (settings.projects || []).forEach((p) => {
-      if (typeof p === "string") map.set(p, { name: p, isFavorite: false });
-      else if (p?.name) map.set(p.name, { ...p });
-    });
-    const add = (name) => {
-      if (name && !map.has(name)) map.set(name, { name, isFavorite: false });
-    };
-    tasks.forEach((t) => (t.projects || []).forEach(add));
-    return [...map.values()].sort((a, b) => {
-      if (!!a.isFavorite !== !!b.isFavorite) return a.isFavorite ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [tasks, settings.projects]);
+  const availableProjects = useMemo(
+    () => sortProjects(settings.projects),
+    [settings.projects],
+  );
+
+  useEffect(() => {
+    if (
+      selectedProject &&
+      !availableProjects.some((p) => p.name === selectedProject)
+    )
+      setSelectedProject(null);
+  }, [availableProjects, selectedProject]);
 
   const allDays = useMemo(
     () => {
@@ -401,7 +395,6 @@ export default function App() {
   useEffect(() => {
     if (!ipc) {
       setLoaded(true);
-      setSettingsLoaded(true);
       return;
     }
     ipc.invoke("get-settings").then((s) => {
@@ -410,7 +403,6 @@ export default function App() {
       // First run: keep whatever the renderer detected so the choice survives
       // a reinstall of the settings file.
       else if (s) ipc.invoke("update-settings", { language: getLanguage() });
-      setSettingsLoaded(true);
     });
     ipc.invoke("jira-status").then((status) => {
       setJiraStatus(status || { configured: false, connected: false });
@@ -424,6 +416,8 @@ export default function App() {
     });
 
     ipc.invoke("load-app-data").then((data) => {
+      accountEpochRef.current = data?.accountEpoch ?? 0;
+      setAccountEpoch(data?.accountEpoch ?? 0);
       setTasks(flattenStored(data));
       setDeletedTasks(data?.deletedTasks || []);
       if (data?.firedReminders?.length)
@@ -431,37 +425,6 @@ export default function App() {
       setLoaded(true);
     });
   }, []);
-
-  // --- One-time: pull project names that only ever existed on tasks into the
-  // saved list, so the composer and Settings show the same thing. Runs once,
-  // so removing a project in Settings afterwards sticks. ---
-  useEffect(() => {
-    if (!loaded || !settingsLoaded || !ipc || settings.projectsBackfilled)
-      return;
-    const known = new Set(
-      (settings.projects || []).map((p) =>
-        typeof p === "string" ? p : p.name,
-      ),
-    );
-    const discovered = availableProjects
-      .map((p) => p.name)
-      .filter((n) => !known.has(n));
-    ipc
-      .invoke("update-settings", {
-        projects: [
-          ...(settings.projects || []),
-          ...discovered.map((name) => ({ name, isFavorite: false })),
-        ],
-        projectsBackfilled: true,
-      })
-      .then((s) => s && setSettings(s));
-  }, [
-    loaded,
-    settingsLoaded,
-    settings.projectsBackfilled,
-    settings.projects,
-    availableProjects,
-  ]);
 
   // --- Text that came in with the hotkey ---
   useEffect(() => {
@@ -500,27 +463,20 @@ export default function App() {
    * merged with the live mention again, and saved twice; the file grew a copy
    * per pass and sync pushed the lot up as tasks you had written.
    */
-  const ownDays = useMemo(
-    () =>
-      allDays
-        .map((day) => ({ ...day, tasks: day.tasks.filter((t) => !t.mention) }))
-        // A day that held nothing but mentions is not a day you had anything
-        // on, and an empty bucket in the file helps nobody.
-        .filter((day) => day.tasks.length > 0),
-    [allDays],
-  );
+  const ownDays = useMemo(() => groupByDay(tasks, todayYMD), [tasks, todayYMD]);
 
   // --- Persist (the main process batches this into one atomic write) ---
   useEffect(() => {
-    if (!loaded || !ipc) return;
+    if (!loaded || !ipc || accountEpoch == null) return;
     // On disk the shape stays "today plus past days" so the CLI and older
     // exports keep working, even though memory holds one flat list.
     ipc.invoke("save-app-data", {
+      accountEpoch,
       tasks: ownDays.find((d) => d.ymd === todayYMD)?.tasks || [],
       history: ownDays.filter((d) => d.ymd !== todayYMD),
       deletedTasks,
     });
-  }, [ownDays, todayYMD, deletedTasks, loaded]);
+  }, [ownDays, todayYMD, deletedTasks, loaded, accountEpoch]);
 
   // --- Land on Today once the data is actually on screen ---
   // Images and fonts settle after the first paint and push the timeline
@@ -607,6 +563,23 @@ export default function App() {
     const onSearch = () => setShowSearch(true);
     const onFocusInput = () => inputRef.current?.focus();
     const onDataUpdated = (_, data) => {
+      if (data?.accountEpoch != null) {
+        if (accountEpochRef.current !== data.accountEpoch) {
+          firedRef.current = new Set(data.firedReminders || []);
+          setSelectedProject(null);
+          setEditingId(null);
+          setAddingSubtaskId(null);
+          setAssigningProjectId(null);
+          setSettingReminderId(null);
+          setPreviewFile(null);
+          setShowSearch(false);
+          setIsExpanded(false);
+          setDeleteTrigger(null);
+          setToasts([]);
+        }
+        accountEpochRef.current = data.accountEpoch;
+        setAccountEpoch(data.accountEpoch);
+      }
       // Only a complete picture may replace the list; a partial one would
       // read as "everything else was deleted".
       if (Array.isArray(data?.tasks) && Array.isArray(data?.history))
@@ -630,6 +603,13 @@ export default function App() {
       ipc.on("focus-input", onFocusInput),
       ipc.on("app-data-updated", onDataUpdated),
       ipc.on("jira-connected", onJiraConnected),
+      ipc.on("settings-updated", (_, next) => setSettings(next)),
+      ipc.on("project-changed", (_, change) => {
+        setSelectedProject((name) =>
+          name === change.name ? change.nextName || null : name,
+        );
+        inputRef.current?.changeProject?.(change);
+      }),
     ];
     return () => offs.forEach((off) => off?.());
   }, []);
@@ -643,31 +623,41 @@ export default function App() {
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       let fired = false;
 
-      tasksRef.current.forEach((t) => {
-        if (!t.reminder || t.completed) return;
-        const due = minutesOf(t.reminder);
-        if (due === null || nowMinutes < due) return;
-        const key = `${t.id}-${today}`;
-        if (firedRef.current.has(key)) return;
-        firedRef.current.add(key);
-        fired = true;
-        // Only notify near the scheduled minute; anything older was missed
-        // while the app was closed and should not stack up on launch.
-        if (nowMinutes - due <= 10) {
-          ipc?.invoke("show-notification", { title: "Stepler", body: t.text });
-        }
-      });
+      tasksRef.current
+        .flatMap((task) => [task, ...(task.subtasks || [])])
+        .forEach((t) => {
+          if (!t.reminder || t.completed) return;
+          if (
+            /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate || "") &&
+            t.dueDate !== today
+          )
+            return;
+          const due = minutesOf(t.reminder);
+          if (due === null || nowMinutes < due) return;
+          const key = `${t.id}-${t.reminder}-${today}`;
+          if (firedRef.current.has(key)) return;
+          firedRef.current.add(key);
+          fired = true;
+          // Only notify near the scheduled minute; anything older was missed
+          // while the app was closed and should not stack up on launch.
+          if (nowMinutes - due <= 10) {
+            ipc?.invoke("show-notification", {
+              title: "Stepler",
+              body: t.text,
+            });
+          }
+        });
 
       if (fired) {
         const keep = [...firedRef.current].filter((k) => k.endsWith(today));
         firedRef.current = new Set(keep);
-        ipc?.invoke("save-app-data", { firedReminders: keep });
+        ipc?.invoke("save-app-data", { firedReminders: keep, accountEpoch });
       }
     };
     check();
     const id = setInterval(check, 30_000);
     return () => clearInterval(id);
-  }, [loaded]);
+  }, [loaded, accountEpoch]);
 
   // --- A new day simply starts a new section; nothing is ever moved ---
   useEffect(() => {
@@ -694,20 +684,25 @@ export default function App() {
   /** Remember a project the moment it is used, so Settings lists it too. */
   const rememberProjects = useCallback(async (names) => {
     if (!ipc || !names?.length) return;
-    const current = settingsRef.current.projects || [];
-    const known = new Set(
-      current.map((p) => (typeof p === "string" ? p : p.name)),
-    );
-    const missing = [...new Set(names.filter((n) => n && !known.has(n)))];
-    if (!missing.length) return;
-    const updated = await ipc.invoke("update-settings", {
-      projects: [
-        ...current,
-        ...missing.map((name) => ({ name, isFavorite: false })),
-      ],
+    const result = await ipc.invoke("mutate-project", {
+      type: "remember",
+      names,
     });
-    if (updated) setSettings(updated);
+    if (result?.settings) setSettings(result.settings);
   }, []);
+
+  const createProject = useCallback(
+    async (name) => {
+      const result = await ipc?.invoke("mutate-project", { type: "add", name });
+      if (!result?.success) {
+        toast(result?.error || t("collab.failed"), "error");
+        return false;
+      }
+      setSettings(result.settings);
+      return true;
+    },
+    [toast, t],
+  );
 
   const addTask = useCallback(
     async ({
@@ -719,7 +714,10 @@ export default function App() {
       jiraSprintId,
     }) => {
       const stored = attachment ? await persistAttachment(attachment) : null;
-      if (attachment && !stored) toast(t("toast.attachmentFailed"), "error");
+      if (attachment && !stored) {
+        toast(t("toast.attachmentFailed"), "error");
+        return false;
+      }
       const body =
         (text || "").trim() ||
         (stored && stored.type !== "image" ? stored.name : "");
@@ -747,7 +745,7 @@ export default function App() {
         }),
       );
 
-      if (!ipc || !body) return;
+      if (!ipc || !body) return true;
 
       // Only reach out to calendars when the task actually has a date.
       if (dueDate && settingsRef.current.calendarSync) {
@@ -828,6 +826,7 @@ export default function App() {
           })
           .catch(() => {});
       }
+      return true;
     },
     [toast, rememberProjects, t],
   );
@@ -961,25 +960,34 @@ export default function App() {
     );
   }, []);
 
-  const deleteTask = useCallback((id) => {
-    const task = tasksRef.current.find((t) => t.id === id);
-    if (!task) return;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    setDeletedTasks((prev) =>
-      [{ ...task, deletedAt: Date.now() }, ...prev].slice(0, 500),
-    );
-    if (!ipc) return;
-    if (task.gcalEventId)
-      ipc
-        .invoke("google-calendar-delete-event", { eventId: task.gcalEventId })
-        .catch(() => {});
-    if (task.appleReminderId && settingsRef.current.appleReminders)
-      ipc
-        .invoke("apple-reminders-delete-event", {
-          reminderId: task.appleReminderId,
-        })
-        .catch(() => {});
+  const removeMirrors = useCallback((task) => {
+    if (!ipc || !task) return;
+    for (const row of [task, ...(task.subtasks || [])]) {
+      if (row.gcalEventId)
+        ipc
+          .invoke("google-calendar-delete-event", { eventId: row.gcalEventId })
+          .catch(() => {});
+      if (row.appleReminderId)
+        ipc
+          .invoke("apple-reminders-delete-event", {
+            reminderId: row.appleReminderId,
+          })
+          .catch(() => {});
+    }
   }, []);
+
+  const deleteTask = useCallback(
+    (id) => {
+      const task = tasksRef.current.find((t) => t.id === id);
+      if (!task) return;
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      setDeletedTasks((prev) =>
+        [{ ...task, deletedAt: Date.now() }, ...prev].slice(0, 500),
+      );
+      removeMirrors(task);
+    },
+    [removeMirrors],
+  );
 
   const triggerDeleteTask = useCallback(
     (e, id) => {
@@ -1002,51 +1010,69 @@ export default function App() {
     [deleteTask],
   );
 
-  const restoreTask = useCallback((id) => {
-    setDeletedTasks((prev) => {
-      const task = prev.find((t) => t.id === id);
-      if (task) {
-        const restored = { ...task };
-        delete restored.deletedAt;
-        setTasks((t) => (t.some((x) => x.id === id) ? t : [...t, restored]));
-      }
-      return prev.filter((t) => t.id !== id);
-    });
-  }, []);
+  const restoreTask = useCallback(
+    (id) => {
+      const task = deletedTasks.find((t) => t.id === id);
+      if (!task) return;
+      const { deletedAt, gcalEventId, gcalLink, appleReminderId, ...restored } =
+        task;
+      void deletedAt;
+      void gcalEventId;
+      void gcalLink;
+      void appleReminderId;
+      setTasks((prev) =>
+        prev.some((t) => t.id === id) ? prev : [...prev, restored],
+      );
+      setDeletedTasks((prev) => prev.filter((t) => t.id !== id));
+    },
+    [deletedTasks],
+  );
 
   const permanentlyDeleteTask = useCallback((id) => {
     setDeletedTasks((prev) => prev.filter((t) => t.id !== id));
+    ipc?.invoke("purge-deleted-tasks", [id]);
   }, []);
 
-  const clearDeletedTasks = useCallback(() => setDeletedTasks([]), []);
+  const clearDeletedTasks = useCallback(() => {
+    setDeletedTasks([]);
+    ipc?.invoke("purge-deleted-tasks");
+  }, []);
 
   // --- Subtasks ---
 
-  const addSubtask = useCallback(async (taskId, text, attachment) => {
-    const stored = attachment ? await persistAttachment(attachment) : null;
-    const body =
-      (text || "").trim() ||
-      (stored && stored.type !== "image" ? stored.name : "");
-    if (!body && !stored) return;
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              subtasks: [
-                ...(t.subtasks || []),
-                {
-                  id: newTaskId(),
-                  text: body,
-                  completed: false,
-                  ...(stored ? { attachment: stored } : {}),
-                },
-              ],
-            }
-          : t,
-      ),
-    );
-  }, []);
+  const addSubtask = useCallback(
+    async (taskId, text, attachment) => {
+      const stored = attachment ? await persistAttachment(attachment) : null;
+      if (attachment && !stored) {
+        toast(t("toast.attachmentFailed"), "error");
+        return false;
+      }
+      const body =
+        (text || "").trim() ||
+        (stored && stored.type !== "image" ? stored.name : "");
+      if (!body && !stored) return;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subtasks: [
+                  ...(t.subtasks || []),
+                  {
+                    id: newTaskId(),
+                    text: body,
+                    completed: false,
+                    ...(stored ? { attachment: stored } : {}),
+                  },
+                ],
+              }
+            : t,
+        ),
+      );
+      return true;
+    },
+    [toast, t],
+  );
 
   const toggleSubtask = useCallback((taskId, subtaskId) => {
     setTasks((prev) =>
@@ -1063,18 +1089,27 @@ export default function App() {
     );
   }, []);
 
-  const deleteSubtask = useCallback((taskId, subtaskId) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              subtasks: (t.subtasks || []).filter((st) => st.id !== subtaskId),
-            }
-          : t,
-      ),
-    );
-  }, []);
+  const deleteSubtask = useCallback(
+    (taskId, subtaskId) => {
+      const child = tasksRef.current
+        .find((task) => task.id === taskId)
+        ?.subtasks?.find((subtask) => subtask.id === subtaskId);
+      removeMirrors(child);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subtasks: (t.subtasks || []).filter(
+                  (st) => st.id !== subtaskId,
+                ),
+              }
+            : t,
+        ),
+      );
+    },
+    [removeMirrors],
+  );
 
   const triggerDeleteSubtask = useCallback(
     (e, taskId, subtaskId) => {
@@ -1118,7 +1153,9 @@ export default function App() {
     (taskId, updater) => {
       const current =
         tasksRef.current.find((t) => t.id === taskId)?.projects || [];
-      const next = updater(current);
+      const next = normalizeProjects(updater(current)).map(
+        (project) => project.name,
+      );
       rememberProjects(next.filter((n) => !current.includes(n)));
       setTasks((prev) =>
         prev.map((t) =>
@@ -1185,7 +1222,13 @@ export default function App() {
   }, []);
 
   const handleDropAction = useCallback(
-    (e, targetType, targetId = null, position = "child") => {
+    (
+      e,
+      targetType,
+      targetId = null,
+      position = "child",
+      targetParentId = null,
+    ) => {
       const dataStr = e.dataTransfer.getData("application/json");
       setDragOverId(null);
       setDragOverPosition(null);
@@ -1197,82 +1240,14 @@ export default function App() {
       } catch {
         return;
       }
-      const {
-        type: sourceType,
-        id: sourceId,
-        parentId: sourceParentId,
-      } = payload;
-      if (sourceId === targetId) return;
-
-      setTasks((prev) => {
-        let next = [...prev];
-        let moved = null;
-
-        if (sourceType === "task") {
-          const idx = next.findIndex((t) => t.id === sourceId);
-          if (idx === -1) return prev;
-          moved = { ...next[idx] };
-          next = next.filter((t) => t.id !== sourceId);
-        } else {
-          const parentIdx = next.findIndex((t) => t.id === sourceParentId);
-          if (parentIdx === -1) return prev;
-          const sub = (next[parentIdx].subtasks || []).find(
-            (st) => st.id === sourceId,
-          );
-          if (!sub) return prev;
-          moved = { ...sub };
-          next = next.map((t, i) =>
-            i === parentIdx
-              ? {
-                  ...t,
-                  subtasks: t.subtasks.filter((st) => st.id !== sourceId),
-                }
-              : t,
-          );
-        }
-        if (!moved) return prev;
-
-        if (targetType === "timeline") {
-          next.push(moved);
-          return next;
-        }
-
-        const targetIndex = next.findIndex((t) => t.id === targetId);
-        if (targetIndex === -1) return prev;
-
-        if (position === "top" || position === "bottom") {
-          next.splice(
-            position === "top" ? targetIndex : targetIndex + 1,
-            0,
-            moved,
-          );
-          return next;
-        }
-
-        // Nesting: a task dragged onto another keeps its own subtasks by
-        // flattening them in, instead of silently dropping them.
-        // Everything the task carried comes with it, minus the subtasks that
-        // are flattened in alongside it. Rebuilding the row from four fields
-        // used to discard the due date, the reminder, the star and the
-        // projects — and with them the calendar and reminder ids, without
-        // which the mirrored event could never be updated or removed again.
-        const { subtasks: movedSubtasks, ...movedRest } = moved;
-        const incoming =
-          sourceType === "task"
-            ? [
-                { ...movedRest, completed: !!moved.completed },
-                ...(movedSubtasks || []),
-              ]
-            : [moved];
-        next[targetIndex] = {
-          ...next[targetIndex],
-          subtasks: [
-            ...(next[targetIndex].subtasks || []),
-            ...incoming.filter((s) => s.text || s.attachment),
-          ],
-        };
-        return next;
-      });
+      setTasks((prev) =>
+        moveTask(prev, payload, {
+          type: targetType,
+          id: targetId,
+          position,
+          ...(targetType === "subtask" ? { parentId: targetParentId } : {}),
+        }),
+      );
     },
     [],
   );
@@ -1329,35 +1304,47 @@ export default function App() {
     return true;
   }, []);
 
-  const handleJumpToTask = useCallback(
-    (taskId, ymd) => {
-      setShowSearch(false);
-      if (ymd) revealDay(ymd); // the day may not be built yet
-      setTimeout(() => {
-        if (flashTask(taskId)) return;
-        if (!ymd)
-          todayRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        else
-          document
-            .getElementById(`day-${ymd}`)
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 250);
+  const revealSearchTask = useCallback(
+    (taskId) => {
+      setSelectedProject(null);
+      setShowCompleted(true);
+      setMentionsOnly(false);
+      const ownPast = groupByDay(tasks, todayYMD).filter(
+        (day) => day.ymd !== todayYMD,
+      );
+      const index = ownPast.findIndex((day) =>
+        day.tasks.some((task) => task.id === taskId),
+      );
+      if (index !== -1)
+        setWeeksShown((shown) =>
+          Math.max(
+            shown,
+            Math.ceil((ownPast.length - index) / DAYS_PER_STEP) + 1,
+          ),
+        );
     },
-    [flashTask, revealDay],
+    [tasks, todayYMD],
+  );
+
+  const handleJumpToTask = useCallback(
+    (taskId) => {
+      setShowSearch(false);
+      revealSearchTask(taskId);
+      setTimeout(() => flashTask(taskId), 250);
+    },
+    [flashTask, revealSearchTask],
   );
 
   const searchAction = useCallback(
     (taskId, setter) => {
       setShowSearch(false);
+      revealSearchTask(taskId);
       setTimeout(() => {
         flashTask(taskId);
         setter(taskId);
       }, 250);
     },
-    [flashTask],
+    [flashTask, revealSearchTask],
   );
 
   // --- Import / export ---
@@ -1718,12 +1705,14 @@ export default function App() {
         />
 
         <TaskInput
+          key={accountEpoch}
           ref={inputRef}
           onSubmit={addTask}
           isExpanded={isExpanded}
           setIsExpanded={setIsExpanded}
           availableProjects={availableProjects}
           onOpenSettings={() => setShowSettings(true)}
+          onCreateProject={createProject}
           onToast={toast}
           jiraStatus={jiraStatus}
           jiraProjects={jiraProjects}

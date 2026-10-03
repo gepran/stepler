@@ -14,6 +14,8 @@ export default [
       "**/dist",
       "**/dist-web",
       "**/out",
+      "ios/SourcePackages/**",
+      "ios/DerivedData/**",
       "index.js",
     ],
   },

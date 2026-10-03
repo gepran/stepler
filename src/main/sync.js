@@ -14,6 +14,22 @@
  * backed by a file and keeps owning the session lifecycle itself.
  */
 
+import {
+  flattenLocal,
+  rebuildLocal,
+  mergeRemote,
+  signature,
+  CARRIED,
+  taskFromSignature,
+} from "./sync-data.js";
+import { mergeTaskEdits } from "../renderer/src/lib/task-merge.js";
+import { commitTaskEdit } from "../renderer/src/lib/task-cloud.js";
+import {
+  applyProjectOperation,
+  normalizeProjectState,
+} from "../renderer/src/lib/project-state.js";
+export { flattenLocal, rebuildLocal, mergeRemote } from "./sync-data.js";
+
 import { initializeApp } from "firebase/app";
 import {
   EmailAuthProvider,
@@ -36,7 +52,7 @@ import {
   getFirestore,
   onSnapshot,
   serverTimestamp,
-  writeBatch,
+  runTransaction,
 } from "firebase/firestore";
 import {
   initCloudFiles,
@@ -80,6 +96,10 @@ let db = null;
 let deps = null;
 
 let unsubscribeTasks = null;
+let unsubscribeProjects = null;
+let projectsRunning = false;
+let projectsTimer = null;
+let projectsSeed = null;
 let currentUid = null;
 let status = { signedIn: false, email: null, state: "off", error: null };
 let pushTimer = null;
@@ -122,67 +142,6 @@ let mentionTimer = null;
 // two devices editing different tasks overwrite each other completely.
 // --------------------------------------------------------------------------
 
-/** The day a task belongs to, taken from the timestamp inside its id. */
-function ymdForTask(task, fallback) {
-  if (typeof task.ymd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.ymd))
-    return task.ymd;
-  const n = parseInt(task.id, 10);
-  const d = !isNaN(n) && n > 10000000000 ? new Date(n) : null;
-  if (!d || isNaN(d.getTime())) return fallback;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Every task on this machine as one flat list, tagged with its bucket. */
-export function flattenLocal(data, todayYMD) {
-  const out = [];
-  const seen = new Set();
-  const push = (t, deleted) => {
-    if (!t || t.id == null) return;
-    // Belt and braces against the bug that put mention rows in the file: one
-    // of those going up would appear in the cloud as a task this account had
-    // written, and then land on its other machines as one.
-    if (t.mention) return;
-    const id = String(t.id);
-    if (seen.has(id)) return;
-    seen.add(id);
-    out.push({ ...t, id, deleted, ymd: ymdForTask({ ...t, id }, todayYMD) });
-  };
-  (data?.tasks || []).forEach((t) => push(t, false));
-  (data?.history || []).forEach((d) =>
-    (d?.tasks || []).forEach((t) => push(t, false)),
-  );
-  (data?.deletedTasks || []).forEach((t) => push(t, true));
-  return out;
-}
-
-/** Put a flat list back into the today / history / trash shape the app stores. */
-export function rebuildLocal(flat, todayYMD) {
-  const tasks = [];
-  const deletedTasks = [];
-  const byDay = new Map();
-  for (const t of flat) {
-    const { deleted, ymd, ...rest } = t;
-    if (deleted) {
-      deletedTasks.push(rest);
-      continue;
-    }
-    const day = ymd || todayYMD;
-    if (day === todayYMD) {
-      tasks.push(rest);
-      continue;
-    }
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(rest);
-  }
-  const history = [...byDay.entries()]
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([ymd, list]) => ({ ymd, date: ymd, tasks: list }));
-  return { tasks, history, deletedTasks };
-}
-
 /**
  * Fields the cloud carries. The rules require id/text/ymd/completed/deleted and
  * reject anything whose updatedAt is not the server's own clock; everything
@@ -194,20 +153,6 @@ export function rebuildLocal(flat, todayYMD) {
  * attachment-less copy up, and the next pull would then strip the attachment
  * from the machine that still has the file.
  */
-const CARRIED = [
-  "priority",
-  "projects",
-  "subtasks",
-  "dueDate",
-  "reminder",
-  "attachment",
-  "gcalEventId",
-  "gcalLink",
-  "appleReminderId",
-  "jiraKey",
-  "jiraLink",
-  "deletedAt",
-];
 
 function taskToDoc(t) {
   const out = {
@@ -240,91 +185,6 @@ function docToTask(d) {
           ? updatedAt
           : 0,
   };
-}
-
-/**
- * Sort object keys all the way down, leaving array order alone because the
- * order of subtasks is meaningful.
- *
- * Firestore does not preserve the key order of a nested object, so a task that
- * went up as {name, type} can come back as {type, name}. Comparing raw JSON
- * then reports a change that never happened — which pushed the task again,
- * which produced another snapshot, which reported another change. That loop ran
- * about nineteen times in twenty-five seconds against real data before this
- * function existed.
- */
-function canonical(v) {
-  if (Array.isArray(v)) return v.map(canonical);
-  if (v && typeof v === "object") {
-    const out = {};
-    for (const k of Object.keys(v).sort()) out[k] = canonical(v[k]);
-    return out;
-  }
-  return v;
-}
-
-/**
- * What this machine believes it has already sent. Comparing against it is how
- * full snapshots from the renderer become the handful of tasks that actually
- * changed — the renderer re-saves everything on every keystroke-sized edit.
- */
-function signature(t) {
-  return JSON.stringify(
-    canonical([
-      t.text,
-      !!t.completed,
-      !!t.deleted,
-      t.ymd,
-      ...CARRIED.map((k) => t[k] ?? null),
-    ]),
-  );
-}
-
-// --------------------------------------------------------------------------
-// Merge
-// --------------------------------------------------------------------------
-
-/**
- * Fold what the cloud says into what this machine has.
- *
- * Last write wins on updatedAt, with two deliberate asymmetries:
- *  - a remote task this machine has never seen is added;
- *  - a local task the cloud has never seen is KEPT, never removed. The cloud
- *    not knowing about a task means it has not been pushed yet.
- * When the remote copy wins it is spread over the local one rather than
- * replacing it, so a field only this machine knows about — an attachment id,
- * say — survives a device that never had it.
- */
-export function mergeRemote(localFlat, remoteTasks, shadow = {}) {
-  const byId = new Map(localFlat.map((t) => [t.id, t]));
-  const applied = [];
-  let changed = 0;
-  for (const r of remoteTasks) {
-    const local = byId.get(r.id);
-    if (!local) {
-      byId.set(r.id, r);
-      applied.push(r);
-      changed += 1;
-      continue;
-    }
-    // Does this machine hold an edit it has not sent yet?
-    //
-    // That question used to be asked by comparing `local.updatedAt`, stamped
-    // by this laptop's clock, against `r.updatedAt`, stamped by the server.
-    // The two are never comparable: on a machine running thirty seconds slow
-    // every remote echo looked newer than the edit just made on it, and the
-    // text reverted under the cursor with no conflict and no error. The shadow
-    // already records what was last sent, and answers the question exactly.
-    if (shadow[r.id] !== signature(local)) continue;
-    const next = { ...local, ...r };
-    // An echo of our own write carries no news. Applying it anyway would
-    // rewrite the file and start another push on every snapshot.
-    if (signature(next) === signature(local)) continue;
-    byId.set(r.id, next);
-    applied.push(r);
-    changed += 1;
-  }
-  return { merged: [...byId.values()], changed, applied };
 }
 
 // --------------------------------------------------------------------------
@@ -485,6 +345,9 @@ export function initSync({
   writeAuth,
   disk,
   todayYMD,
+  getProjects,
+  applyProjects,
+  selectAccount,
 }) {
   deps = {
     getData,
@@ -498,6 +361,9 @@ export function initSync({
     writeAuth,
     disk,
     todayYMD,
+    getProjects,
+    applyProjects,
+    selectAccount,
   };
   ensureApp();
 
@@ -507,6 +373,15 @@ export function initSync({
       currentUid = null;
       resetCollab();
       setStatus({ signedIn: false, email: null, state: "off", error: null });
+      return;
+    }
+    stopListening();
+    currentUid = null;
+    resetCollab();
+    try {
+      await deps.selectAccount?.(user.uid);
+    } catch (error) {
+      setStatus({ signedIn: false, state: "error", error: error.message });
       return;
     }
     currentUid = user.uid;
@@ -526,6 +401,9 @@ export function initSync({
 }
 
 function stopListening() {
+  unsubscribeProjects?.();
+  unsubscribeProjects = null;
+  clearTimeout(projectsTimer);
   if (unsubscribeTasks) {
     unsubscribeTasks();
     unsubscribeTasks = null;
@@ -535,6 +413,26 @@ function stopListening() {
 function startListening() {
   stopListening();
   if (!currentUid) return;
+  const uid = currentUid;
+  if (deps.getProjects) {
+    projectsSeed = deps.getProjects(uid).projects;
+    unsubscribeProjects = onSnapshot(
+      doc(db, "users", uid, "meta", "projects"),
+      (snapshot) => {
+        if (uid !== currentUid) return;
+        if (snapshot.exists())
+          deps.applyProjects(
+            normalizeProjectState(snapshot.data()),
+            [],
+            false,
+            uid,
+          );
+        scheduleProjects();
+      },
+      (error) => setStatus({ state: "error", error: error.message }),
+    );
+    scheduleProjects();
+  }
   unsubscribeTasks = onSnapshot(
     collection(db, "users", currentUid, "tasks"),
     (snap) => {
@@ -591,7 +489,7 @@ export function notifyLocalChange() {
   schedulePush();
 }
 
-function schedulePush() {
+function schedulePush(delay = 800) {
   if (!currentUid) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
@@ -599,13 +497,71 @@ function schedulePush() {
       console.error("Push failed:", err.code || "", err.message);
       setStatus({ state: "error", error: err.message });
     });
-  }, 800);
+  }, delay);
   // Bytes move on the same triggers as documents but on a slower clock; see
   // scheduleFiles.
   scheduleFiles();
   // So do mentions: an edit that adds or removes an @handle is an edit like
   // any other, and this is the one place every edit passes through.
   scheduleMentions();
+  scheduleProjects();
+}
+
+function scheduleProjects(delay = 800) {
+  if (!currentUid || !deps.getProjects) return;
+  clearTimeout(projectsTimer);
+  projectsTimer = setTimeout(
+    () =>
+      pushProjects().catch((error) => {
+        setStatus({ state: "error", error: error.message });
+        scheduleProjects(15_000);
+      }),
+    delay,
+  );
+}
+
+async function pushProjects() {
+  if (projectsRunning || !currentUid || !deps.getProjects) return;
+  projectsRunning = true;
+  const uid = currentUid;
+  try {
+    const local = deps.getProjects(uid);
+    const queue = local.queue || [];
+    if (!queue.length && local.initialized) return;
+    const operations = local.initialized
+      ? queue
+      : [{ type: "remember", names: projectsSeed || local.projects }, ...queue];
+    const state = await runTransaction(db, async (transaction) => {
+      const target = doc(db, "users", uid, "meta", "projects");
+      const snapshot = await transaction.get(target);
+      let next = normalizeProjectState(snapshot.data());
+      for (const operation of operations) {
+        try {
+          next = applyProjectOperation(next, operation);
+        } catch (error) {
+          if (
+            !["Project no longer exists", "Project already exists"].includes(
+              error.message,
+            )
+          )
+            throw error;
+        }
+      }
+      transaction.set(target, { ...next, updatedAt: serverTimestamp() });
+      return next;
+    });
+    if (uid === currentUid)
+      deps.applyProjects(
+        state,
+        queue.map((operation) => operation.id),
+        true,
+        uid,
+      );
+  } finally {
+    projectsRunning = false;
+    if (uid === currentUid && deps.getProjects(uid)?.queue?.length)
+      scheduleProjects(15_000);
+  }
 }
 
 /**
@@ -657,23 +613,42 @@ async function pushChanged() {
 
     setStatus({ state: "syncing" });
     const nextShadow = { ...shadow };
-    // Firestore caps a batch at 500 writes, so a first import of a long history
-    // goes up in chunks instead of one rejected request.
-    for (let i = 0; i < outgoing.length; i += 400) {
-      const slice = outgoing.slice(i, i + 400);
-      const batch = writeBatch(db);
-      for (const t of slice) {
-        batch.set(doc(db, "users", uid, "tasks", t.id), taskToDoc(t), {
-          merge: true,
-        });
-      }
-      // Only record what actually committed: a crash mid-import then resumes
-      // instead of believing it finished. And stop waiting if the answer is
-      // not coming — the shadow simply does not advance, so the next push
-      // sends the same slice again, which a merge write is happy to take.
-      if (!(await settledWithin(batch.commit(), PUSH_ACK_MS))) return;
+    for (const t of outgoing) {
       if (uid !== currentUid) return;
-      for (const t of slice) nextShadow[t.id] = signature(t);
+      let committed;
+      const written = commitTaskEdit(db, {
+        uid,
+        task: t,
+        base: taskFromSignature(shadow[t.id], t.id),
+        toDocument: (row) => {
+          const out = taskToDoc(row);
+          for (const key of CARRIED) if (row[key] == null) delete out[key];
+          return out;
+        },
+        fromDocument: docToTask,
+      }).then((value) => {
+        committed = value;
+      });
+      if (!(await settledWithin(written, PUSH_ACK_MS))) {
+        setStatus({
+          state: "error",
+          error: "Sync is waiting for a connection; local changes are saved.",
+        });
+        if (uid === currentUid) schedulePush(15_000);
+        return;
+      }
+      if (uid !== currentUid) return;
+      // Do not overwrite edits made while the transaction was in flight.
+      const latest = flattenLocal(deps.getData(), today).map((row) =>
+        row.id === t.id ? mergeTaskEdits(t, row, committed) : row,
+      );
+      applyingRemote = true;
+      try {
+        deps.applyRemote(rebuildLocal(latest, today));
+      } finally {
+        applyingRemote = false;
+      }
+      nextShadow[t.id] = signature(committed);
       await deps.writeToken({ ...saved, uid, shadow: nextShadow });
     }
     setStatus({ state: "synced", error: null });

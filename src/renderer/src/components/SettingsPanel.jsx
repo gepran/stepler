@@ -1,3 +1,4 @@
+import { sortProjects } from "../lib/projects";
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
 import GuideTab from "./GuideTab";
@@ -877,6 +878,7 @@ export default function SettingsPanel({
     const offs = [
       ipc?.on("google-calendar-connected", refreshGcal),
       ipc?.on("jira-connected", refreshJira),
+      ipc?.on("settings-updated", (_, next) => setSettings(next)),
     ];
     return () => offs.forEach((off) => off?.());
   }, []);
@@ -936,81 +938,35 @@ export default function SettingsPanel({
     [recording, updateSetting, onToast, t],
   );
 
-  const projects = settings.projects || [];
+  const projects = sortProjects(settings.projects);
 
-  /**
-   * Change the saved project list against the copy the app is holding, not the
-   * one this panel rendered from.
-   *
-   * `updateSetting({projects})` replaces the array wholesale, so writing back a
-   * stale copy is not a display bug, it is a delete: anything added since this
-   * panel last heard about the settings disappears. Reading first costs one IPC
-   * round trip and closes that window — and `mutate` is handed the live array,
-   * so it must match on NAME rather than on the index this row rendered at.
-   */
-  const updateProjects = useCallback(
-    async (mutate) => {
-      const live = (await ipc?.invoke("get-settings")) || {};
-      const next = mutate(live.projects || []);
-      if (next) await updateSetting({ projects: next });
-    },
-    [updateSetting],
-  );
+  const changeProject = async (operation) => {
+    const result = await ipc?.invoke("mutate-project", operation);
+    if (!result?.success) {
+      onToast?.(result?.error || t("collab.failed"), "error");
+      return false;
+    }
+    setSettings(result.settings);
+    onSettingsUpdate?.(result.settings);
+    return true;
+  };
 
-  /**
-   * Exactly, not case-insensitively. Everywhere else in the app a label is its
-   * literal string — `rememberProjects` dedupes with an exact Set, the sidebar
-   * filters with `projects.includes(name)` — so `Work` and `work` really are
-   * two labels with two sets of tasks. A loose match here made one row's
-   * delete take the other away with it, and one row's colour repaint both.
-   */
-  const sameName = (project, name) => projectName(project) === String(name);
+  const patchProject = (name, patch) => {
+    if (typeof patch === "function")
+      return changeProject({ type: "favorite", name });
+    if (patch.name)
+      return changeProject({ type: "rename", name, nextName: patch.name });
+    return changeProject({ type: "color", name, color: patch.color });
+  };
 
-  /**
-   * Patch one saved project, found by name. A very old settings file holds
-   * bare strings; spreading one would scatter its characters across the entry,
-   * so a string is replaced by a fresh object rather than spread — and every
-   * other key it carries, `color` included, survives a rename or a pin.
-   */
-  const patchProject = (name, patch) =>
-    updateProjects((list) => {
-      // A rename onto a name that already exists would leave two rows every
-      // later click treats as one. Refuse it the way adding one is refused.
-      if (typeof patch !== "function" && patch.name && patch.name !== name) {
-        if (list.some((p) => sameName(p, patch.name))) {
-          onToast?.(t("settings.projects.exists"), "error");
-          return null;
-        }
-      }
-      return list.map((p) => {
-        if (!sameName(p, name)) return p;
-        const base = typeof p === "string" ? {} : p;
-        // A function patch reads the LIVE entry, which is what a toggle needs:
-        // `!favorite` off the rendered row writes the same value twice when
-        // somebody clicks the star faster than the round trip.
-        const fields = typeof patch === "function" ? patch(base) : patch;
-        return { ...base, name: projectName(p), ...fields };
-      });
-    });
-
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     const name = newProjectName.trim();
     if (!name) return;
-    // Checked against what is on screen first, so a duplicate leaves the typed
-    // name in the field to be corrected. The check inside the callback is the
-    // one that is actually authoritative, against the live list.
-    if (projects.some((p) => sameName(p, name))) {
+    if (projects.some((p) => p.name === name)) {
       onToast?.(t("settings.projects.exists"), "error");
       return;
     }
-    setNewProjectName("");
-    updateProjects((list) => {
-      if (list.some((p) => sameName(p, name))) {
-        onToast?.(t("settings.projects.exists"), "error");
-        return null;
-      }
-      return [...list, { name, isFavorite: false }];
-    });
+    if (await changeProject({ type: "add", name })) setNewProjectName("");
   };
 
   const tabs = {
@@ -1346,20 +1302,21 @@ export default function SettingsPanel({
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div data-project-list="settings" className="space-y-2">
                   {projects.length === 0 && (
                     <p className="text-[13px] text-neutral-400">
                       {t("settings.projects.empty")}
                     </p>
                   )}
-                  {projects.map((project, idx) => {
+                  {projects.map((project) => {
                     const name = projectName(project);
                     const favorite =
                       typeof project === "object" && project.isFavorite;
                     const colour = colorForLabel(name, projects);
                     return (
                       <div
-                        key={`${name}-${idx}`}
+                        key={name}
+                        data-project-name={name}
                         className="group rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3.5 py-2.5 transition-colors hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30"
                       >
                         <div className="flex items-center justify-between">
@@ -1456,9 +1413,7 @@ export default function SettingsPanel({
                                 </button>
                                 <button
                                   onClick={() =>
-                                    updateProjects((list) =>
-                                      list.filter((p) => !sameName(p, name)),
-                                    )
+                                    changeProject({ type: "remove", name })
                                   }
                                   className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
                                   title={t("settings.projects.removeSaved")}
@@ -1787,7 +1742,6 @@ export default function SettingsPanel({
                         await updateSetting({
                           apiEnabled: !settings.apiEnabled,
                         });
-                        onToast?.(t("toast.restartToApply"));
                       }}
                     />
                   }

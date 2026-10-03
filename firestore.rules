@@ -78,7 +78,8 @@ service cloud.firestore {
 
     function mentionedOn(author, taskId) {
       return exists(mentionPath(taskId))
-        ? get(mentionPath(taskId)).data.fromUid == author
+        ? (get(mentionPath(taskId)).data.fromUid == author
+          && get(mentionPath(taskId)).data.taskId == taskId)
         : false;
     }
 
@@ -106,6 +107,8 @@ service cloud.firestore {
       allow write: if signedInAs(uid)
         && isString('username', 24)
         && isString('usernameLower', 24)
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'usernameLower', 'displayName', 'photoURL', 'updatedAt'])
         && request.resource.data.username == request.resource.data.usernameLower
         && handleHolder(request.resource.data.usernameLower) == uid
         && stampedByServer();
@@ -118,9 +121,17 @@ service cloud.firestore {
     match /usernames/{handle} {
       allow read: if signedIn();
       allow create: if signedIn()
+        && handle.matches('[a-z0-9._-]{2,24}')
+        && request.resource.data.username == handle
         && request.resource.data.uid == request.auth.uid
         && stampedByServer();
-      allow update, delete: if signedIn()
+      allow update: if signedIn()
+        && resource != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.username == handle
+        && stampedByServer();
+      allow delete: if signedIn()
         && resource != null
         && resource.data.uid == request.auth.uid;
     }
@@ -141,6 +152,7 @@ service cloud.firestore {
       allow create, update: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.auth.token.email is string
+        && request.auth.token.email_verified == true
         && address == request.auth.token.email.lower()
         && stampedByServer();
       allow delete: if signedIn()
@@ -153,7 +165,13 @@ service cloud.firestore {
       allow write: if signedInAs(uid) && stampedByServer();
 
       match /tasks/{taskId} {
-        allow read: if signedInAs(uid);
+        allow list: if signedInAs(uid);
+        // A connected collaborator may re-read this specific mentioned task
+        // for an atomic edit, but cannot enumerate the author's task list.
+        allow get: if signedInAs(uid) || (signedIn()
+          && mentionedOn(uid, taskId)
+          && acceptedWith(uid, request.auth.uid)
+          && acceptedWith(request.auth.uid, uid));
         allow create: if signedInAs(uid) && validTask();
 
         // Somebody you named in a task can work on it with you, within limits
@@ -174,6 +192,11 @@ service cloud.firestore {
               signedIn()
               && resource != null
               && mentionedOn(uid, taskId)
+              && acceptedWith(uid, request.auth.uid)
+              && acceptedWith(request.auth.uid, uid)
+              && validTask()
+              && (!('priority' in request.resource.data) || request.resource.data.priority is bool)
+              && (!('subtasks' in request.resource.data) || (request.resource.data.subtasks is list && request.resource.data.subtasks.size() <= 500))
               && onlyTouches(['completed', 'priority', 'subtasks'])
               && stampedByServer()
             );
@@ -202,14 +225,30 @@ service cloud.firestore {
         // name on this row that `resolveMentions` matches when it decides who
         // to deliver your tasks to: your own client would post them to whoever
         // sent the row.
-        allow create, update: if signedInAs(uid)
-          ? true
-          : (
-            signedInAs(otherUid)
-            && stampedByServer()
-            && request.resource.data.uid == request.auth.uid
-            && handleHolder(request.resource.data.usernameLower) == request.auth.uid
-          );
+        // The sender can deliver an invitation, never accept it for the
+        // recipient. Acceptance updates both rows in a batch; getAfter checks
+        // the accepting person's row from that same batch.
+        allow create, update: if signedIn()
+          && stampedByServer()
+          && request.resource.data.uid == otherUid
+          && isString('usernameLower', 24)
+          && request.resource.data.username == request.resource.data.usernameLower
+          && handleHolder(request.resource.data.usernameLower) == otherUid
+          && (signedInAs(uid)
+            ? (
+                request.resource.data.status == 'pending'
+                || (request.resource.data.status == 'accepted'
+                    && resource != null
+                    && resource.data.status in ['incoming', 'accepted'])
+              )
+            : (
+                signedInAs(otherUid)
+                && (request.resource.data.status == 'incoming'
+                  || (request.resource.data.status == 'accepted'
+                    && resource != null
+                    && resource.data.status in ['pending', 'accepted']
+                    && getAfter(connectionPath(otherUid, uid)).data.status == 'accepted'))
+              ));
         allow delete: if signedInAs(uid) || signedInAs(otherUid);
       }
 
@@ -231,10 +270,14 @@ service cloud.firestore {
         // author and cash that in for write access to that person's task.
         allow create: if signedIn()
           && request.resource.data.fromUid == request.auth.uid
+          && isString('fromUsername', 24)
+          && handleHolder(request.resource.data.fromUsername) == request.auth.uid
           && isString('text', 20000)
           && isString('taskId', 64)
+          && request.resource.data.taskId == mentionId
           && stampedByServer()
-          && acceptedWith(uid, request.auth.uid);
+          && acceptedWith(uid, request.auth.uid)
+          && acceptedWith(request.auth.uid, uid);
 
         // Two different updates. You may tick your copy off and mark it read;
         // the author may revise what they said. Neither may rewrite who it
@@ -246,13 +289,20 @@ service cloud.firestore {
             ? (
                 onlyTouches(['read', 'dismissed', 'completed', 'priority', 'subtasks'])
                 && request.resource.data.fromUid == resource.data.fromUid
+                && stampedByServer()
               )
             : (
                 signedIn()
                 && resource.data.fromUid == request.auth.uid
                 && request.resource.data.fromUid == request.auth.uid
+                && isString('fromUsername', 24)
+                && handleHolder(request.resource.data.fromUsername) == request.auth.uid
                 && isString('text', 20000)
                 && isString('taskId', 64)
+                && request.resource.data.taskId == mentionId
+                && request.resource.data.taskId == resource.data.taskId
+                && acceptedWith(uid, request.auth.uid)
+                && acceptedWith(request.auth.uid, uid)
                 && stampedByServer()
               )
         );

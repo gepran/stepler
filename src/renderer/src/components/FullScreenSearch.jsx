@@ -52,7 +52,7 @@ export default function FullScreenSearch({
     // exactly how the date label below came to call the task object.
     const all = tasks.map((task) => {
       const stamp = taskTimestamp(task.id);
-      const ymd = stamp ? localYMD(stamp) : today;
+      const ymd = task.ymd || (stamp ? localYMD(stamp) : today);
       const isToday = ymd >= today;
       return {
         ...task,

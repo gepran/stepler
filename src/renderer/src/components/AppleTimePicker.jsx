@@ -40,7 +40,7 @@ const Wheel = ({ options, value, onChange }) => {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar py-[36px]"
+        className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar py-[36px] scroll-pt-[36px]"
       >
         {options.map((opt) => (
           <div

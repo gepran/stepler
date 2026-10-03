@@ -55,6 +55,14 @@ firestore-debug.log
 # Lint cache
 .eslintcache
 
+# Native iOS build products and per-user Xcode state
+ios/DerivedData/
+ios/SourcePackages/
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/*.xcresult
+ios/*.ipa
+
 # NOT ignored: build/
 #
 # It reads like output and is not — it is electron-builder's buildResources
