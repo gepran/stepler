@@ -1,12 +1,5 @@
 /* Runs the actual built app with disposable data, never the user's profile. */
-const {
-  app,
-  BrowserWindow,
-  clipboard,
-  ClipboardItem,
-  nativeImage,
-  net,
-} = require("electron");
+const { app, BrowserWindow, clipboard, nativeImage, net } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -809,22 +802,17 @@ app.once("browser-window-created", (_event, created) => {
       await check(
         "native and browser-decoded images reach the OS clipboard",
         async () => {
-          const original = await Promise.all(
-            (await clipboard.read()).map(
-              async (item) =>
-                new ClipboardItem(
-                  Object.fromEntries(
-                    await Promise.all(
-                      item.types.map(async (type) => [
-                        type,
-                        await item.getType(type),
-                      ]),
-                    ),
-                  ),
-                ),
-            ),
-          );
+          const { snapshotClipboard, restoreClipboard } =
+            await import("../src/main/clipboard.js");
+          const original = await snapshotClipboard();
           try {
+            clipboard.clear();
+            const cleared = await snapshotClipboard();
+            assert.equal(
+              cleared.every((item) => item.types.length > 0),
+              true,
+              "A cleared clipboard must never produce a ClipboardItem with no formats",
+            );
             const png = fs.readFileSync(
               path.join(__dirname, "../resources/icon.png"),
             );
@@ -853,6 +841,11 @@ app.once("browser-window-created", (_event, created) => {
               ).withImage,
               true,
             );
+            assert.equal(await clipboard.readText(), "Image and text");
+            assert.equal((await clipboardImage()).isEmpty(), false);
+            const combined = await snapshotClipboard();
+            clipboard.clear();
+            await restoreClipboard(combined);
             assert.equal(await clipboard.readText(), "Image and text");
             assert.equal((await clipboardImage()).isEmpty(), false);
             assert.equal(
@@ -956,8 +949,7 @@ app.once("browser-window-created", (_event, created) => {
               document.querySelector('[data-testid="file-preview"]').click(),
             );
           } finally {
-            if (original.length) await clipboard.write(original);
-            else clipboard.clear();
+            await restoreClipboard(original);
           }
         },
       );
