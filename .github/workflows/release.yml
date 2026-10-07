@@ -34,8 +34,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
-      # One platform failing must not throw away the other's build. A release
-      # with macOS in it and Windows to follow is worth having; neither is not.
+      # Keep the other platform's artifacts if one fails, while publication
+      # waits until both platforms have passed and built their update feeds.
       fail-fast: false
       matrix:
         include:
@@ -144,12 +144,9 @@ jobs:
   release:
     name: Publish
     needs: build
-    # `always()`, not a check on needs.build.result: a matrix job reports one
-    # combined result, which is 'failure' the moment either platform fails. The
-    # question worth asking is whether anything got built, and that is answered
-    # below by looking at what was actually uploaded — so a Windows failure
-    # still lets the macOS half reach people.
-    if: always()
+    # An incomplete latest release makes the other platform's updater return
+    # 404. Keep the existing public release until both sets of assets are ready.
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -160,9 +157,6 @@ jobs:
         with:
           path: installers
           merge-multiple: true
-        # A platform that failed left no artifact behind; that is a reason to
-        # publish less, not a reason to fail here.
-        continue-on-error: true
 
       - name: Publish the release
         env:
@@ -188,11 +182,12 @@ jobs:
           else
             echo "Creating $tag."
             gh release create "$tag" "${files[@]}" \
+              --draft --verify-tag \
               --title "Stepler $version" \
               --generate-notes
           fi
 
-          gh release edit "$tag" --latest
+          gh release edit "$tag" --draft=false --latest
 
           echo "### Stepler $version" >> "$GITHUB_STEP_SUMMARY"
           gh release view "$tag" --json assets \
