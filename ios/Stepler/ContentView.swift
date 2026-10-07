@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var editing: TaskRecord?
     @State private var creating = false
     @State private var mentionsOnly = false
+    @State private var needsBottomScroll = true
+    @State private var bottomScrollRequest = 0
     @AppStorage("stepler.theme") private var theme = "system"
     private var visible: [TaskRecord] {
         store.tasks.filter { row in
@@ -29,79 +31,104 @@ struct ContentView: View {
             (search.isEmpty || row.text.localizedCaseInsensitiveContains(search) || row.subtasks.contains { $0.text.localizedCaseInsensitiveContains(search) })
         }
     }
-    private var days: [String] { Array(Set(visible.map(\.ymd))).sorted(by: >) }
+    private var days: [String] { Array(Set(visible.map(\.ymd))).sorted() }
+    private var lastVisibleRowID: String? {
+        if mentionsOnly { return store.mentions.last?.id }
+        guard let day = days.last else { return nil }
+        return TaskRecord.ordered(visible.filter { $0.ymd == day }).last?.id
+    }
+    private var timelineContext: [String] { [store.accountKey, store.selectedProject ?? "", search, String(mentionsOnly)] }
     var body: some View {
         NavigationStack {
-            List {
-                if mentionsOnly {
-                    if store.mentions.isEmpty { ContentUnavailableView("No mentions", systemImage: "at", description: Text("Tasks addressed to you by connected people appear here.")) }
-                    ForEach(store.mentions) { MentionRow(mention: $0) }
-                } else if visible.isEmpty {
-                    ContentUnavailableView(search.isEmpty ? "Room for a fresh start" : "No matching tasks", systemImage: search.isEmpty ? "checklist" : "magnifyingglass", description: Text(search.isEmpty ? "Write your first task below. It stays saved on your iPhone, even offline." : "Try another phrase or project."))
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(days, id: \.self) { day in
-                        Section(day == TaskRecord.day(Date()) ? "Today" : day) {
-                            ForEach(TaskRecord.ordered(visible.filter { $0.ymd == day })) { task in
-                                TaskRow(task: task, edit: { editing = task })
-                                    .draggable(task.id)
-                                    .dropDestination(for: String.self) { ids, _ in store.reorder(ids, before: task.id); return true }
-                                    .swipeActions(edge: .trailing) { Button("Delete", role: .destructive) { store.delete(task.id) } }
-                                    .contextMenu {
-                                        Button("Edit", systemImage: "pencil") { editing = task }
-                                        Button("Copy task", systemImage: "doc.on.doc") { store.copyTask(task) }
-                                        Button(task.priority ? "Remove priority" : "Set priority", systemImage: "star") { store.edit(task.id) { $0.priority.toggle() } }
-                                        Menu("Move into task") { ForEach(store.tasks.filter { $0.id != task.id }) { target in Button(target.text) { store.nest(task.id, under: target.id) } } }
-                                        Button("Delete", systemImage: "trash", role: .destructive) { store.delete(task.id) }
-                                    }
+            ScrollViewReader { proxy in
+                List {
+                    if mentionsOnly {
+                        if store.mentions.isEmpty { ContentUnavailableView("No mentions", systemImage: "at", description: Text("Tasks addressed to you by connected people appear here.")) }
+                    ForEach(store.mentions) { mention in MentionRow(mention: mention).id(mention.id) }
+                    } else if visible.isEmpty {
+                        ContentUnavailableView(search.isEmpty ? "Room for a fresh start" : "No matching tasks", systemImage: search.isEmpty ? "checklist" : "magnifyingglass", description: Text(search.isEmpty ? "Write your first task below. It stays saved on your iPhone, even offline." : "Try another phrase or project."))
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(days, id: \.self) { day in
+                            Section(day == TaskRecord.day(Date()) ? "Today" : day) {
+                                ForEach(TaskRecord.ordered(visible.filter { $0.ymd == day })) { task in
+                                    TaskRow(task: task, edit: { editing = task })
+                                        .id(task.id)
+                                        .draggable(task.id)
+                                        .dropDestination(for: String.self) { ids, _ in store.reorder(ids, before: task.id); return true }
+                                        .swipeActions(edge: .trailing) { Button("Delete", role: .destructive) { store.delete(task.id) } }
+                                        .contextMenu {
+                                            Button("Edit", systemImage: "pencil") { editing = task }
+                                            Button("Copy task", systemImage: "doc.on.doc") { store.copyTask(task) }
+                                            Button(task.priority ? "Remove priority" : "Set priority", systemImage: "star") { store.edit(task.id) { $0.priority.toggle() } }
+                                            Menu("Move into task") { ForEach(store.tasks.filter { $0.id != task.id }) { target in Button(target.text) { store.nest(task.id, under: target.id) } } }
+                                            Button("Delete", systemImage: "trash", role: .destructive) { store.delete(task.id) }
+                                        }
+                                }
                             }
                         }
                     }
                 }
-            }
-            .listStyle(.insetGrouped)
-            .accessibilityIdentifier("task.timeline")
-            .contentShape(Rectangle())
-            .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(store.selectedProject ?? (mentionsOnly ? "Mentions" : "Stepler"))
-            .searchable(text: $search, prompt: "Search tasks and subtasks")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Projects", systemImage: "sidebar.left") { showProjects = true }.accessibilityIdentifier("projects.open")
+                .listStyle(.insetGrouped)
+                .accessibilityIdentifier("task.timeline")
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+                .scrollDismissesKeyboard(.interactively)
+                .task(id: timelineContext) {
+                    needsBottomScroll = true
+                    await Task.yield()
+                    scrollToBottom(proxy)
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Mentions", systemImage: mentionsOnly ? "at.circle.fill" : "at") { mentionsOnly.toggle() }.accessibilityIdentifier("mentions.filter")
-                    Button("Settings", systemImage: "gearshape") { showSettings = true }.accessibilityIdentifier("settings.open")
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 10) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(store.projects) { project in
-                                ProjectChip(project: project, selected: store.selectedProject == project.name) { store.selectedProject = store.selectedProject == project.name ? nil : project.name }
-                                    .accessibilityIdentifier("composer.project.\(project.name)")
-                            }
-                            Button("New project", systemImage: "plus") { showProjects = true }.font(.caption.weight(.semibold))
-                        }.padding(.horizontal)
+                .task(id: lastVisibleRowID) {
+                    // The first sync snapshot may arrive after the view opens.
+                    if needsBottomScroll {
+                        await Task.yield()
+                        scrollToBottom(proxy)
                     }
-                    HStack(spacing: 12) {
-                        Button("Add details", systemImage: "plus.circle") { creating = true }.labelStyle(.iconOnly).font(.title2).accessibilityIdentifier("task.details")
-                        TextField("What needs to get done?", text: $draft, axis: .vertical).lineLimit(1...4)
-                            .focused($composerFocused)
-                            .submitLabel(.done).onSubmit(addDraft).accessibilityIdentifier("task.draft")
-                        Button(action: addDraft) { Image(systemName: "arrow.up.circle.fill").font(.title) }
-                            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .accessibilityLabel("Add task").accessibilityIdentifier("task.add")
-                    }.padding(.horizontal)
-                    HStack {
-                        Circle().fill(store.syncState == "synced" ? Color.green : (store.syncState == "error" ? Color.red : Color.secondary)).frame(width: 5, height: 5)
-                        Text(store.syncMessage).font(.caption2).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(store.tasks.filter(\.completed).count) / \(store.tasks.count) done").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                    }.padding(.horizontal).contentShape(Rectangle()).onTapGesture { dismissKeyboard() }
-                }.padding(.vertical, 12).background(.regularMaterial)
+                }
+                .task(id: bottomScrollRequest) {
+                    await Task.yield()
+                    scrollToBottom(proxy)
+                }
+                .navigationTitle(store.selectedProject ?? (mentionsOnly ? "Mentions" : "Stepler"))
+                .searchable(text: $search, prompt: "Search tasks and subtasks")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Projects", systemImage: "sidebar.left") { showProjects = true }.accessibilityIdentifier("projects.open")
+                    }
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button("Mentions", systemImage: mentionsOnly ? "at.circle.fill" : "at") { mentionsOnly.toggle() }.accessibilityIdentifier("mentions.filter")
+                        Button("Settings", systemImage: "gearshape") { showSettings = true }.accessibilityIdentifier("settings.open")
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    VStack(spacing: 10) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(store.projects) { project in
+                                    ProjectChip(project: project, selected: store.selectedProject == project.name) { store.selectedProject = store.selectedProject == project.name ? nil : project.name }
+                                        .accessibilityIdentifier("composer.project.\(project.name)")
+                                }
+                                Button("New project", systemImage: "plus") { showProjects = true }.font(.caption.weight(.semibold))
+                            }.padding(.horizontal)
+                        }
+                        HStack(spacing: 12) {
+                            Button("Add details", systemImage: "plus.circle") { creating = true }.labelStyle(.iconOnly).font(.title2).accessibilityIdentifier("task.details")
+                            TextField("What needs to get done?", text: $draft, axis: .vertical).lineLimit(1...4)
+                                .focused($composerFocused)
+                                .submitLabel(.done).onSubmit(addDraft).accessibilityIdentifier("task.draft")
+                            Button(action: addDraft) { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .accessibilityLabel("Add task").accessibilityIdentifier("task.add")
+                        }.padding(.horizontal)
+                        HStack {
+                            Circle().fill(store.syncState == "synced" ? Color.green : (store.syncState == "error" ? Color.red : Color.secondary)).frame(width: 5, height: 5)
+                            Text(store.syncMessage).font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(store.tasks.filter(\.completed).count) / \(store.tasks.count) done").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                        }.padding(.horizontal).contentShape(Rectangle()).onTapGesture { dismissKeyboard() }
+                    }.padding(.vertical, 12).background(.regularMaterial)
+                }
             }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.retrySync() } }
@@ -116,7 +143,12 @@ struct ContentView: View {
         } message: { Text(store.errorMessage ?? "") }
     }
     private func addDraft() {
-        if store.add(text: draft, projects: store.selectedProject.map { [$0] } ?? []) { draft = ""; mentionsOnly = false }
+        if store.add(text: draft, projects: store.selectedProject.map { [$0] } ?? []) { draft = ""; mentionsOnly = false; bottomScrollRequest += 1 }
+    }
+    @MainActor private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        guard let id = lastVisibleRowID else { return }
+        proxy.scrollTo(id, anchor: .bottom)
+        needsBottomScroll = false
     }
     private func dismissKeyboard() {
         composerFocused = false

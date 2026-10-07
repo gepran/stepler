@@ -24,6 +24,36 @@ final class SteplerUITests: XCTestCase {
         let y = max(timeline.frame.minY + 16, min(timeline.frame.maxY, input.frame.minY - 80) - 24)
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: timeline.frame.midX, dy: y)).tap()
     }
+    func testTimelineStartsAtNewestAndKeepsOldestAtTopAfterRelaunch() throws {
+        app.terminate()
+        let rows = (0..<36).map { index -> [String: Any] in
+            ["id": "\(1577836800000 + index * 86_400_000)-timeline", "text": "Timeline task \(index)", "ymd": "2020-01-\(String(format: "%02d", index / 12 + 1))"]
+        }
+        app.launchEnvironment["STEPLER_UI_TEST_TASKS"] = String(data: try JSONSerialization.data(withJSONObject: rows), encoding: .utf8)
+        app.launch()
+        let newest = app.buttons["task.row.1580860800000-timeline"]
+        let oldest = app.buttons["task.row.1577836800000-timeline"]
+        let newestVisible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: newest)
+        XCTAssertEqual(XCTWaiter.wait(for: [newestVisible], timeout: 10), .completed)
+        XCTAssertFalse(oldest.isHittable)
+        let beforeNewest = app.buttons["task.row.1580774400000-timeline"]
+        XCTAssertTrue(beforeNewest.isHittable)
+        XCTAssertLessThan(beforeNewest.frame.minY, newest.frame.minY)
+        let timeline = app.descendants(matching: .any)["task.timeline"]
+        for _ in 0..<12 {
+            if oldest.isHittable { break }
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(oldest.isHittable)
+        let second = app.buttons["task.row.1577923200000-timeline"]
+        XCTAssertTrue(second.isHittable)
+        XCTAssertLessThan(oldest.frame.minY, second.frame.minY)
+        app.terminate(); app.launchEnvironment.removeValue(forKey: "STEPLER_UI_TEST_TASKS")
+        app.launchArguments = ["--ui-testing"]; app.launch()
+        let newestAfterRelaunch = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: newest)
+        XCTAssertEqual(XCTWaiter.wait(for: [newestAfterRelaunch], timeout: 10), .completed)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Stepler iOS newest tasks at bottom"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
     func testEmptyTimelineTapDismissesKeyboardWithoutLosingDraft() {
         let input = app.descendants(matching: .any)["task.draft"]
         XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText("Keep this draft")
@@ -94,7 +124,12 @@ final class SteplerUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(send.isEnabled); send.tap()
         XCTAssertTrue(app.staticTexts["Reporting is disabled in tests. Your draft is still available."].waitForExistence(timeout: 5))
-        app.swipeDown(); app.swipeDown()
+        let form = app.descendants(matching: .any)["report.form"]
+        for _ in 0..<5 {
+            if title.exists { break }
+            form.swipeDown()
+        }
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["report.title"].value as? String, "Image copy problem")
         app.buttons["report.close"].tap()
         XCTAssertTrue(app.buttons["settings.done"].waitForExistence(timeout: 5))

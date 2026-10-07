@@ -50,6 +50,14 @@ final class AppStore: ObservableObject {
         deviceID = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(deviceID, forKey: key)
         load()
+        if testing, let fixture = ProcessInfo.processInfo.environment["STEPLER_UI_TEST_TASKS"],
+           let data = fixture.data(using: .utf8) {
+            do {
+                let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
+                snapshot.tasks = try rows.map { try TaskRecord(dictionary: $0) }
+                try persist()
+            } catch { errorMessage = "Could not load the disposable timeline fixture." }
+        }
         if !testing {
             ReminderService.refresh(tasks: snapshot.tasks)
             authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in Task { @MainActor in self?.selectUser(user) } }

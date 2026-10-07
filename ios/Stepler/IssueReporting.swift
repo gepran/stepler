@@ -39,6 +39,7 @@ struct IssueReportView: View {
                     Section { Button { Task { await send() } } label: { HStack { if busy { ProgressView() }; Text(busy ? "Sending…" : "Send report") } }.disabled(busy || title.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || details.trimmingCharacters(in: .whitespacesAndNewlines).count < 10 || title.count > 120 || details.count > 3000 || contact.count > 160).accessibilityIdentifier("report.send") }
                 }
             }
+            .accessibilityIdentifier("report.form")
             .disabled(busy)
             .navigationTitle("Report an issue")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(received ? "Done" : "Cancel") { dismiss() }.disabled(busy).accessibilityIdentifier("report.close") } }

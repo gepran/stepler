@@ -6,6 +6,10 @@ nesting/promotion, priority, reminders, files/photos/paste, trash, JSON
 import/export, Google/email sign-in, Firebase sync, connections and mentions.
 Apple Calendar and Reminders mirrors can be enabled in Settings.
 
+The timeline matches the web app: days run oldest to newest, with newer tasks
+at the bottom of each day's existing ordering. It opens at the bottom, including
+when the first sync snapshot arrives after launch, and shows newly added tasks.
+
 Open `Stepler.xcodeproj` in Xcode. The committed Firebase configuration belongs
 to the existing Stepler project and the `com.stepler.app.ios` registration.
 Swift packages are pinned in the project's `Package.resolved`. To regenerate
