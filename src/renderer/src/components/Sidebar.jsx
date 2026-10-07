@@ -1,4 +1,3 @@
-import { useState } from "react";
 import PropTypes from "prop-types";
 import { Settings, Layers, Plus, Star } from "lucide-react";
 import { translatePlural as tPlural, useT } from "../lib/i18n";
@@ -25,8 +24,7 @@ export default function Sidebar({
   onProjectClick,
 }) {
   const t = useT();
-  const [isHovered, setIsHovered] = useState(false);
-  const isExpanded = show || isHovered;
+  const isExpanded = show;
   const rowStyle = (selected) =>
     `group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-orange-400 ${selected ? "bg-orange-500/10 font-semibold text-orange-700 dark:text-orange-300" : "font-medium text-neutral-600 hover:bg-neutral-200/60 dark:text-neutral-400 dark:hover:bg-neutral-800"}`;
   const count = (name) =>
@@ -34,8 +32,6 @@ export default function Sidebar({
 
   return (
     <aside
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       aria-label={t("sidebar.projects")}
       className={`relative z-40 h-full shrink-0 border-r border-neutral-200 bg-neutral-50 transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 ${isExpanded ? "w-60" : "w-16"}`}
     >
@@ -62,8 +58,8 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => onSettingsClick?.("projects")}
-              title={t("settings.projects.add")}
-              aria-label={t("settings.projects.add")}
+              title={t("task.newProject")}
+              aria-label={t("task.newProject")}
               className="rounded-md p-1 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800"
             >
               <Plus size={15} />

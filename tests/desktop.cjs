@@ -928,9 +928,7 @@ app.once("browser-window-created", (_event, created) => {
           await until(() => !document.querySelector('[role="dialog"]'));
           if (process.env.STEPLER_SCREENSHOTS_DIR) {
             await evaluate(() =>
-              document
-                .querySelector("aside")
-                .dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+              document.querySelector('button[title="Toggle Sidebar"]').click(),
             );
             await delay(250);
             fs.writeFileSync(
@@ -938,14 +936,70 @@ app.once("browser-window-created", (_event, created) => {
               (await win.webContents.capturePage()).toPNG(),
             );
             await evaluate(() =>
-              document.querySelector("aside").dispatchEvent(
-                new MouseEvent("mouseout", {
-                  bubbles: true,
-                  relatedTarget: document.querySelector("main"),
-                }),
-              ),
+              document.querySelector('button[title="Toggle Sidebar"]').click(),
             );
           }
+        },
+      );
+
+      await check(
+        "sidebar controls keep their position and new-project opens project settings",
+        async () => {
+          await evaluate(() =>
+            document
+              .querySelector("aside")
+              .dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+          );
+          await delay(250);
+          assert.equal(
+            await evaluate(() =>
+              document
+                .querySelector('[data-project-list="sidebar-collapsed"]')
+                .closest("[aria-hidden]")
+                .getAttribute("aria-hidden"),
+            ),
+            "false",
+          );
+          await evaluate(() =>
+            document
+              .querySelector('[data-project-list="sidebar-collapsed"]')
+              .parentElement.querySelector('button[title="Settings"]')
+              .click(),
+          );
+          await until(
+            () =>
+              document.querySelector('[role="dialog"] h3')?.textContent ===
+              "Appearance",
+          );
+          await evaluate(() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+          );
+          await until(() => !document.querySelector('[role="dialog"]'));
+          await evaluate(() =>
+            document.querySelector('button[title="Toggle Sidebar"]').click(),
+          );
+          await until(() =>
+            document.querySelector('aside button[title="New project…"]'),
+          );
+          await evaluate(() =>
+            document
+              .querySelector('aside button[title="New project…"]')
+              .click(),
+          );
+          await until(() =>
+            document.querySelector('[data-project-list="settings"]'),
+          );
+          await evaluate(() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+          );
+          await until(() => !document.querySelector('[role="dialog"]'));
+          await evaluate(() =>
+            document.querySelector('button[title="Toggle Sidebar"]').click(),
+          );
         },
       );
 
