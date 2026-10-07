@@ -1,4 +1,4 @@
-import { compressImage } from "./images";
+import { compressImage, imageAsPng } from "./images";
 
 export const ipc = window.electron?.ipcRenderer;
 
@@ -77,9 +77,36 @@ export async function persistAttachment(pending) {
   return null;
 }
 
+function localImageId(att) {
+  return att?.id || att?.storagePath?.split("/").pop() || null;
+}
+
+async function copyImage(att, text) {
+  try {
+    if (!att || !ipc) return { success: false, error: "missing" };
+    const id = localImageId(att);
+    const result =
+      text === undefined
+        ? await ipc.invoke("copy-attachment-image", { id })
+        : await ipc.invoke("copy-task", {
+            text,
+            attachmentId: id,
+            imageExpected: true,
+          });
+    if (result?.success) return result;
+    // Chromium decodes WebP, GIF, SVG and AVIF even when nativeImage cannot.
+    // Read through IPC because the page CSP restricts fetching our file scheme.
+    const file = await ipc.invoke("read-attachment", { id });
+    if (!file?.success) return file;
+    const png = await imageAsPng(file.bytes, att.name);
+    return await ipc.invoke("copy-image-bytes", { bytes: png, text });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export function copyAttachmentImage(att) {
-  if (!att?.id || !ipc) return Promise.resolve({ success: false });
-  return ipc.invoke("copy-attachment-image", { id: att.id });
+  return copyImage(att);
 }
 
 export function copyAttachmentFile(att) {
@@ -114,11 +141,12 @@ export async function copyTask(task) {
   let text = task.text || task.title || "";
   if (task.subtasks?.length)
     text += "\n" + task.subtasks.map((st) => `- ${st.text}`).join("\n");
-  const imageId = task.attachment?.type === "image" ? task.attachment.id : null;
+  if (task.attachment?.type === "image" && ipc)
+    return copyImage(task.attachment, text);
   // The main process owns this: the renderer cannot fetch its own attachment
   // scheme under the page CSP, and Electron can put text and image on the
   // clipboard in a single write.
-  if (ipc) return ipc.invoke("copy-task", { text, attachmentId: imageId });
+  if (ipc) return ipc.invoke("copy-task", { text });
   await navigator.clipboard.writeText(text);
   return { success: true };
 }

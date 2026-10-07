@@ -13,6 +13,7 @@ extension Color {
 
 struct ContentView: View {
     @EnvironmentObject var store: AppStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var search = ""
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
@@ -48,6 +49,7 @@ struct ContentView: View {
                                     .swipeActions(edge: .trailing) { Button("Delete", role: .destructive) { store.delete(task.id) } }
                                     .contextMenu {
                                         Button("Edit", systemImage: "pencil") { editing = task }
+                                        Button("Copy task", systemImage: "doc.on.doc") { store.copyTask(task) }
                                         Button(task.priority ? "Remove priority" : "Set priority", systemImage: "star") { store.edit(task.id) { $0.priority.toggle() } }
                                         Menu("Move into task") { ForEach(store.tasks.filter { $0.id != task.id }) { target in Button(target.text) { store.nest(task.id, under: target.id) } } }
                                         Button("Delete", systemImage: "trash", role: .destructive) { store.delete(task.id) }
@@ -94,7 +96,7 @@ struct ContentView: View {
                             .accessibilityLabel("Add task").accessibilityIdentifier("task.add")
                     }.padding(.horizontal)
                     HStack {
-                        Circle().fill(store.uid == nil ? Color.secondary : Color.green).frame(width: 5, height: 5)
+                        Circle().fill(store.syncState == "synced" ? Color.green : (store.syncState == "error" ? Color.red : Color.secondary)).frame(width: 5, height: 5)
                         Text(store.syncMessage).font(.caption2).foregroundStyle(.secondary)
                         Spacer()
                         Text("\(store.tasks.filter(\.completed).count) / \(store.tasks.count) done").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
@@ -102,6 +104,7 @@ struct ContentView: View {
                 }.padding(.vertical, 12).background(.regularMaterial)
             }
         }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.retrySync() } }
         .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
         .onChange(of: store.uid) { _, _ in draft = ""; editing = nil; creating = false; search = ""; showProjects = false; mentionsOnly = false }
         .sheet(isPresented: $showProjects) { ProjectSidebar() }
@@ -165,6 +168,9 @@ struct TaskRow: View {
                     if let url = store.attachmentURL(attachment), let image = UIImage(contentsOfFile: url.path), attachment["type"] == .string("image") { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12)) }
                     else { Label(attachment["name"].flatMap { if case .string(let s) = $0 { return s }; return nil } ?? "Attachment", systemImage: "paperclip").font(.caption) }
                 }.buttonStyle(.borderless).padding(.leading, 32)
+                    .contextMenu {
+                        if attachment["type"] == .string("image") { Button("Copy image", systemImage: "doc.on.doc") { store.copyAttachmentImage(attachment) } }
+                    }
             }
             ForEach(task.subtasks) { child in
                 HStack(spacing: 10) {
@@ -176,7 +182,17 @@ struct TaskRow: View {
                 }
             }
         }.padding(.vertical, 5)
-            .sheet(item: $preview) { QuickPreview(url: $0.url) }
+            .sheet(item: $preview) { file in
+                NavigationStack {
+                    QuickPreview(url: file.url).ignoresSafeArea(edges: .bottom)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) { Button("Done") { preview = nil } }
+                            ToolbarItem(placement: .primaryAction) { Button("Copy image", systemImage: "doc.on.doc") {
+                                if let attachment = task.attachment { store.copyAttachmentImage(attachment) }
+                            }.disabled(task.attachment?["type"] != .string("image")) }
+                        }
+                }
+            }
     }
 }
 

@@ -23,6 +23,7 @@
 - **Export and import.** One portable JSON file with the attachments embedded.
 - **Optional integrations.** Google Calendar, Jira and Apple Reminders — all off until you turn them on.
 - **English, ქართული and Русский.** Switch the interface language in Settings → General.
+- **Issue reporting.** Settings → Report an issue sends a report to support, with optional basic diagnostics. See [server setup and verification](docs/issue-reporting.md).
 
 ## 📥 Installing on macOS
 

@@ -1,6 +1,6 @@
 {
   "name": "stepler",
-  "version": "1.3.14",
+  "version": "1.3.15",
   "description": "Stepler — a fast daily task timeline for macOS and Windows",
   "main": "./out/main/index.js",
   "bin": {
@@ -24,14 +24,17 @@
     "build:web": "vite build --config vite.web.config.mjs",
     "deploy:web": "npm run build:web && firebase deploy --only hosting:web",
     "prebuild:web": "node scripts/sync-download-links.mjs",
-    "test": "node --test tests/projects-and-drag.test.mjs tests/sync-data.test.mjs tests/concurrent-edits.test.mjs tests/project-sync.test.mjs tests/subtask-queue.test.mjs",
+    "test": "node --test tests/projects-and-drag.test.mjs tests/sync-data.test.mjs tests/concurrent-edits.test.mjs tests/project-sync.test.mjs tests/subtask-queue.test.mjs tests/sync-recovery.test.mjs functions/test/report-service.test.mjs",
     "test:rules": "node --test tests/firestore-rules.test.mjs",
-    "test:firebase": "firebase emulators:exec --only firestore,storage,auth --project demo-stepler-review --config firebase.test.json \"node --test tests/firestore-rules.test.mjs tests/storage-rules.test.mjs\"",
+    "test:firebase": "firebase emulators:exec --only firestore,storage,auth --project demo-stepler-review --config firebase.test.json \"node --test tests/firestore-rules.test.mjs tests/storage-rules.test.mjs functions/test/report-endpoint.test.mjs\"",
     "test:desktop": "npm run build && electron tests/desktop.cjs",
     "test:all": "npm run lint && npm test && npm run test:firebase && npm run test:desktop && npm run build:web",
     "test:ios": "node scripts/ios.mjs test",
     "build:ios": "node scripts/ios.mjs build",
-    "install:ios": "node scripts/ios.mjs install"
+    "install:ios": "node scripts/ios.mjs install",
+    "deploy:reports": "firebase deploy --only functions:reports",
+    "deploy:report-intake": "node scripts/deploy-report-intake.mjs",
+    "verify:update": "node scripts/verify-update-artifacts.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -63,7 +66,8 @@
     "react-dom": "^19.2.1",
     "sharp": "^0.35.4",
     "tailwindcss": "^4.2.0",
-    "vite": "^7.2.6"
+    "vite": "^7.2.6",
+    "js-yaml": "^4.3.2"
   },
   "overrides": {
     "@firebase/firestore": {

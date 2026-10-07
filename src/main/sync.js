@@ -23,6 +23,7 @@ import {
   taskFromSignature,
 } from "./sync-data.js";
 import { mergeTaskEdits } from "../renderer/src/lib/task-merge.js";
+import { waitForSync, syncFailure } from "./sync-wait.js";
 import { commitTaskEdit } from "../renderer/src/lib/task-cloud.js";
 import {
   applyProjectOperation,
@@ -50,6 +51,7 @@ import {
   deleteField,
   doc,
   getFirestore,
+  enableNetwork,
   onSnapshot,
   serverTimestamp,
   runTransaction,
@@ -106,6 +108,16 @@ let pushTimer = null;
 let pushing = false;
 let pushAgain = false;
 let applyingRemote = false;
+let serverReady = false;
+let sessionNumber = 0;
+let taskListenerFailure = null;
+let projectListenerFailure = null;
+let projectWriteFailure = null;
+const projectWrites = new Map();
+let recoveryTimer = null;
+let shadowQueue = Promise.resolve();
+let pullQueue = Promise.resolve();
+const taskWrites = new Map();
 let filesTimer = null;
 let filesRunning = false;
 let repairingEchoes = false;
@@ -202,6 +214,7 @@ export function publicStatus() {
     email: status.email,
     state: status.state,
     error: status.error,
+    errorCode: status.errorCode || null,
     // Read off the live user rather than kept in `status`: linking a password
     // does not fire onAuthStateChanged — the uid has not changed — so a copy
     // here would still say "no password" on an account that has just been
@@ -368,11 +381,18 @@ export function initSync({
   ensureApp();
 
   onAuthStateChanged(auth, async (user) => {
+    const session = ++sessionNumber;
     if (!user) {
       stopListening();
       currentUid = null;
       resetCollab();
-      setStatus({ signedIn: false, email: null, state: "off", error: null });
+      setStatus({
+        signedIn: false,
+        email: null,
+        state: "off",
+        error: null,
+        errorCode: null,
+      });
       return;
     }
     stopListening();
@@ -381,17 +401,25 @@ export function initSync({
     try {
       await deps.selectAccount?.(user.uid);
     } catch (error) {
+      if (session !== sessionNumber) return;
       setStatus({ signedIn: false, state: "error", error: error.message });
       return;
     }
+    if (session !== sessionNumber) return;
     currentUid = user.uid;
     setStatus({
       signedIn: true,
       email: user.email || null,
       state: "syncing",
       error: null,
+      errorCode: null,
     });
     startListening();
+    recoveryTimer = setInterval(() => {
+      if (taskListenerFailure || projectListenerFailure)
+        retrySync().catch(() => {});
+      else if (status.state !== "synced") schedulePush(0);
+    }, 30_000);
     startCollab(user);
     schedulePush();
   });
@@ -401,6 +429,10 @@ export function initSync({
 }
 
 function stopListening() {
+  serverReady = false;
+  clearInterval(recoveryTimer);
+  clearTimeout(pushTimer);
+  clearTimeout(filesTimer);
   unsubscribeProjects?.();
   unsubscribeProjects = null;
   clearTimeout(projectsTimer);
@@ -414,12 +446,17 @@ function startListening() {
   stopListening();
   if (!currentUid) return;
   const uid = currentUid;
+  const session = sessionNumber;
+  taskListenerFailure = null;
+  projectListenerFailure = null;
+  projectWriteFailure = null;
   if (deps.getProjects) {
     projectsSeed = deps.getProjects(uid).projects;
     unsubscribeProjects = onSnapshot(
       doc(db, "users", uid, "meta", "projects"),
       (snapshot) => {
-        if (uid !== currentUid) return;
+        if (uid !== currentUid || session !== sessionNumber) return;
+        projectListenerFailure = null;
         if (snapshot.exists())
           deps.applyProjects(
             normalizeProjectState(snapshot.data()),
@@ -429,34 +466,50 @@ function startListening() {
           );
         scheduleProjects();
       },
-      (error) => setStatus({ state: "error", error: error.message }),
+      (error) => {
+        if (uid === currentUid && session === sessionNumber) {
+          projectListenerFailure = syncFailure(error);
+          setStatus(projectListenerFailure);
+        }
+      },
     );
     scheduleProjects();
   }
   unsubscribeTasks = onSnapshot(
-    collection(db, "users", currentUid, "tasks"),
+    collection(db, "users", uid, "tasks"),
+    { includeMetadataChanges: true },
     (snap) => {
+      if (uid !== currentUid || session !== sessionNumber) return;
+      taskListenerFailure = null;
+      serverReady = !snap.metadata.fromCache;
       const remote = [];
       snap.forEach((d) => remote.push(docToTask({ ...d.data(), id: d.id })));
-      applyRemoteTasks(remote).catch((err) =>
+      pullQueue = pullQueue
+        .catch(() => {})
+        .then(() => applyRemoteTasks(remote, uid, session));
+      pullQueue.catch((err) =>
         console.warn("Applying a pull reported:", err.code || "", err.message),
       );
     },
     (err) => {
       console.error("Sync listener failed:", err.code, err.message);
-      setStatus({ state: "error", error: err.message });
+      if (uid === currentUid && session === sessionNumber) {
+        taskListenerFailure = syncFailure(err);
+        setStatus(taskListenerFailure);
+      }
     },
   );
 }
 
-async function applyRemoteTasks(remote) {
+async function applyRemoteTasks(remote, uid, session) {
+  if (uid !== currentUid || session !== sessionNumber) return;
   const today = deps.todayYMD();
-  const uid = currentUid;
   const saved = (await deps.readToken()) || {};
   const shadow = saved.uid === uid && saved.shadow ? saved.shadow : {};
+  if (uid !== currentUid || session !== sessionNumber) return;
   const localFlat = flattenLocal(deps.getData(), today);
   const { merged, changed, applied } = mergeRemote(localFlat, remote, shadow);
-  if (uid !== currentUid) return;
+  if (uid !== currentUid || session !== sessionNumber) return;
   if (changed > 0) {
     applyingRemote = true;
     try {
@@ -470,11 +523,13 @@ async function applyRemoteTasks(remote) {
   // would send the whole history back up, and the merge above could not tell a
   // stale local copy from one carrying an edit that has not gone up yet.
   if (applied.length) {
-    const nextShadow = { ...shadow };
-    for (const r of applied) nextShadow[r.id] = signature(r);
-    await deps.writeToken({ ...saved, uid, shadow: nextShadow });
+    await rememberShadow(
+      uid,
+      Object.fromEntries(applied.map((row) => [row.id, signature(row)])),
+    );
   }
-  setStatus({ state: "synced", error: null });
+  if (uid !== currentUid || session !== sessionNumber) return;
+  if (!pushing && !taskWrites.size) setConnectionStatus();
   // A pull can also bring back an echo another device has not cleaned up yet.
   repairMentionEchoes().catch((err) =>
     console.warn("Echo repair reported:", err.code || "", err.message),
@@ -491,11 +546,16 @@ export function notifyLocalChange() {
 
 function schedulePush(delay = 800) {
   if (!currentUid) return;
+  const uid = currentUid;
+  const session = sessionNumber;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
+    if (uid !== currentUid || session !== sessionNumber) return;
     pushChanged().catch((err) => {
+      if (uid !== currentUid || session !== sessionNumber) return;
       console.error("Push failed:", err.code || "", err.message);
-      setStatus({ state: "error", error: err.message });
+      setStatus(syncFailure(err));
+      schedulePush(15_000);
     });
   }, delay);
   // Bytes move on the same triggers as documents but on a slower clock; see
@@ -509,21 +569,26 @@ function schedulePush(delay = 800) {
 
 function scheduleProjects(delay = 800) {
   if (!currentUid || !deps.getProjects) return;
+  const uid = currentUid;
+  const session = sessionNumber;
   clearTimeout(projectsTimer);
-  projectsTimer = setTimeout(
-    () =>
-      pushProjects().catch((error) => {
-        setStatus({ state: "error", error: error.message });
-        scheduleProjects(15_000);
-      }),
-    delay,
-  );
+  projectsTimer = setTimeout(() => {
+    if (uid !== currentUid || session !== sessionNumber) return;
+    pushProjects().catch((error) => {
+      if (uid !== currentUid || session !== sessionNumber) return;
+      projectWriteFailure = syncFailure(error);
+      setStatus(projectWriteFailure);
+      scheduleProjects(15_000);
+    });
+  }, delay);
 }
 
 async function pushProjects() {
   if (projectsRunning || !currentUid || !deps.getProjects) return;
   projectsRunning = true;
   const uid = currentUid;
+  const session = sessionNumber;
+  const key = `${session}/${uid}`;
   try {
     const local = deps.getProjects(uid);
     const queue = local.queue || [];
@@ -531,59 +596,116 @@ async function pushProjects() {
     const operations = local.initialized
       ? queue
       : [{ type: "remember", names: projectsSeed || local.projects }, ...queue];
-    const state = await runTransaction(db, async (transaction) => {
-      const target = doc(db, "users", uid, "meta", "projects");
-      const snapshot = await transaction.get(target);
-      let next = normalizeProjectState(snapshot.data());
-      for (const operation of operations) {
-        try {
-          next = applyProjectOperation(next, operation);
-        } catch (error) {
-          if (
-            !["Project no longer exists", "Project already exists"].includes(
-              error.message,
+    let written = projectWrites.get(key);
+    if (!written) {
+      written = runTransaction(db, async (transaction) => {
+        const target = doc(db, "users", uid, "meta", "projects");
+        const snapshot = await transaction.get(target);
+        let next = normalizeProjectState(snapshot.data());
+        for (const operation of operations) {
+          try {
+            next = applyProjectOperation(next, operation);
+          } catch (error) {
+            if (
+              !["Project no longer exists", "Project already exists"].includes(
+                error.message,
+              )
             )
-          )
-            throw error;
+              throw error;
+          }
         }
-      }
-      transaction.set(target, { ...next, updatedAt: serverTimestamp() });
-      return next;
-    });
-    if (uid === currentUid)
-      deps.applyProjects(
-        state,
-        queue.map((operation) => operation.id),
-        true,
-        uid,
-      );
+        transaction.set(target, { ...next, updatedAt: serverTimestamp() });
+        return next;
+      })
+        .then((state) => {
+          if (uid !== currentUid || session !== sessionNumber) return;
+          projectWriteFailure = null;
+          deps.applyProjects(
+            state,
+            queue.map((operation) => operation.id),
+            true,
+            uid,
+          );
+        })
+        .finally(() => {
+          projectWrites.delete(key);
+          if (uid === currentUid && session === sessionNumber)
+            scheduleProjects();
+        });
+      projectWrites.set(key, written);
+    }
+    await waitForSync(written, PUSH_ACK_MS);
   } finally {
     projectsRunning = false;
-    if (uid === currentUid && deps.getProjects(uid)?.queue?.length)
+    if (
+      uid === currentUid &&
+      session === sessionNumber &&
+      deps.getProjects(uid)?.queue?.length
+    )
       scheduleProjects(15_000);
   }
 }
 
-/**
- * Wait for a write, but not forever.
- *
- * Firestore does not settle a write until the server acknowledges it, so while
- * the machine is offline the promise simply never resolves. Anything holding a
- * latch across one of those waits stops for the lifetime of the process. The
- * write itself stays queued in the SDK either way; the only thing given up
- * here is our waiting on it.
- */
-function settledWithin(promise, ms) {
-  let timer;
-  return Promise.race([
-    promise.then(
-      () => true,
-      () => false,
-    ),
-    new Promise((resolve) => {
-      timer = setTimeout(() => resolve(false), ms);
-    }),
-  ]).finally(() => clearTimeout(timer));
+/** Serialize shadow patches so concurrent pull/write acknowledgments do not lose baselines. */
+function rememberShadow(uid, changes, session = sessionNumber) {
+  const update = shadowQueue.then(async () => {
+    if (uid !== currentUid || session !== sessionNumber) return;
+    const saved = (await deps.readToken()) || {};
+    if (uid !== currentUid || session !== sessionNumber) return;
+    await deps.writeToken({
+      ...saved,
+      uid,
+      shadow: { ...(saved.uid === uid ? saved.shadow : {}), ...changes },
+    });
+  });
+  shadowQueue = update.catch(() => {});
+  return update;
+}
+
+function setConnectionStatus() {
+  if (!currentUid) return;
+  const failure =
+    taskListenerFailure || projectListenerFailure || projectWriteFailure;
+  if (failure) {
+    setStatus(failure);
+    return;
+  }
+  const projects = deps.getProjects?.(currentUid);
+  if (
+    serverReady &&
+    (projects?.queue?.length ||
+      projectWrites.has(`${sessionNumber}/${currentUid}`))
+  ) {
+    setStatus({ state: "syncing", error: null, errorCode: null });
+    return;
+  }
+  if (serverReady) setStatus({ state: "synced", error: null, errorCode: null });
+  else setStatus({ state: "offline", error: null, errorCode: null });
+}
+
+export async function retrySync() {
+  if (!currentUid) return { success: false, error: "Sign in to synchronize." };
+  const uid = currentUid;
+  const session = sessionNumber;
+  try {
+    resetCloudFiles();
+    await enableNetwork(db);
+    if (uid !== currentUid || session !== sessionNumber)
+      return { success: false, error: "Account changed." };
+    startListening();
+    recoveryTimer = setInterval(() => {
+      if (taskListenerFailure || projectListenerFailure)
+        retrySync().catch(() => {});
+      else if (status.state !== "synced") schedulePush(0);
+    }, 30_000);
+    setStatus({ state: "syncing", error: null, errorCode: null });
+    schedulePush(0);
+    return { success: true };
+  } catch (error) {
+    if (uid === currentUid && session === sessionNumber)
+      setStatus(syncFailure(error));
+    return { success: false, error: error.message };
+  }
 }
 
 const PUSH_ACK_MS = 15000;
@@ -599,59 +721,66 @@ async function pushChanged() {
   // re-target the remaining batches and the shadow at whichever account signed
   // in next. Every other async path in this file already does this.
   const uid = currentUid;
+  const session = sessionNumber;
   try {
     const today = deps.todayYMD();
     const flat = flattenLocal(deps.getData(), today);
     const saved = (await deps.readToken()) || {};
+    if (uid !== currentUid || session !== sessionNumber) return;
     const shadow = saved.uid === uid && saved.shadow ? saved.shadow : {};
 
     const outgoing = flat.filter((t) => shadow[t.id] !== signature(t));
     if (!outgoing.length) {
-      setStatus({ state: "synced", error: null });
+      setConnectionStatus();
       return;
     }
 
     setStatus({ state: "syncing" });
-    const nextShadow = { ...shadow };
     for (const t of outgoing) {
-      if (uid !== currentUid) return;
-      let committed;
-      const written = commitTaskEdit(db, {
-        uid,
-        task: t,
-        base: taskFromSignature(shadow[t.id], t.id),
-        toDocument: (row) => {
-          const out = taskToDoc(row);
-          for (const key of CARRIED) if (row[key] == null) delete out[key];
-          return out;
-        },
-        fromDocument: docToTask,
-      }).then((value) => {
-        committed = value;
-      });
-      if (!(await settledWithin(written, PUSH_ACK_MS))) {
-        setStatus({
-          state: "error",
-          error: "Sync is waiting for a connection; local changes are saved.",
-        });
-        if (uid === currentUid) schedulePush(15_000);
-        return;
+      if (uid !== currentUid || session !== sessionNumber) return;
+      const key = `${session}/${uid}/${t.id}`;
+      let written = taskWrites.get(key);
+      if (!written) {
+        written = commitTaskEdit(db, {
+          uid,
+          task: t,
+          base: taskFromSignature(shadow[t.id], t.id),
+          toDocument: (row) => {
+            const out = taskToDoc(row);
+            for (const key of CARRIED) if (row[key] == null) delete out[key];
+            return out;
+          },
+          fromDocument: docToTask,
+        })
+          .then(async (committed) => {
+            if (uid !== currentUid || session !== sessionNumber) return;
+            // A timed-out transaction may acknowledge later. Apply it once and
+            // preserve edits made while it was in flight.
+            const latest = flattenLocal(deps.getData(), today).map((row) =>
+              row.id === t.id ? mergeTaskEdits(t, row, committed) : row,
+            );
+            applyingRemote = true;
+            try {
+              deps.applyRemote(rebuildLocal(latest, today));
+            } finally {
+              applyingRemote = false;
+            }
+            await rememberShadow(
+              uid,
+              { [t.id]: signature(committed) },
+              session,
+            );
+          })
+          .finally(() => {
+            taskWrites.delete(key);
+            if (uid === currentUid && session === sessionNumber) schedulePush();
+          });
+        taskWrites.set(key, written);
       }
-      if (uid !== currentUid) return;
-      // Do not overwrite edits made while the transaction was in flight.
-      const latest = flattenLocal(deps.getData(), today).map((row) =>
-        row.id === t.id ? mergeTaskEdits(t, row, committed) : row,
-      );
-      applyingRemote = true;
-      try {
-        deps.applyRemote(rebuildLocal(latest, today));
-      } finally {
-        applyingRemote = false;
-      }
-      nextShadow[t.id] = signature(committed);
-      await deps.writeToken({ ...saved, uid, shadow: nextShadow });
+      await waitForSync(written, PUSH_ACK_MS);
+      if (uid !== currentUid || session !== sessionNumber) return;
     }
-    setStatus({ state: "synced", error: null });
+    setConnectionStatus();
   } finally {
     pushing = false;
     if (pushAgain) {
@@ -1246,6 +1375,7 @@ export async function setAccountPassword({ password, currentPassword }) {
 }
 
 export async function signOutSync() {
+  sessionNumber += 1;
   stopListening();
   resetCollab();
   clearTimeout(pushTimer);
@@ -1260,6 +1390,16 @@ export async function signOutSync() {
   // Drop the shadow with the session. Signing back in — possibly as somebody
   // else — must not push this account's tasks into that account's list.
   await deps?.writeToken(null);
-  setStatus({ signedIn: false, email: null, state: "off", error: null });
+  setStatus({
+    signedIn: false,
+    email: null,
+    state: "off",
+    error: null,
+    errorCode: null,
+  });
   return { success: true };
+}
+
+export async function reportAuthToken() {
+  return auth?.currentUser ? auth.currentUser.getIdToken() : null;
 }

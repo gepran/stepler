@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import {
   ArrowUpCircle,
+  Bug,
   Bell,
   LogOut,
   Monitor,
@@ -23,6 +24,9 @@ import { THEMES, setTheme, useTheme } from "./theme";
 import { applyUpdate, checkForUpdate } from "./update";
 import { requestNotifyPermission, useNotifyPermission } from "./notify";
 import AccountPassword from "./AccountPassword";
+import IssueReportModal from "../renderer/src/components/IssueReportModal";
+import { postIssueReport } from "../renderer/src/lib/issue-reports";
+import { version } from "../../package.json";
 import {
   LANGUAGES,
   setLanguage,
@@ -52,6 +56,21 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
   const theme = useTheme();
   const notify = useNotifyPermission();
   const [deleted, setDeleted] = useState([]);
+  const [reporting, setReporting] = useState(false);
+  const diagnostics = useCallback(
+    () => ({
+      platform: "web",
+      version,
+      syncState: navigator.onLine ? "connected" : "offline",
+      language,
+    }),
+    [language],
+  );
+  const submitReport = useCallback(
+    async (report) =>
+      postIssueReport(report, { token: await user.getIdToken() }),
+    [user],
+  );
   const [notice, setNotice] = useState(null);
   // idle → checking → current | available | failed
   const [update, setUpdate] = useState("idle");
@@ -81,10 +100,10 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
   // Escape closes it, the same contract the account menu already has, so the
   // two overlays in this app cannot behave differently.
   useEffect(() => {
-    const esc = (e) => e.key === "Escape" && onClose();
+    const esc = (e) => e.key === "Escape" && !reporting && onClose();
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
-  }, [onClose]);
+  }, [onClose, reporting]);
 
   // Its own subscription rather than a list handed down from the timeline.
   // Firestore keeps one listen per collection however many callers attach to
@@ -144,6 +163,23 @@ export default function SettingsModal({ user, collab, onClose, onSignOut }) {
           className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-5 py-5"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
         >
+          <section>
+            <button
+              type="button"
+              onClick={() => setReporting(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 px-3 py-3 text-sm font-semibold text-neutral-700 dark:border-neutral-700 dark:text-neutral-200"
+            >
+              <Bug size={16} />
+              {t("report.title")}
+            </button>
+            {reporting && (
+              <IssueReportModal
+                onClose={() => setReporting(false)}
+                getDiagnostics={diagnostics}
+                onSubmit={submitReport}
+              />
+            )}
+          </section>
           <section>
             <h3 className={HEADING}>{t("settings.sync.title")}</h3>
             <div className="flex items-center gap-3 rounded-xl border border-neutral-200 px-3.5 py-3 dark:border-neutral-800">
@@ -383,6 +419,7 @@ SettingsModal.propTypes = {
   user: PropTypes.shape({
     uid: PropTypes.string.isRequired,
     email: PropTypes.string,
+    getIdToken: PropTypes.func.isRequired,
     displayName: PropTypes.string,
   }).isRequired,
   collab: PropTypes.shape({

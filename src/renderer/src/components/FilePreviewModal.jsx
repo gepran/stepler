@@ -46,6 +46,7 @@ export default function FilePreviewModal({
 
   return (
     <div
+      data-testid="file-preview"
       className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 p-10 backdrop-blur-sm"
       onClick={() => setPreviewFile(null)}
     >

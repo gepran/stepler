@@ -2,6 +2,7 @@ import { sortProjects } from "../lib/projects";
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
 import GuideTab from "./GuideTab";
+import IssueReportModal from "./IssueReportModal";
 import DeletedTasksList from "./DeletedTasksList";
 import CollaborationPanel from "./CollaborationPanel";
 import {
@@ -19,6 +20,7 @@ import {
 } from "../lib/labels";
 import {
   BookOpen,
+  Bug,
   X,
   SunMedium,
   Moon,
@@ -443,6 +445,16 @@ function SyncSection() {
               </p>
             )}
 
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => withBusy(() => ipc?.invoke("sync-retry"))}
+              className={`${BTN_GHOST} mt-3 w-full`}
+            >
+              <RefreshCw size={14} />
+              {t("settings.sync.retry")}
+            </button>
+
             {/* Google and email are one account, not two. Somebody who signed
                 in with Google and then tried to sign up with a password was
                 told the address was taken — which was true and useless. This
@@ -821,6 +833,7 @@ export default function SettingsPanel({
   const language = useLanguage();
   const [settings, setSettings] = useState(initialSettings || {});
   const [recording, setRecording] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [recordError, setRecordError] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   // Keyed by name, not by position: deleting a row shortens the array and
@@ -885,14 +898,14 @@ export default function SettingsPanel({
 
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape" && !recording) {
+      if (e.key === "Escape" && !recording && !reporting) {
         e.stopPropagation();
         onClose();
       }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [onClose, recording]);
+  }, [onClose, recording, reporting]);
 
   useEffect(() => {
     if (recording) recorderRef.current?.focus();
@@ -1093,6 +1106,17 @@ export default function SettingsPanel({
               for when something goes wrong. */}
           <div className="shrink-0 space-y-2 border-t border-neutral-200/70 p-3 dark:border-neutral-800">
             <UpdateCorner onRevealed={onToast} />
+            <button
+              type="button"
+              onClick={() => setReporting(true)}
+              className={`${BTN_GHOST} w-full`}
+            >
+              <Bug size={14} />
+              {t("report.title")}
+            </button>
+            {reporting && (
+              <IssueReportModal onClose={() => setReporting(false)} />
+            )}
             <button onClick={onClose} className={`${BTN_GHOST} w-full`}>
               <X size={14} />
               {t("common.close")}

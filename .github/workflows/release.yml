@@ -44,6 +44,7 @@ jobs:
             # Universal, not the runner's own arch: an Intel Mac and an Apple
             # Silicon one download the same file.
             args: --mac --universal
+            platform: mac
             # The .app itself is not uploaded — only what a person installs
             # and what the updater reads.
             glob: |
@@ -55,6 +56,7 @@ jobs:
           - name: Windows (x64)
             os: windows-latest
             args: --win --x64
+            platform: win
             glob: |
               dist/*-setup.exe
               dist/*-setup.exe.blockmap
@@ -94,6 +96,14 @@ jobs:
       - name: Check it still compiles
         run: npm run lint
 
+      - name: Check sync and report behavior
+        run: npm test
+
+      - name: Check the native clipboard and report modal
+        run: npm run test:desktop
+        env:
+          STEPLER_ALLOW_NO_GOOGLE: "1"
+
       # THE credentials. `.env` is not in the repository and a runner has no
       # copy of it, so without these two secrets the Vite `define` folds empty
       # strings into the main bundle and every installed copy answers the
@@ -120,6 +130,9 @@ jobs:
           # builds. Left on, electron-builder goes hunting for an identity in
           # an empty keychain and fails the build over not finding one.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Verify the update artifacts
+        run: npm run verify:update -- ${{ matrix.platform }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -178,6 +191,8 @@ jobs:
               --title "Stepler $version" \
               --generate-notes
           fi
+
+          gh release edit "$tag" --latest
 
           echo "### Stepler $version" >> "$GITHUB_STEP_SUMMARY"
           gh release view "$tag" --json assets \

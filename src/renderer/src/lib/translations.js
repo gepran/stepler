@@ -2026,4 +2026,58 @@ const ru = {
   },
 };
 
+en.report = {
+  title: "Report an issue",
+  intro:
+    "Describe what happened so we can investigate. Reports are sent to Stepler support via Telegram.",
+  subject: "Issue title",
+  description: "What happened?",
+  descriptionHint:
+    "Steps to reproduce, what you expected, and what happened instead…",
+  contact: "Email or Telegram username (optional)",
+  diagnostics:
+    "Include app version, platform, language and sync status. Task content and files are not included.",
+  send: "Send report",
+  sending: "Sending…",
+  received: "Report received. Thank you — it is queued for the support team.",
+  failed:
+    "Could not send the report. Your draft is still available; please retry.",
+};
+ka.report = {
+  title: "პრობლემის შეტყობინება",
+  intro:
+    "აღწერეთ პრობლემა. შეტყობინება Telegram-ით გაეგზავნება Stepler-ის მხარდაჭერას.",
+  subject: "პრობლემის სათაური",
+  description: "რა მოხდა?",
+  descriptionHint: "როგორ გავიმეოროთ პრობლემა, რას ელოდით და რა მოხდა…",
+  contact: "ელფოსტა ან Telegram-ის სახელი (არასავალდებულო)",
+  diagnostics:
+    "აპის ვერსიის, პლატფორმის, ენისა და სინქრონიზაციის სტატუსის დამატება. დავალებები და ფაილები არ იგზავნება.",
+  send: "გაგზავნა",
+  sending: "იგზავნება…",
+  received: "შეტყობინება მიღებულია და გადაეცემა მხარდაჭერას. გმადლობთ!",
+  failed: "გაგზავნა ვერ მოხერხდა. ტექსტი შენახულია; სცადეთ ხელახლა.",
+};
+ru.report = {
+  title: "Сообщить о проблеме",
+  intro:
+    "Опишите проблему. Отчёт будет отправлен поддержке Stepler через Telegram.",
+  subject: "Название проблемы",
+  description: "Что произошло?",
+  descriptionHint: "Шаги для повторения, ожидаемый и фактический результат…",
+  contact: "Email или имя в Telegram (необязательно)",
+  diagnostics:
+    "Добавить версию приложения, платформу, язык и статус синхронизации. Задачи и файлы не отправляются.",
+  send: "Отправить",
+  sending: "Отправка…",
+  received: "Отчёт получен и поставлен в очередь для поддержки. Спасибо!",
+  failed: "Не удалось отправить отчёт. Текст сохранён; попробуйте снова.",
+};
+en.settings.sync.retry = "Retry sync";
+en.settings.sync.states.offline = "Offline · changes saved locally";
+ka.settings.sync.retry = "სინქრონიზაციის ხელახლა ცდა";
+ka.settings.sync.states.offline = "კავშირის გარეშე · ცვლილებები შენახულია";
+ru.settings.sync.retry = "Повторить синхронизацию";
+ru.settings.sync.states.offline = "Нет связи · изменения сохранены";
+
 export const translations = { en, ka, ru };

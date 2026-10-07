@@ -18,6 +18,7 @@
 		6D73718DB9393B735CFE4D44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C84175BB886077B9496BD646 /* Assets.xcassets */; };
 		87A7A3C4D016A568DFC01C6C /* SteplerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797085FDA6ABB9E6681080E8 /* SteplerUITests.swift */; };
 		A0447A64A487AA1FE6E28F7A /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3480907E34CDD71B41E4EF0 /* AppStore.swift */; };
+		ACB58ECB0F1B75792F199497 /* IssueReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CA78700E2D0C1D7F6EB4587 /* IssueReporting.swift */; };
 		B19DADA70A40AA06A86DBB53 /* Collaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF33EBFAA83FEE5FE6B8694F /* Collaboration.swift */; };
 		E0DC6EE0A7C83886325B66D4 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 4D847E633A4E696C4B6A4BA1 /* GoogleSignIn */; };
 		FABD3C0AF52E4007BD8448CB /* SteplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B512B042294F4215F5A041B /* SteplerTests.swift */; };
@@ -46,6 +47,7 @@
 		3B512B042294F4215F5A041B /* SteplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteplerTests.swift; sourceTree = "<group>"; };
 		56B6D509C1FBB5213F4EA9C7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		62496EF0EA5B02834C194520 /* Stepler.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stepler.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CA78700E2D0C1D7F6EB4587 /* IssueReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueReporting.swift; sourceTree = "<group>"; };
 		774308D07F7B754ACDB30B2D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		797085FDA6ABB9E6681080E8 /* SteplerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteplerUITests.swift; sourceTree = "<group>"; };
 		8431CE55E36B0351EC18D6A4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -109,6 +111,7 @@
 				8431CE55E36B0351EC18D6A4 /* ContentView.swift */,
 				56B6D509C1FBB5213F4EA9C7 /* GoogleService-Info.plist */,
 				774308D07F7B754ACDB30B2D /* Info.plist */,
+				6CA78700E2D0C1D7F6EB4587 /* IssueReporting.swift */,
 				D5582E148DEAD0B990B128E5 /* Models.swift */,
 				9B65DC10ECF21DDCD7206AD1 /* ReminderService.swift */,
 				30797B0C7AAA8856911CC46C /* SettingsView.swift */,
@@ -258,6 +261,7 @@
 				A0447A64A487AA1FE6E28F7A /* AppStore.swift in Sources */,
 				B19DADA70A40AA06A86DBB53 /* Collaboration.swift in Sources */,
 				5BA74CB3C6707B46BD91782B /* ContentView.swift in Sources */,
+				ACB58ECB0F1B75792F199497 /* IssueReporting.swift in Sources */,
 				185B5A63B942F76AEA1086EF /* Models.swift in Sources */,
 				22C69F8BAE8185B5EE6BCF75 /* ReminderService.swift in Sources */,
 				438BC5CE0EADA67FA0D8751F /* SettingsView.swift in Sources */,
@@ -400,7 +404,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = CQCZ5G8D6H;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -415,7 +419,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.14;
+				MARKETING_VERSION = 1.3.15;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -493,7 +497,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = CQCZ5G8D6H;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -514,7 +518,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.14;
+				MARKETING_VERSION = 1.3.15;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

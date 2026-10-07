@@ -20,6 +20,7 @@ const invocations = new Set([
   "collab-toggle-mention-subtask",
   "copy-attachment-file",
   "copy-attachment-image",
+  "copy-image-bytes",
   "copy-task",
   "copy-text",
   "export-tasks",
@@ -51,6 +52,8 @@ const invocations = new Set([
   "open-file-attachment",
   "purge-deleted-tasks",
   "read-attachment",
+  "report-diagnostics",
+  "report-issue",
   "reveal-downloaded-update",
   "save-app-data",
   "save-attachment",
@@ -62,6 +65,7 @@ const invocations = new Set([
   "sync-signin-google",
   "sync-signout",
   "sync-status",
+  "sync-retry",
   "update-settings",
 ]);
 const events = new Set([

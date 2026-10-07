@@ -82,4 +82,22 @@ final class SteplerUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertEqual(row.label, "Must stay saved")
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Stepler iOS timeline"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
+    func testIssueReportModalValidatesAndKeepsFailedDraft() {
+        app.buttons["settings.open"].tap()
+        let open = app.buttons["report.open"]
+        if !open.isHittable { app.swipeUp() }
+        XCTAssertTrue(open.waitForExistence(timeout: 5)); open.tap()
+        let send = app.buttons["report.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5)); XCTAssertFalse(send.isEnabled)
+        let title = app.textFields["report.title"]; title.tap(); title.typeText("Image copy problem")
+        let details = app.descendants(matching: .any)["report.description"]; details.tap(); details.typeText("Copying my image did not work after sync.")
+        app.swipeUp()
+        XCTAssertTrue(send.isEnabled); send.tap()
+        XCTAssertTrue(app.staticTexts["Reporting is disabled in tests. Your draft is still available."].waitForExistence(timeout: 5))
+        app.swipeDown(); app.swipeDown()
+        XCTAssertEqual(app.textFields["report.title"].value as? String, "Image copy problem")
+        app.buttons["report.close"].tap()
+        XCTAssertTrue(app.buttons["settings.done"].waitForExistence(timeout: 5))
+    }
+
 }

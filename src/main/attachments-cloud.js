@@ -138,9 +138,13 @@ export async function reconcileAttachments({ uid, tasks, disk }) {
       }
       // The bytes are already up. All that is left is getting them down, and
       // only on a machine that does not have them.
-      if (present.has(fileId)) return;
+      if (present.has(fileId)) {
+        if (att.id !== fileId) patches.set(key, { id: fileId });
+        return;
+      }
       if (disk.has(fileId)) {
         present.add(fileId);
+        if (att.id !== fileId) patches.set(key, { id: fileId });
         return;
       }
       jobs.push({ kind: "down", key, fileId, path: att.storagePath });

@@ -15,6 +15,8 @@ final class AppStore: ObservableObject {
     @Published private(set) var email: String?
     @Published var errorMessage: String?
     @Published var syncMessage = "Saved on this iPhone"
+    @Published private(set) var syncState = "off"
+    @Published private(set) var syncErrorCode = ""
     @Published var mentions: [MentionRecord] = []
     @Published var connections: [PersonRecord] = []
     @Published var profile: PersonRecord?
@@ -28,6 +30,7 @@ final class AppStore: ObservableObject {
     private let monitor = NWPathMonitor()
     private var deviceID: String
     private var cloudReady = false
+    private var sessionID = UUID()
     private var readOnly = false
     var failWritesForTesting = false
 
@@ -51,7 +54,11 @@ final class AppStore: ObservableObject {
             ReminderService.refresh(tasks: snapshot.tasks)
             authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in Task { @MainActor in self?.selectUser(user) } }
             monitor.pathUpdateHandler = { [weak self] path in
-                if path.status == .satisfied { Task { @MainActor in self?.scheduleSync() } }
+                Task { @MainActor in
+                    guard let self else { return }
+                    if path.status == .satisfied { self.retrySync() }
+                    else if self.uid != nil { self.syncState = "offline"; self.syncMessage = "Offline · changes saved locally" }
+                }
             }
             monitor.start(queue: DispatchQueue(label: "Stepler.network"))
         }
@@ -169,35 +176,39 @@ final class AppStore: ObservableObject {
             state.tasks.append(child); state.pending[child.id] = PendingEdit(base: nil, local: child)
         }
     }
-    private func selectUser(_ user: FirebaseAuth.User?) {
-        guard uid != user?.uid || (user != nil && listeners.isEmpty) else { return }
+    private func selectUser(_ user: FirebaseAuth.User?, force: Bool = false) {
+        guard force || uid != user?.uid || (user != nil && listeners.isEmpty) else { return }
+        sessionID = UUID()
         worker?.cancel(); worker = nil; listeners.forEach { $0.remove() }; listeners = []; cloudReady = false
         // Auth accounts have separate local snapshots. Guest tasks stay in
         // the guest profile; an explicit import can copy them into an account.
         uid = user?.uid; email = user?.email; selectedProject = nil
         mentions = []; connections = []; profile = nil; load()
         if !testing { ReminderService.refresh(tasks: snapshot.tasks) }
-        guard let user else { syncMessage = "Saved on this iPhone"; return }
-        syncMessage = "Connecting…"
+        guard let user else { syncState = "off"; syncErrorCode = ""; syncMessage = "Saved on this iPhone"; return }
+        syncState = "syncing"; syncErrorCode = ""; syncMessage = "Connecting…"
         let owner = user.uid
+        let session = sessionID
         listeners.append(db.collection("users").document(owner).collection("tasks").addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, error in
             Task { @MainActor in
-                guard let self, self.uid == owner else { return }
-                if let error { self.errorMessage = error.localizedDescription; return }
+                guard let self, self.uid == owner, self.sessionID == session else { return }
+                if let error { self.syncState = "error"; self.syncMessage = error.localizedDescription; self.syncErrorCode = String((error as NSError).code); return }
                 guard let snap else { return }
                 var rows: [TaskRecord] = []
                 do { rows = try snap.documents.map { try TaskRecord(dictionary: $0.data(), documentID: $0.documentID) } }
                 catch { self.errorMessage = "A cloud task could not be read: \(error.localizedDescription)"; return }
                 self.receive(rows)
-                self.cloudReady = true
+                self.cloudReady = !snap.metadata.isFromCache
+                self.syncState = snap.metadata.isFromCache ? "offline" : "syncing"
+                self.syncErrorCode = ""
                 self.syncMessage = snap.metadata.isFromCache ? "Offline · changes saved locally" : "Connected"
                 self.scheduleSync()
             }
         })
         listeners.append(db.collection("users").document(owner).collection("meta").document("projects").addSnapshotListener { [weak self] snap, error in
             Task { @MainActor in
-                guard let self, self.uid == owner else { return }
-                if let error { self.errorMessage = error.localizedDescription; return }
+                guard let self, self.uid == owner, self.sessionID == session else { return }
+                if let error { self.syncState = "error"; self.syncMessage = error.localizedDescription; self.syncErrorCode = String((error as NSError).code); return }
                 guard let snap, snap.exists else { return }
                 self.receiveProjects(ProjectState(dictionary: snap.data() ?? [:])); self.scheduleSync()
             }
@@ -237,6 +248,10 @@ final class AppStore: ObservableObject {
         }
         if let selection { selectedProject = snapshot.projectState.resolve(selection) }
     }
+    func retrySync() {
+        guard !testing, let user = Auth.auth().currentUser else { return }
+        selectUser(user, force: true)
+    }
     func scheduleSync() {
         guard !testing, uid != nil, worker == nil, cloudReady else { return }
         let owner = uid
@@ -256,6 +271,8 @@ final class AppStore: ObservableObject {
     }
     private func push() async {
         guard let owner = uid else { return }
+        let session = sessionID
+        syncState = "syncing"
         do {
             let pending = snapshot.pending
             for (id, edit) in pending {
@@ -271,7 +288,7 @@ final class AppStore: ObservableObject {
                         return merged.dictionary
                     } catch { errorPointer?.pointee = error as NSError; return nil }
                 }
-                guard uid == owner, let dictionary = result as? [String: Any] else { return }
+                guard uid == owner, sessionID == session, !Task.isCancelled, let dictionary = result as? [String: Any] else { return }
                 let committed = try TaskRecord(dictionary: dictionary)
                 _ = commitLocal { state in
                     guard let i = state.tasks.firstIndex(where: { $0.id == id }) else { return }
@@ -293,10 +310,21 @@ final class AppStore: ObservableObject {
                         transaction.setData(data, forDocument: target); return state.dictionary
                     } catch { errorPointer?.pointee = error as NSError; return nil }
                 }
-                if uid == owner, let result = result as? [String: Any] { receiveProjects(ProjectState(dictionary: result)) }
+                if uid == owner, sessionID == session, !Task.isCancelled, let result = result as? [String: Any] { receiveProjects(ProjectState(dictionary: result)) }
             }
-            if uid == owner { await syncAttachments(owner: owner); syncMessage = hasOutstandingAttachments ? "Tasks synced · attachments pending" : "Synced" }
-        } catch { if uid == owner { syncMessage = "Changes saved locally · retrying"; errorMessage = error.localizedDescription } }
+            if uid == owner, sessionID == session, !Task.isCancelled {
+                await syncAttachments(owner: owner)
+                guard uid == owner, sessionID == session, !Task.isCancelled else { return }
+                syncState = snapshot.pending.isEmpty && snapshot.projectQueue.isEmpty ? "synced" : "syncing"
+                syncErrorCode = ""
+                syncMessage = syncState == "syncing" ? "Changes saved locally · syncing" : (hasOutstandingAttachments ? "Tasks synced · attachments pending" : "Synced")
+            }
+        } catch {
+            if uid == owner, sessionID == session, !Task.isCancelled {
+                syncState = "error"; syncErrorCode = String((error as NSError).code)
+                syncMessage = "Changes saved locally · retrying: \(error.localizedDescription)"
+            }
+        }
     }
     func signIn(email: String, password: String, create: Bool) async {
         do {
@@ -336,7 +364,7 @@ final class AppStore: ObservableObject {
             for child in task.subtasks { if let attachment = child.attachment, needsTransfer(attachment, owner: owner) { jobs.append((task.id, child.id, attachment)) } }
         }
         for (taskID, childID, original) in jobs.prefix(20) {
-            guard uid == owner else { return }
+            guard uid == owner, !Task.isCancelled else { return }
             do {
                 var next = original
                 if case .string(let path) = original["storagePath"] {
@@ -344,7 +372,7 @@ final class AppStore: ObservableObject {
                     let url = attachmentsDirectory.appendingPathComponent(id)
                     if !FileManager.default.fileExists(atPath: url.path) {
                         let data = try await Storage.storage().reference(withPath: path).data(maxSize: Int64(FileSafety.maxBytes))
-                        guard uid == owner else { return }
+                        guard uid == owner, !Task.isCancelled else { return }
                         try FileManager.default.createDirectory(at: attachmentsDirectory, withIntermediateDirectories: true)
                         try data.write(to: url, options: [.atomic, .completeFileProtection])
                     }

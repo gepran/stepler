@@ -108,4 +108,24 @@ final class SteplerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: XCTUnwrap(store.attachmentURL(attachment))), Data([1, 2, 3]))
         XCTAssertThrowsError(try store.storeAttachment(Data(count: FileSafety.maxBytes), name: "large", image: false))
     }
+    @MainActor func testImageAndTaskCopyWritePixelsAndText() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AppStore(testing: true, root: root)
+        let original = UIPasteboard.general.items
+        defer { UIPasteboard.general.items = original }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 15)).image { context in
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 15))
+        }
+        let attachment = try store.storeAttachment(try XCTUnwrap(image.pngData()), name: "copy.png", image: true)
+        XCTAssertTrue(store.copyAttachmentImage(attachment))
+        XCTAssertEqual(UIPasteboard.general.image?.cgImage?.width, image.cgImage?.width)
+        XCTAssertEqual(UIPasteboard.general.image?.cgImage?.height, image.cgImage?.height)
+        var task = TaskRecord(text: "With image"); task.attachment = attachment; task.subtasks = [TaskRecord(text: "Child")]
+        XCTAssertTrue(store.copyTask(task))
+        XCTAssertEqual(UIPasteboard.general.string, "With image\n- Child")
+        XCTAssertNotNil(UIPasteboard.general.image)
+        XCTAssertFalse(store.copyAttachmentImage(["id": .string("missing.png")]))
+    }
+
 }

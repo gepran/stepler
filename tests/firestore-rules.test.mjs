@@ -78,6 +78,20 @@ test(
       assert.rejects(promise, (err) => err.code === "permission-denied");
 
     try {
+      await t.test(
+        "issue reports and report limits are server-only",
+        async () => {
+          for (const name of ["issueReports", "reportLimits"]) {
+            await denied(getDoc(doc(alice, name, "private-report")));
+            await denied(getDocs(collection(alice, name)));
+            await denied(
+              setDoc(doc(alice, name, "private-report"), {
+                title: "Spoofed report",
+              }),
+            );
+          }
+        },
+      );
       for (const [db, uid] of [
         [alice, "alice"],
         [bob, "bob"],

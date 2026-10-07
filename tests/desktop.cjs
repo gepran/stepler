@@ -1,5 +1,12 @@
 /* Runs the actual built app with disposable data, never the user's profile. */
-const { app, BrowserWindow } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  clipboard,
+  ClipboardItem,
+  nativeImage,
+  net,
+} = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -95,6 +102,15 @@ const flat = (data) => [
   ...data.tasks,
   ...data.history.flatMap((day) => day.tasks),
 ];
+async function clipboardImage() {
+  const item = (await clipboard.read()).find((item) =>
+    item.types.includes("image/png"),
+  );
+  if (!item) return nativeImage.createEmpty();
+  return nativeImage.createFromBuffer(
+    Buffer.from(await (await item.getType("image/png")).arrayBuffer()),
+  );
+}
 const passed = [];
 async function check(name, action) {
   await action();
@@ -525,6 +541,22 @@ app.once("browser-window-created", (_event, created) => {
       await check("reminder save and clear persist", async () => {
         await evaluate(
           (id) =>
+            document
+              .getElementById(`task-${id}`)
+              .dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+          ids[0],
+        );
+        await until(
+          (id) =>
+            [
+              ...document
+                .getElementById(`task-${id}`)
+                .querySelectorAll("button"),
+            ].some((button) => button.textContent.trim() === "Remind"),
+          ids[0],
+        );
+        await evaluate(
+          (id) =>
             [
               ...document
                 .getElementById(`task-${id}`)
@@ -773,6 +805,253 @@ app.once("browser-window-created", (_event, created) => {
           flat(await data()).some((t) => t.attachment?.name === "paste.png"),
         );
       });
+
+      await check(
+        "native and browser-decoded images reach the OS clipboard",
+        async () => {
+          const original = await Promise.all(
+            (await clipboard.read()).map(
+              async (item) =>
+                new ClipboardItem(
+                  Object.fromEntries(
+                    await Promise.all(
+                      item.types.map(async (type) => [
+                        type,
+                        await item.getType(type),
+                      ]),
+                    ),
+                  ),
+                ),
+            ),
+          );
+          try {
+            const png = fs.readFileSync(
+              path.join(__dirname, "../resources/icon.png"),
+            );
+            const saved = await evaluate(
+              (bytes) =>
+                window.electron.ipcRenderer.invoke("save-attachment", {
+                  bytes: new Uint8Array(bytes),
+                  name: "icon.png",
+                  type: "image",
+                }),
+              Array.from(png),
+            );
+            assert.ok(saved.success);
+            assert.ok(
+              (await ipc("copy-attachment-image", { id: saved.attachment.id }))
+                .success,
+            );
+            assert.equal((await clipboardImage()).isEmpty(), false);
+            assert.equal(
+              (
+                await ipc("copy-task", {
+                  text: "Image and text",
+                  attachmentId: saved.attachment.id,
+                  imageExpected: true,
+                })
+              ).withImage,
+              true,
+            );
+            assert.equal(await clipboard.readText(), "Image and text");
+            assert.equal((await clipboardImage()).isEmpty(), false);
+            assert.equal(
+              (
+                await ipc("copy-attachment-file", {
+                  id: saved.attachment.id,
+                  name: "icon.png",
+                })
+              ).mode,
+              "file",
+            );
+            const fileItem = (await clipboard.read()).find((item) =>
+              item.types.includes("text/uri-list"),
+            );
+            assert.ok(fileItem);
+            assert.ok(
+              (await (await fileItem.getType("text/uri-list")).text()).includes(
+                "icon.png",
+              ),
+            );
+            assert.equal(
+              (
+                await evaluate(() =>
+                  window.electron.ipcRenderer.invoke("copy-image-bytes", {
+                    bytes: new Uint8Array([1, 2, 3]),
+                  }),
+                )
+              ).success,
+              false,
+            );
+            const svg =
+              '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="red"/></svg>';
+            await evaluate((svg) => {
+              window.reviewSetValue(
+                document.querySelector("textarea"),
+                "SVG clipboard check",
+              );
+              const transfer = new DataTransfer();
+              transfer.items.add(
+                new File([svg], "clipboard.svg", { type: "image/svg+xml" }),
+              );
+              document.querySelector("textarea").dispatchEvent(
+                new ClipboardEvent("paste", {
+                  bubbles: true,
+                  cancelable: true,
+                  clipboardData: transfer,
+                }),
+              );
+            }, svg);
+            await until(() =>
+              [...document.images].some(
+                (img) =>
+                  img.alt === "clipboard.svg" && img.src.startsWith("blob:"),
+              ),
+            );
+            await evaluate(() =>
+              document
+                .querySelector("textarea")
+                .dispatchEvent(
+                  new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+                ),
+            );
+            await until(() =>
+              [...document.images].some(
+                (img) =>
+                  img.alt === "clipboard.svg" &&
+                  img.src.startsWith("stepler-file:"),
+              ),
+            );
+            await evaluate(() =>
+              [...document.images]
+                .find(
+                  (img) =>
+                    img.alt === "clipboard.svg" &&
+                    img.src.startsWith("stepler-file:"),
+                )
+                .click(),
+            );
+            await until(() =>
+              document.querySelector('[data-testid="file-preview"]'),
+            );
+            clipboard.clear();
+            await evaluate(() =>
+              document
+                .querySelector(
+                  '[data-testid="file-preview"] button[title="Copy image"]',
+                )
+                .click(),
+            );
+            for (
+              let attempt = 0;
+              attempt < 60 && (await clipboardImage()).isEmpty();
+              attempt++
+            )
+              await delay(50);
+            assert.deepEqual((await clipboardImage()).getSize(), {
+              width: 40,
+              height: 30,
+            });
+            await evaluate(() =>
+              document.querySelector('[data-testid="file-preview"]').click(),
+            );
+          } finally {
+            if (original.length) await clipboard.write(original);
+            else clipboard.clear();
+          }
+        },
+      );
+
+      await check(
+        "report modal preserves failed drafts and confirms only a server receipt",
+        async () => {
+          const originalFetch = net.fetch;
+          let requests = 0;
+          try {
+            net.fetch = async (url, options) => {
+              assert.equal(
+                url,
+                "https://us-central1-stepler-490308.cloudfunctions.net/reportIssue",
+              );
+              const report = JSON.parse(options.body);
+              assert.equal(report.title, "Copy image problem");
+              assert.equal(
+                report.description,
+                "Copying my image did not put pixels on the clipboard.",
+              );
+              assert.equal(report.diagnostics.platform, process.platform);
+              assert.equal(report.diagnostics.tasks, undefined);
+              requests++;
+              if (requests === 1)
+                throw new Error("Simulated report network failure");
+              return new Response(
+                JSON.stringify({ success: true, id: report.id }),
+                { status: 202 },
+              );
+            };
+            win.webContents.send("open-settings");
+            await until(() =>
+              [...document.querySelectorAll("button")].some(
+                (b) => b.textContent.trim() === "Report an issue",
+              ),
+            );
+            await evaluate(() =>
+              [...document.querySelectorAll("button")]
+                .find((b) => b.textContent.trim() === "Report an issue")
+                .click(),
+            );
+            await until(() =>
+              document.querySelector('input[aria-label="Issue title"]'),
+            );
+            await evaluate(() => {
+              window.reviewSetValue(
+                document.querySelector('input[aria-label="Issue title"]'),
+                "Copy image problem",
+              );
+              window.reviewSetValue(
+                document.querySelector('textarea[aria-label="What happened?"]'),
+                "Copying my image did not put pixels on the clipboard.",
+              );
+            });
+            await delay(100);
+            await evaluate(() =>
+              document.querySelector('[role="dialog"] form').requestSubmit(),
+            );
+            await until(() =>
+              document
+                .querySelector('[role="alert"]')
+                ?.textContent.includes("Simulated report network failure"),
+            );
+            assert.equal(
+              await evaluate(
+                () =>
+                  document.querySelector('input[aria-label="Issue title"]')
+                    .value,
+              ),
+              "Copy image problem",
+            );
+            await evaluate(() =>
+              document.querySelector('[role="dialog"] form').requestSubmit(),
+            );
+            await until(() =>
+              document.querySelector('[role="dialog"] [role="status"]'),
+            );
+            assert.equal(requests, 2);
+            await evaluate(() =>
+              document
+                .querySelector('[role="dialog"] button[aria-label="Close"]')
+                .click(),
+            );
+            await evaluate(() =>
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+              ),
+            );
+          } finally {
+            net.fetch = originalFetch;
+          }
+        },
+      );
 
       await check(
         "attachment write failure keeps the draft and retry creates only one task",

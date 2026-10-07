@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("stepler.theme") private var theme = "system"
     @State private var auth = false
+    @State private var reporting = false
     @State private var editing: Project?
     @State private var newProject = ""
     @State private var exporting = false
@@ -27,8 +28,9 @@ struct SettingsView: View {
                 Section("Account & sync") {
                     if store.uid != nil {
                         LabeledContent("Signed in", value: store.email ?? "Firebase account")
+                        Text(store.syncMessage).font(.caption).foregroundStyle(.secondary)
                         if let profile = store.profile { LabeledContent("Handle", value: "@\(profile.username)") }
-                        Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { store.scheduleSync() }
+                        Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { store.retrySync() }
                         Button("Sign out", role: .destructive) { store.signOut() }
                     } else {
                         Text("Your tasks are saved on this iPhone. Sign in to sync with your Mac and the web app.").font(.footnote).foregroundStyle(.secondary)
@@ -60,11 +62,13 @@ struct SettingsView: View {
                     Button("Import tasks", systemImage: "square.and.arrow.down") { importing = true }
                     Text("Account profiles are kept separately on this iPhone. Use export/import to copy local tasks into an account.").font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Support") { Button("Report an issue", systemImage: "ladybug") { reporting = true }.accessibilityIdentifier("report.open") }
                 if let notice { Section { Text(notice).font(.footnote).foregroundStyle(.secondary) } }
                 Section { HStack { Image("Brand").resizable().frame(width: 28, height: 28).clipShape(RoundedRectangle(cornerRadius: 7)); Text("Stepler").fontWeight(.semibold); Spacer(); Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · iOS").font(.caption).foregroundStyle(.secondary) } }
             }.navigationTitle("Settings")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("settings.done") } }
                 .sheet(isPresented: $auth) { AuthView() }
+                .sheet(isPresented: $reporting) { IssueReportView() }
                 .sheet(item: $editing) { ProjectEditor(project: $0) }
                 .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "stepler-export") { result in if case .failure(let error) = result { store.errorMessage = error.localizedDescription } }
                 .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in

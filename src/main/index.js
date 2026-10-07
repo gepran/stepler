@@ -15,6 +15,7 @@ import {
   nativeImage,
   safeStorage,
   Tray,
+  powerMonitor,
 } from "electron";
 import { join, basename, extname } from "path";
 import { translations } from "../renderer/src/lib/translations";
@@ -49,6 +50,13 @@ import { randomUUID, randomBytes, createHash, timingSafeEqual } from "crypto";
 import { execFile } from "child_process";
 import http from "http";
 import * as sync from "./sync";
+import {
+  writeClipboardImage,
+  snapshotClipboard,
+  restoreClipboard,
+  copyFileReference,
+} from "./clipboard";
+import { postIssueReport } from "../renderer/src/lib/issue-reports";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 
@@ -1209,8 +1217,7 @@ end tell`);
  * put the clipboard back exactly as it was, images included.
  */
 async function copySelectionViaClipboard() {
-  const before = clipboard.readText();
-  const beforeImage = clipboard.readImage();
+  const before = await snapshotClipboard();
   try {
     // Comparing before with after cannot tell "copied the same words again"
     // from "copied nothing", so start from empty.
@@ -1228,7 +1235,7 @@ async function copySelectionViaClipboard() {
     let after = "";
     for (let i = 0; i < 12; i += 1) {
       await new Promise((r) => setTimeout(r, 50));
-      after = clipboard.readText();
+      after = await clipboard.readText();
       if (after) break;
     }
     return after || null;
@@ -1236,9 +1243,7 @@ async function copySelectionViaClipboard() {
     console.warn("Selection capture failed:", err.message);
     return null;
   } finally {
-    if (before) clipboard.writeText(before);
-    else if (!beforeImage.isEmpty()) clipboard.writeImage(beforeImage);
-    else clipboard.clear();
+    await restoreClipboard(before);
   }
 }
 
@@ -2206,7 +2211,34 @@ function setupIPC() {
 
   // ---- cloud sync ----
 
+  handle("report-diagnostics", () => {
+    const state = sync.publicStatus();
+    return {
+      platform: process.platform,
+      version: app.getVersion(),
+      syncState: state.state,
+      syncErrorCode: state.errorCode || "",
+      language: loadSettings().language || "en",
+    };
+  });
+  handle("report-issue", async (_, report) => {
+    try {
+      if (
+        !report ||
+        typeof report !== "object" ||
+        JSON.stringify(report).length > 16_384
+      )
+        return { success: false, error: "Invalid report" };
+      return await postIssueReport(report, {
+        token: await sync.reportAuthToken(),
+        fetcher: net.fetch,
+      });
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
   handle("sync-status", () => sync.publicStatus());
+  handle("sync-retry", () => sync.retrySync());
 
   handle("sync-signin-google", async () => {
     // Wait for the client rather than reading a null as "no credentials".
@@ -2381,30 +2413,52 @@ function setupIPC() {
     return { success: true, bytes: readFileSync(p) };
   });
 
-  handle("copy-attachment-image", (_, { id }) => {
+  handle("copy-attachment-image", async (_, { id }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     const img = loadNativeImage(p);
     if (img.isEmpty()) return { success: false, error: "not an image" };
-    clipboard.writeImage(img);
+    await writeClipboardImage(img);
     return { success: true };
   });
 
-  handle("copy-task", (_, { text, attachmentId }) => {
+  handle("copy-image-bytes", async (_, { bytes, text } = {}) => {
+    try {
+      if (
+        !(bytes instanceof Uint8Array) ||
+        !bytes.length ||
+        bytes.length > 64 * 1024 * 1024
+      )
+        return { success: false, error: "Invalid image data" };
+      const img = nativeImage.createFromBuffer(Buffer.from(bytes));
+      if (img.isEmpty()) return { success: false, error: "not an image" };
+      await writeClipboardImage(img, text);
+      return { success: true, withImage: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  handle("copy-task", async (_, { text, attachmentId, imageExpected }) => {
     const body = String(text || "");
     const p = attachmentId ? attachmentPath(attachmentId) : null;
     if (p && existsSync(p)) {
       const img = loadNativeImage(p);
       if (!img.isEmpty()) {
-        clipboard.write({ text: body, image: img });
+        await writeClipboardImage(img, body);
         return { success: true, withImage: true };
       }
     }
-    clipboard.writeText(body);
+    if (imageExpected)
+      return {
+        success: false,
+        error: "Image is missing or could not be decoded",
+      };
+    await clipboard.writeText(body);
     return { success: true, withImage: false };
   });
 
-  handle("copy-attachment-file", (_, { id, name }) => {
+  handle("copy-attachment-file", async (_, { id, name }) => {
     const p = attachmentPath(id);
     if (!p || !existsSync(p)) return { success: false, error: "missing" };
     try {
@@ -2413,15 +2467,8 @@ function setupIPC() {
       const dir = mkdtempSync(join(tmpdir(), "stepler-clipboard-"));
       const target = join(dir, sanitizeFileName(name || basename(p)));
       copyFileSync(p, target);
-      if (isMac) {
-        clipboard.writeBuffer(
-          "public.file-url",
-          Buffer.from(pathToFileURL(target).toString(), "utf8"),
-        );
-        return { success: true, mode: "file" };
-      }
-      clipboard.writeText(target);
-      return { success: true, mode: "path" };
+      await copyFileReference(target);
+      return { success: true, mode: "file" };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -2585,8 +2632,8 @@ function setupIPC() {
     };
   });
 
-  handle("copy-text", (_, text) => {
-    clipboard.writeText(String(text ?? ""));
+  handle("copy-text", async (_, text) => {
+    await clipboard.writeText(String(text ?? ""));
     return { success: true };
   });
 
@@ -3482,6 +3529,11 @@ async function handleFirebaseCallback(url, send) {
  * re-stamped and bounced straight back.
  */
 function startSync() {
+  powerMonitor.on("resume", () => {
+    sync
+      .retrySync()
+      .catch((error) => console.warn("Sync resume:", error.code || "unknown"));
+  });
   sync.initSync({
     selectAccount: selectLocalAccount,
     getData: () => loadAppData(),

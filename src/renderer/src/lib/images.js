@@ -168,3 +168,48 @@ export function compressImage(file, name) {
     new Promise((resolve) => setTimeout(() => resolve(null), TIMEOUT_MS)),
   ]);
 }
+
+/** Convert browser-supported images to the PNG format accepted by every OS clipboard. */
+export async function imageAsPng(bytes, name = "") {
+  const types = {
+    svg: "image/svg+xml",
+    webp: "image/webp",
+    gif: "image/gif",
+    avif: "image/avif",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+  };
+  const blob = new Blob([bytes], {
+    type:
+      types[name.split(".").pop().toLowerCase()] || "application/octet-stream",
+  });
+  const url = URL.createObjectURL(blob);
+  let timer;
+  try {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("Image decoding timed out")),
+        TIMEOUT_MS,
+      );
+      img.onload = resolve;
+      img.onerror = () => reject(new Error("This image could not be decoded"));
+      img.src = url;
+    });
+    if (
+      !img.naturalWidth ||
+      !img.naturalHeight ||
+      img.naturalWidth * img.naturalHeight > 40_000_000
+    )
+      throw new Error("This image is too large to copy");
+    const canvas = makeCanvas(img.naturalWidth, img.naturalHeight);
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    const png = await encode(canvas, "image/png");
+    if (!png) throw new Error("Could not prepare this image for the clipboard");
+    return new Uint8Array(await png.arrayBuffer());
+  } finally {
+    clearTimeout(timer);
+    URL.revokeObjectURL(url);
+  }
+}

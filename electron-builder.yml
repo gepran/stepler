@@ -17,7 +17,7 @@ files:
   - "!{dist-web,vite.web.config.mjs,src/web}"
   # stepler-cli.mjs deliberately stays: it shipped before, and the MCP
   # server next to it is shipped on purpose for the same reason.
-  - "!{index.js,.eslintcache,tests,scripts,ios}"
+  - "!{index.js,.eslintcache,tests,scripts,ios,functions}"
 asarUnpack:
   - resources/**
   # A plain `node` cannot run a file from inside an asar, and pointing a

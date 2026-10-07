@@ -9,11 +9,7 @@
   "hosting": {
     "target": "web",
     "public": "dist-web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "cleanUrls": true,
     "redirects": [
       {
@@ -80,5 +76,13 @@
     "ui": {
       "enabled": false
     }
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "reports",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", ".env*", ".secret.local", "test", "*.log"]
+    }
+  ]
 }
