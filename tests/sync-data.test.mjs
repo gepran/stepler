@@ -5,7 +5,82 @@ import {
   rebuildLocal,
   mergeRemote,
   signature,
+  taskFromSignature,
 } from "../src/main/sync-data.js";
+
+const legacyTask = {
+  id: "1790900000000-legacy",
+  text: "Saved before upgrading",
+  completed: false,
+  deleted: false,
+  ymd: "2026-10-02",
+  priority: true,
+  projects: ["Work"],
+  subtasks: [{ id: "child", text: "Child", completed: false }],
+  dueDate: "2026-10-08",
+  reminder: "09:00",
+  attachment: { id: "image.png", name: "image.png" },
+  gcalEventId: "event",
+  gcalLink: "https://calendar.google.com/",
+  appleReminderId: "reminder",
+  jiraKey: "WORK-1",
+  jiraLink: "https://example.com/WORK-1",
+  deletedAt: 123,
+};
+// This is the positional format shipped through 1.3.13, before purged and
+// sortOrder were inserted between priority and projects.
+const legacySignature = JSON.stringify([
+  legacyTask.text,
+  legacyTask.completed,
+  legacyTask.deleted,
+  legacyTask.ymd,
+  legacyTask.priority,
+  legacyTask.projects,
+  legacyTask.subtasks,
+  legacyTask.dueDate,
+  legacyTask.reminder,
+  legacyTask.attachment,
+  legacyTask.gcalEventId,
+  legacyTask.gcalLink,
+  legacyTask.appleReminderId,
+  legacyTask.jiraKey,
+  legacyTask.jiraLink,
+  legacyTask.deletedAt,
+]);
+
+test("upgrading a legacy sync baseline preserves every field's position", () => {
+  assert.deepEqual(
+    taskFromSignature(legacySignature, legacyTask.id),
+    legacyTask,
+  );
+  const current = { ...legacyTask, purged: false, sortOrder: 456 };
+  assert.deepEqual(taskFromSignature(signature(current), current.id), current);
+  for (const invalid of ['{"unexpected":true}', "[]", "null", "invalid"])
+    assert.equal(taskFromSignature(invalid, legacyTask.id), null);
+});
+
+test("a legacy baseline merges queued edits with cloud changes after upgrading", () => {
+  const local = {
+    ...legacyTask,
+    text: "Edited offline before upgrading",
+    subtasks: [{ ...legacyTask.subtasks[0], completed: true }],
+  };
+  const remote = {
+    ...legacyTask,
+    projects: ["Work", "Shared"],
+    subtasks: [{ ...legacyTask.subtasks[0], text: "Edited on another device" }],
+  };
+  const result = mergeRemote([local], [remote], {
+    [local.id]: legacySignature,
+  });
+  assert.equal(result.merged[0].text, local.text);
+  assert.deepEqual(result.merged[0].projects, remote.projects);
+  assert.deepEqual(result.merged[0].subtasks, [
+    { id: "child", text: "Edited on another device", completed: true },
+  ]);
+  assert.equal(result.merged[0].reminder, "09:00");
+  assert.deepEqual(result.applied, [remote]);
+});
 
 test("remote removal clears optional fields and preserves a downloaded attachment id", () => {
   const local = {

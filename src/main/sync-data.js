@@ -85,6 +85,12 @@ export const CARRIED = [
   "deletedAt",
 ];
 
+// Releases through 1.3.13 persisted these fields before purged and sortOrder
+// were inserted. Decode the published layouts before merging queued edits.
+const LEGACY_CARRIED = CARRIED.filter(
+  (key) => !["purged", "sortOrder"].includes(key),
+);
+
 /**
  * Sort object keys all the way down, leaving array order alone because the
  * order of subtasks is meaningful.
@@ -125,11 +131,25 @@ export function signature(t) {
 
 export function taskFromSignature(value, id) {
   try {
-    const [text, completed, deleted, ymd, ...fields] = JSON.parse(value);
+    const decoded = JSON.parse(value);
+    if (!Array.isArray(decoded)) return null;
+    const [text, completed, deleted, ymd, ...fields] = decoded;
+    const layout =
+      fields.length === CARRIED.length
+        ? CARRIED
+        : fields.length === LEGACY_CARRIED.length
+          ? LEGACY_CARRIED
+          : null;
+    if (!layout) return null;
     const task = { id, text, completed, deleted, ymd };
-    CARRIED.forEach((key, index) => {
+    layout.forEach((key, index) => {
       if (fields[index] != null) task[key] = fields[index];
     });
+    if (
+      (task.projects != null && !Array.isArray(task.projects)) ||
+      (task.subtasks != null && !Array.isArray(task.subtasks))
+    )
+      return null;
     return task;
   } catch {
     return null;
