@@ -2,6 +2,7 @@ import { sortProjects } from "../lib/projects";
 import { useState, useEffect, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
 import GuideTab from "./GuideTab";
+import { version } from "../../../../package.json";
 import IssueReportModal from "./IssueReportModal";
 import DeletedTasksList from "./DeletedTasksList";
 import CollaborationPanel from "./CollaborationPanel";
@@ -20,6 +21,8 @@ import {
 } from "../lib/labels";
 import {
   BookOpen,
+  Keyboard,
+  Info,
   Bug,
   X,
   SunMedium,
@@ -207,9 +210,10 @@ function Choice({ selected, onClick, Icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`btn-tactile flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border py-3 transition-all ${
+      aria-pressed={selected}
+      className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border py-3 transition-all ${
         selected
-          ? "border-neutral-900 bg-neutral-900 text-white shadow-sm dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+          ? "border-orange-400 bg-orange-50 text-orange-700 dark:border-orange-500/50 dark:bg-orange-500/10 dark:text-orange-300"
           : "border-neutral-200/80 bg-neutral-50/60 text-neutral-500 hover:border-neutral-300 hover:bg-white dark:border-neutral-800 dark:bg-neutral-800/30 dark:text-neutral-400 dark:hover:bg-neutral-800"
       }`}
     >
@@ -231,29 +235,24 @@ Choice.propTypes = {
  * becomes a button — that is the global shortcut, the only one you can change.
  */
 function KeyCard({ combo, caption, action, onClick }) {
-  const body = (
-    <>
-      <kbd className="inline-flex items-center rounded-lg border border-neutral-200 bg-white px-2.5 py-1 font-mono text-[13px] font-bold tracking-wider text-neutral-800 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
-        {combo}
-      </kbd>
-      <span className="mt-2 block text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+  return (
+    <div className="flex items-center gap-4 py-4">
+      <span className="min-w-0 flex-1 text-[13px] leading-relaxed text-neutral-600 dark:text-neutral-300">
         {caption}
       </span>
-    </>
-  );
-
-  if (!onClick) return <Card className="px-4 py-3.5">{body}</Card>;
-
-  return (
-    <Card className="relative px-4 py-3.5 transition-colors hover:border-neutral-300 dark:hover:border-neutral-700">
-      <button
-        onClick={onClick}
-        className="absolute right-3 top-3 cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-200/70 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700/70 dark:hover:text-neutral-100"
-      >
-        {action}
-      </button>
-      {body}
-    </Card>
+      <kbd className="shrink-0 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 font-mono text-xs font-semibold text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+        {combo}
+      </kbd>
+      {onClick && (
+        <button
+          type="button"
+          onClick={onClick}
+          className="text-xs font-medium text-orange-600 hover:underline dark:text-orange-300"
+        >
+          {action}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -818,6 +817,7 @@ UpdateCorner.propTypes = { onRevealed: PropTypes.func };
 
 export default function SettingsPanel({
   settings: initialSettings,
+  initialTab = "general",
   onClose,
   onExport,
   onImport,
@@ -843,7 +843,7 @@ export default function SettingsPanel({
   const [editingProjectName, setEditingProjectName] = useState("");
   const [colorPickerKey, setColorPickerKey] = useState(null);
 
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const recorderRef = useRef(null);
 
   // The connect callback fires from a mount-only effect, so read the latest
@@ -984,10 +984,28 @@ export default function SettingsPanel({
 
   const tabs = {
     general: {
-      label: t("settings.tabs.general"),
+      label: t("settings.general.appearance"),
       Icon: SunMedium,
-      title: t("settings.general.title"),
-      subtitle: t("settings.subtitles.general"),
+      title: t("settings.general.appearance"),
+      subtitle: t("settings.design.appearanceHint"),
+    },
+    account: {
+      label: t("settings.design.account"),
+      Icon: Cloud,
+      title: t("settings.sync.title"),
+      subtitle: t("settings.design.accountHint"),
+    },
+    shortcuts: {
+      label: t("settings.general.shortcut"),
+      Icon: Keyboard,
+      title: t("settings.general.shortcut"),
+      subtitle: t("settings.design.shortcutsHint"),
+    },
+    about: {
+      label: t("settings.design.about"),
+      Icon: Info,
+      title: t("settings.design.about"),
+      subtitle: t("settings.design.aboutHint"),
     },
     projects: {
       label: t("settings.tabs.projects"),
@@ -999,7 +1017,7 @@ export default function SettingsPanel({
       label: t("settings.tabs.integrations"),
       Icon: Calendar,
       title: t("settings.integrations.title"),
-      subtitle: t("settings.subtitles.integrations"),
+      subtitle: t("settings.design.integrationsHint"),
     },
     collab: {
       label: t("settings.tabs.collab"),
@@ -1036,26 +1054,32 @@ export default function SettingsPanel({
   // how it looks and behaves, what it talks to, what it holds, where to read
   // about it.
   const navGroups = [
-    { label: t("settings.nav.app"), ids: ["general", "projects"] },
-    { label: t("settings.nav.connections"), ids: ["integrations", "collab"] },
+    { label: t("settings.nav.app"), ids: ["general", "shortcuts", "projects"] },
+    {
+      label: t("settings.nav.connections"),
+      ids: ["account", "collab", "integrations"],
+    },
     { label: t("settings.nav.dataGroup"), ids: ["data", "trash"] },
-    { label: t("settings.nav.help"), ids: ["guide"] },
+    { label: t("settings.nav.help"), ids: ["guide", "about"] },
   ];
 
   const current = tabs[activeTab] || tabs.general;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/35 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
     >
       <div
-        className="flex h-[620px] max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-900"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("settings.title")}
+        className="flex h-[700px] max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl sm:flex-row dark:border-neutral-800 dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/60 dark:border-neutral-800 dark:bg-neutral-900/50">
-          <div className="flex items-center gap-2.5 px-4 pb-4 pt-5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black text-white dark:bg-white dark:text-black">
+        <div className="flex w-full shrink-0 flex-col border-b border-neutral-200 bg-neutral-50 sm:w-52 sm:border-r sm:border-b-0 dark:border-neutral-800 dark:bg-neutral-950/60">
+          <div className="flex items-center gap-2.5 px-5 py-4 sm:py-6">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-300">
               <SunMedium size={15} />
             </div>
             <h2 className="text-[15px] font-bold text-neutral-800 dark:text-neutral-100">
@@ -1063,30 +1087,44 @@ export default function SettingsPanel({
             </h2>
           </div>
 
-          <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+          <nav
+            aria-label={t("settings.title")}
+            className="flex gap-2 overflow-x-auto px-3 pb-3 sm:min-h-0 sm:flex-1 sm:flex-col sm:overflow-y-auto sm:px-3"
+          >
             {navGroups.map((group) => (
-              <div key={group.label} className="mb-3 last:mb-0">
-                <div className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-neutral-400 dark:text-neutral-500">
+              <div
+                key={group.label}
+                className="flex shrink-0 gap-1 sm:mb-3 sm:block sm:last:mb-0"
+              >
+                <div className="hidden px-2.5 pb-2 text-[10.5px] font-medium text-neutral-400 sm:block dark:text-neutral-500">
                   {group.label}
                 </div>
-                <div className="space-y-0.5">
+                <div className="flex gap-1 sm:block sm:space-y-1">
                   {group.ids.map((id) => {
                     const { label, Icon, badge } = tabs[id];
                     return (
                       <button
                         key={id}
-                        onClick={() => setActiveTab(id)}
-                        className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                        title={label}
+                        onClick={() => {
+                          setRecording(false);
+                          setActiveTab(id);
+                        }}
+                        aria-current={activeTab === id ? "page" : undefined}
+                        className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium whitespace-nowrap transition-colors ${
                           activeTab === id
-                            ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-white dark:ring-neutral-700"
+                            ? "bg-orange-500/10 text-orange-700 dark:text-orange-300"
                             : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
                         }`}
                       >
                         <Icon
                           size={15}
+                          className="shrink-0"
                           strokeWidth={activeTab === id ? 2.5 : 2}
                         />
-                        {label}
+                        <span className="sm:min-w-0 sm:text-left sm:leading-snug sm:whitespace-normal">
+                          {label}
+                        </span>
                         {badge > 0 && (
                           <span className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-100 px-1 text-[10.5px] font-semibold text-red-500 dark:bg-red-500/10">
                             {badge > 99 ? "99+" : badge}
@@ -1100,51 +1138,63 @@ export default function SettingsPanel({
             ))}
           </nav>
 
-          {/* The corner: which build this is, whether there is a newer one,
-              and the way out. The version is worth having here rather than
-              buried in an About box — it is the first thing anybody is asked
-              for when something goes wrong. */}
-          <div className="shrink-0 space-y-2 border-t border-neutral-200/70 p-3 dark:border-neutral-800">
-            <UpdateCorner onRevealed={onToast} />
-            <button
-              type="button"
-              onClick={() => setReporting(true)}
-              className={`${BTN_GHOST} w-full`}
-            >
-              <Bug size={14} />
-              {t("report.title")}
-            </button>
-            {reporting && (
-              <IssueReportModal onClose={() => setReporting(false)} />
-            )}
-            <button onClick={onClose} className={`${BTN_GHOST} w-full`}>
-              <X size={14} />
-              {t("common.close")}
-            </button>
+          <div className="hidden shrink-0 border-t border-neutral-200/70 px-5 py-4 text-[11px] text-neutral-400 sm:block dark:border-neutral-800">
+            Stepler <span className="float-right tabular-nums">{version}</span>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Where you are stays on screen. Scrolling a long tab used to take
               its own title away with it. */}
-          <header className="shrink-0 border-b border-neutral-200/70 px-7 py-4 dark:border-neutral-800">
-            <h3 className="text-[16px] font-bold text-neutral-800 dark:text-neutral-100">
-              {current.title}
-            </h3>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
-              {current.subtitle}
-            </p>
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-neutral-200/70 px-6 py-5 dark:border-neutral-800">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                {current.title}
+              </h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                {current.subtitle}
+              </p>
+            </div>
+            <button
+              type="button"
+              autoFocus
+              onClick={onClose}
+              aria-label={t("common.close")}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            >
+              <X size={18} />
+            </button>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+          <div
+            key={activeTab}
+            className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-6"
+          >
+            {activeTab === "account" && <SyncSection />}
+            {activeTab === "about" && (
+              <div className="space-y-5">
+                <UpdateCorner onRevealed={onToast} />
+                <Row
+                  icon={<Bug size={18} />}
+                  title={t("report.title")}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setReporting(true)}
+                      className={BTN_GHOST}
+                    >
+                      {t("report.title")}
+                    </button>
+                  }
+                />
+              </div>
+            )}
             {activeTab === "general" && (
               <div>
-                <SyncSection />
-
                 {/* Theme and language are the same kind of choice — three
                     tiles, pick one — so they are drawn at the same size and
                     sit side by side rather than stacked down the page. */}
-                <div className="mb-7 grid grid-cols-2 gap-5">
+                <div className="space-y-8">
                   <section>
                     <SectionLabel>
                       {t("settings.general.appearance")}
@@ -1198,7 +1248,10 @@ export default function SettingsPanel({
                     </div>
                   </section>
                 </div>
-
+              </div>
+            )}
+            {activeTab === "shortcuts" && (
+              <div>
                 {/* Every key the app answers to, in one place. Only the first
                     is yours to change; the other three are fixed, and a person
                     who never opens a menu would otherwise never learn them. */}
@@ -1218,7 +1271,7 @@ export default function SettingsPanel({
                       </span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                       <KeyCard
                         combo={formatAcceleratorForDisplay(settings.hotkey)}
                         caption={t("settings.general.keyGlobal")}
@@ -1532,34 +1585,39 @@ export default function SettingsPanel({
                   }
                 >
                   {!gcalStatus.configured && (
-                    <div className="mt-3.5 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
-                      <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
-                        {t("settings.integrations.gcalCredsBefore")}{" "}
-                        <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11.5px] dark:bg-neutral-800">
-                          stepler-integrations.json
-                        </code>{" "}
-                        {t("settings.integrations.gcalCredsAfter")}
+                    <details className="mt-3 border-t border-neutral-200/80 pt-3 dark:border-neutral-700/50">
+                      <summary className="cursor-pointer text-[12px] font-medium text-orange-600 dark:text-orange-300">
+                        {t("settings.design.setup")}
+                      </summary>
+                      <div className="pt-3">
+                        <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+                          {t("settings.integrations.gcalCredsBefore")}{" "}
+                          <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11.5px] dark:bg-neutral-800">
+                            stepler-integrations.json
+                          </code>{" "}
+                          {t("settings.integrations.gcalCredsAfter")}
+                        </div>
+                        <div className="mt-2.5 flex gap-2">
+                          <button
+                            onClick={() => ipc?.invoke("open-data-folder")}
+                            className={BTN_GHOST}
+                          >
+                            {t("settings.integrations.openDataFolder")}
+                          </button>
+                          <button
+                            onClick={() =>
+                              ipc?.invoke(
+                                "open-external",
+                                "https://github.com/gepran/stepler#-integrations",
+                              )
+                            }
+                            className={BTN_GHOST}
+                          >
+                            {t("settings.integrations.setupGuide")}
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-2.5 flex gap-2">
-                        <button
-                          onClick={() => ipc?.invoke("open-data-folder")}
-                          className={BTN_GHOST}
-                        >
-                          {t("settings.integrations.openDataFolder")}
-                        </button>
-                        <button
-                          onClick={() =>
-                            ipc?.invoke(
-                              "open-external",
-                              "https://github.com/gepran/stepler#-integrations",
-                            )
-                          }
-                          className={BTN_GHOST}
-                        >
-                          {t("settings.integrations.setupGuide")}
-                        </button>
-                      </div>
-                    </div>
+                    </details>
                   )}
                   {gcalStatus.connected && (
                     <div className="mt-3.5 flex items-center justify-between gap-4 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
@@ -1620,115 +1678,122 @@ export default function SettingsPanel({
                   }
                 >
                   {!jiraStatus.connected && (
-                    <div className="mt-3.5 border-t border-neutral-200/80 pt-3.5 dark:border-neutral-700/50">
-                      <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
-                        {t("settings.integrations.jiraNote")}
-                      </div>
+                    <details className="mt-3 border-t border-neutral-200/80 pt-3 dark:border-neutral-700/50">
+                      <summary className="cursor-pointer text-[12px] font-medium text-orange-600 dark:text-orange-300">
+                        {t("settings.design.setup")}
+                      </summary>
+                      <div className="pt-3">
+                        <div className="text-[12.5px] leading-snug text-neutral-500 dark:text-neutral-400">
+                          {t("settings.integrations.jiraNote")}
+                        </div>
 
-                      <div className="mt-3 grid gap-2">
-                        <input
-                          value={jiraForm.siteUrl}
-                          onChange={(e) =>
-                            setJiraForm((f) => ({
-                              ...f,
-                              siteUrl: e.target.value,
-                            }))
-                          }
-                          placeholder="your-team.atlassian.net"
-                          className={INPUT}
-                        />
-                        <input
-                          value={jiraForm.email}
-                          onChange={(e) =>
-                            setJiraForm((f) => ({
-                              ...f,
-                              email: e.target.value,
-                            }))
-                          }
-                          placeholder={t("settings.integrations.jiraEmail")}
-                          className={INPUT}
-                        />
-                        <input
-                          type="password"
-                          value={jiraForm.token}
-                          onChange={(e) =>
-                            setJiraForm((f) => ({
-                              ...f,
-                              token: e.target.value,
-                            }))
-                          }
-                          placeholder={t("settings.integrations.jiraToken")}
-                          className={INPUT}
-                        />
-                      </div>
-
-                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={async () => {
-                            setJiraBusy(true);
-                            const res = await ipc?.invoke(
-                              "jira-connect-token",
-                              jiraForm,
-                            );
-                            setJiraBusy(false);
-                            if (res?.success) {
-                              setJiraForm({
-                                siteUrl: "",
-                                email: "",
-                                token: "",
-                              });
-                              ipc
-                                ?.invoke("jira-status")
-                                .then((st) => st && setJiraStatus(st));
-                              onToast?.(
-                                t("toast.jiraConnected", {
-                                  name: res.displayName,
-                                }),
-                              );
-                            } else {
-                              onToast?.(
-                                res?.error ||
-                                  t("settings.integrations.jiraConnectFailed"),
-                                "error",
-                              );
+                        <div className="mt-3 grid gap-2">
+                          <input
+                            value={jiraForm.siteUrl}
+                            onChange={(e) =>
+                              setJiraForm((f) => ({
+                                ...f,
+                                siteUrl: e.target.value,
+                              }))
                             }
-                          }}
-                          disabled={jiraBusy}
-                          className={BTN}
-                        >
-                          {jiraBusy
-                            ? t("settings.integrations.jiraChecking")
-                            : t("common.connect")}
-                        </button>
-                        <button
-                          onClick={() =>
-                            ipc?.invoke(
-                              "open-external",
-                              "https://id.atlassian.com/manage-profile/security/api-tokens",
-                            )
-                          }
-                          className={BTN_GHOST}
-                        >
-                          {t("settings.integrations.jiraCreateToken")}
-                        </button>
-                        {jiraStatus.oauthConfigured && (
+                            placeholder="your-team.atlassian.net"
+                            className={INPUT}
+                          />
+                          <input
+                            value={jiraForm.email}
+                            onChange={(e) =>
+                              setJiraForm((f) => ({
+                                ...f,
+                                email: e.target.value,
+                              }))
+                            }
+                            placeholder={t("settings.integrations.jiraEmail")}
+                            className={INPUT}
+                          />
+                          <input
+                            type="password"
+                            value={jiraForm.token}
+                            onChange={(e) =>
+                              setJiraForm((f) => ({
+                                ...f,
+                                token: e.target.value,
+                              }))
+                            }
+                            placeholder={t("settings.integrations.jiraToken")}
+                            className={INPUT}
+                          />
+                        </div>
+
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
                           <button
                             onClick={async () => {
-                              const res = await ipc?.invoke("jira-auth");
-                              if (!res?.success)
+                              setJiraBusy(true);
+                              const res = await ipc?.invoke(
+                                "jira-connect-token",
+                                jiraForm,
+                              );
+                              setJiraBusy(false);
+                              if (res?.success) {
+                                setJiraForm({
+                                  siteUrl: "",
+                                  email: "",
+                                  token: "",
+                                });
+                                ipc
+                                  ?.invoke("jira-status")
+                                  .then((st) => st && setJiraStatus(st));
+                                onToast?.(
+                                  t("toast.jiraConnected", {
+                                    name: res.displayName,
+                                  }),
+                                );
+                              } else {
                                 onToast?.(
                                   res?.error ||
-                                    t("settings.integrations.signInFailed"),
+                                    t(
+                                      "settings.integrations.jiraConnectFailed",
+                                    ),
                                   "error",
                                 );
+                              }
                             }}
+                            disabled={jiraBusy}
+                            className={BTN}
+                          >
+                            {jiraBusy
+                              ? t("settings.integrations.jiraChecking")
+                              : t("common.connect")}
+                          </button>
+                          <button
+                            onClick={() =>
+                              ipc?.invoke(
+                                "open-external",
+                                "https://id.atlassian.com/manage-profile/security/api-tokens",
+                              )
+                            }
                             className={BTN_GHOST}
                           >
-                            {t("settings.integrations.jiraUseOauth")}
+                            {t("settings.integrations.jiraCreateToken")}
                           </button>
-                        )}
+                          {jiraStatus.oauthConfigured && (
+                            <button
+                              onClick={async () => {
+                                const res = await ipc?.invoke("jira-auth");
+                                if (!res?.success)
+                                  onToast?.(
+                                    res?.error ||
+                                      t("settings.integrations.signInFailed"),
+                                    "error",
+                                  );
+                              }}
+                              className={BTN_GHOST}
+                            >
+                              {t("settings.integrations.jiraUseOauth")}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </details>
                   )}
                 </Row>
 
@@ -1752,26 +1817,31 @@ export default function SettingsPanel({
                   />
                 )}
 
-                {/* Local API, and the agents that live off it. The two sit next
-                  to each other because one is useless without the other. */}
-                <Row
-                  icon={<Terminal size={17} className="text-neutral-500" />}
-                  title={t("settings.integrations.cli")}
-                  hint={t("settings.integrations.cliBlurb")}
-                  action={
-                    <Toggle
-                      on={!!settings.apiEnabled}
-                      label={t("settings.integrations.cli")}
-                      onClick={async () => {
-                        await updateSetting({
-                          apiEnabled: !settings.apiEnabled,
-                        });
-                      }}
+                <details className="pt-4">
+                  <summary className="cursor-pointer py-2 text-[13px] font-semibold text-neutral-500">
+                    {t("settings.design.advanced")}
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <Row
+                      icon={<Terminal size={17} className="text-neutral-500" />}
+                      title={t("settings.integrations.cli")}
+                      hint={t("settings.integrations.cliBlurb")}
+                      action={
+                        <Toggle
+                          on={!!settings.apiEnabled}
+                          label={t("settings.integrations.cli")}
+                          onClick={async () => {
+                            await updateSetting({
+                              apiEnabled: !settings.apiEnabled,
+                            });
+                          }}
+                        />
+                      }
                     />
-                  }
-                />
 
-                <AgentSetup enabled={!!settings.apiEnabled} />
+                    <AgentSetup enabled={!!settings.apiEnabled} />
+                  </div>
+                </details>
               </div>
             )}
 
@@ -1842,6 +1912,7 @@ export default function SettingsPanel({
           </div>
         </div>
       </div>
+      {reporting && <IssueReportModal onClose={() => setReporting(false)} />}
     </div>
   );
 }
@@ -1855,6 +1926,7 @@ SettingsPanel.propTypes = {
     accept: PropTypes.func.isRequired,
     remove: PropTypes.func.isRequired,
   }).isRequired,
+  initialTab: PropTypes.string,
   settings: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onExport: PropTypes.func,

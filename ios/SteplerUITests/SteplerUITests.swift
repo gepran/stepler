@@ -121,6 +121,7 @@ final class SteplerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["sidebar.project.Work"].waitForExistence(timeout: 5)); app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(app.buttons["composer.project.Work"].waitForExistence(timeout: 5))
         app.buttons["settings.open"].tap()
+        app.buttons["settings.projects.open"].tap()
         let setting = app.buttons["settings.project.Work"]; XCTAssertTrue(setting.waitForExistence(timeout: 5)); setting.tap()
         app.buttons["project.favorite"].tap(); app.buttons["Done"].firstMatch.tap(); app.buttons["settings.done"].tap()
         XCTAssertTrue(app.buttons["composer.project.Work"].waitForExistence(timeout: 5))
@@ -131,6 +132,27 @@ final class SteplerUITests: XCTestCase {
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'task.row.'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertEqual(row.label, "Must stay saved")
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Stepler iOS timeline"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+    func testMentionPhotosRenderAndOpenPreview() {
+        app.terminate(); app.launchEnvironment["STEPLER_UI_TEST_MENTION_IMAGE"] = "1"; app.launch()
+        app.buttons["mentions.filter"].tap()
+        let photos = app.buttons.matching(identifier: "mention.attachment")
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(photos.count, 2)
+        XCTAssertTrue(app.staticTexts["Photo from a friend"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Stepler shared mention photos"; screenshot.lifetime = .keepAlways; add(screenshot)
+        photos.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Copy image"].waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 5))
+    }
+    func testSettingsSeparatesAppearanceAccountAndProjects() {
+        app.buttons["settings.open"].tap()
+        XCTAssertTrue(app.buttons["settings.account.open"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Sign in"].exists)
+        XCTAssertFalse(app.textFields["settings.newProject"].exists)
+        app.buttons["settings.account.open"].tap()
+        XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 5))
     }
     func testIssueReportModalValidatesAndKeepsFailedDraft() {
         app.buttons["settings.open"].tap()

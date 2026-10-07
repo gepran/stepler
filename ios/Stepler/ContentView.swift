@@ -399,15 +399,43 @@ struct MentionRow: View {
                 Spacer()
                 Button { Task { await store.editMention(mention, priority: !mention.task.priority) } } label: { Image(systemName: mention.task.priority ? "star.fill" : "star") }.buttonStyle(.borderless)
             }
+            if let attachment = mention.task.attachment { MentionAttachment(attachment: attachment) }
             ForEach(mention.task.subtasks) { child in
                 Button {
                     var rows = mention.task.subtasks; if let i = rows.firstIndex(where: { $0.id == child.id }) { rows[i].completed.toggle() }
                     Task { await store.editMention(mention, subtasks: rows) }
                 } label: { Label(child.text, systemImage: child.completed ? "checkmark.circle.fill" : "circle").font(.subheadline) }.buttonStyle(.borderless)
+                if let attachment = child.attachment { MentionAttachment(attachment: attachment).padding(.leading, 24) }
             }
             Button("Add subtask", systemImage: "plus") { addChild = true }.font(.caption).buttonStyle(.borderless)
         }.swipeActions { Button("Dismiss", role: .destructive) { Task { await store.dismissMention(mention) } } }
             .alert("Add subtask", isPresented: $addChild) { TextField("Subtask", text: $childText); Button("Add") { if !childText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { Task { await store.editMention(mention, subtasks: mention.task.subtasks + [TaskRecord(text: childText)]); childText = "" } } }; Button("Cancel", role: .cancel) {} }
+    }
+}
+
+struct MentionAttachment: View {
+    @EnvironmentObject var store: AppStore
+    let attachment: [String: JSONValue]
+    @State private var preview: PreviewFile?
+    var body: some View {
+        Button {
+            if let url = store.attachmentURL(attachment) { preview = PreviewFile(url: url) }
+            else { store.retrySync() }
+        } label: {
+            if let url = store.attachmentURL(attachment), attachment["type"] == .string("image"), let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 180).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("mention.image")
+            } else {
+                Label(attachment["name"].flatMap { if case .string(let name) = $0 { return name }; return nil } ?? "Attachment", systemImage: "paperclip").font(.caption)
+            }
+        }.buttonStyle(.borderless)
+            .contextMenu { if attachment["type"] == .string("image") { Button("Copy image", systemImage: "doc.on.doc") { store.copyAttachmentImage(attachment) } } }
+            .accessibilityIdentifier("mention.attachment")
+            .sheet(item: $preview) { file in
+                NavigationStack { QuickPreview(url: file.url).ignoresSafeArea(edges: .bottom).toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { preview = nil } }
+                    ToolbarItem(placement: .primaryAction) { Button("Copy image", systemImage: "doc.on.doc") { store.copyAttachmentImage(attachment) }.disabled(attachment["type"] != .string("image")) }
+                } }
+            }
     }
 }
 

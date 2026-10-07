@@ -764,6 +764,13 @@ function Timeline({ user, collab, onOpenSettings, searchQuery }) {
                   <MentionTaskItem
                     key={`m-${task.mention.id}`}
                     mention={task.mention}
+                    renderAttachment={(att) => (
+                      <Attachment
+                        key={att.storagePath || att.name}
+                        att={att}
+                        onOpen={setPreview}
+                      />
+                    )}
                     onMarkRead={(id) => report(markMentionRead(uid, id))}
                     onToggle={(m, completed) =>
                       report(editMention(uid, m, { completed }))

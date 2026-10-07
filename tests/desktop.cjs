@@ -598,6 +598,22 @@ app.once("browser-window-created", (_event, created) => {
         );
         await evaluate(
           (id) =>
+            document
+              .getElementById(`task-${id}`)
+              .dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+          ids[0],
+        );
+        await until(
+          (id) =>
+            [
+              ...document
+                .getElementById(`task-${id}`)
+                .querySelectorAll("button"),
+            ].some((b) => b.textContent.trim() === "Remind"),
+          ids[0],
+        );
+        await evaluate(
+          (id) =>
             [
               ...document
                 .getElementById(`task-${id}`)
@@ -758,17 +774,178 @@ app.once("browser-window-created", (_event, created) => {
               },
             ],
           });
-          await until(() => document.querySelector("button[aria-pressed]"));
+          await until(() =>
+            document.querySelector('[data-testid="mentions-filter"]'),
+          );
           const before = flat(await data()).length;
           await evaluate(() =>
-            document.querySelector("button[aria-pressed]").click(),
+            document.querySelector('[data-testid="mentions-filter"]').click(),
           );
           await delay(200);
           assert.equal(flat(await data()).length, before);
           await evaluate(() =>
-            document.querySelector("button[aria-pressed]").click(),
+            document.querySelector('[data-testid="mentions-filter"]').click(),
           );
           await delay(100);
+        },
+      );
+
+      await check(
+        "mention photos and subtask photos render and open a preview",
+        async () => {
+          const saved = await evaluate(
+            (bytes) =>
+              window.electron.ipcRenderer.invoke("save-attachment", {
+                bytes: new Uint8Array(bytes),
+                name: "shared-photo.png",
+                type: "image",
+              }),
+            Array.from(
+              fs.readFileSync(path.join(__dirname, "../resources/icon.png")),
+            ),
+          );
+          assert.ok(saved.success);
+          win.webContents.send("collab-snapshot", {
+            uid: null,
+            profile: null,
+            connections: [],
+            mentions: [
+              {
+                id: `${now}-photo`,
+                taskId: `${now}-photo`,
+                text: "Photo from a friend",
+                fromUid: "other",
+                fromUsername: "friend",
+                attachment: saved.attachment,
+                subtasks: [
+                  {
+                    id: "photo-child",
+                    text: "Another photo",
+                    attachment: saved.attachment,
+                  },
+                ],
+              },
+            ],
+          });
+          await until(
+            () =>
+              document.querySelectorAll(".mention-frame img").length === 2 &&
+              [...document.querySelectorAll(".mention-frame img")].every(
+                (img) => img.naturalWidth > 0,
+              ),
+          );
+          await evaluate(() =>
+            document.querySelector(".mention-frame img").click(),
+          );
+          await until(
+            () =>
+              document.querySelector('[data-testid="file-preview"] img')
+                ?.naturalWidth > 0,
+          );
+          await evaluate(() =>
+            document.querySelector('[data-testid="file-preview"]').click(),
+          );
+        },
+      );
+
+      await check(
+        "settings separates appearance, account, shortcuts and support",
+        async () => {
+          win.webContents.send("open-settings");
+          await until(() => document.querySelector('[role="dialog"] nav'));
+          assert.equal(
+            await evaluate(
+              () => document.querySelector('[role="dialog"] h3').textContent,
+            ),
+            "Appearance",
+          );
+          assert.equal(
+            await evaluate(() =>
+              document
+                .querySelector('[role="dialog"]')
+                .textContent.includes("Show or hide Stepler"),
+            ),
+            false,
+          );
+          if (process.env.STEPLER_SCREENSHOTS_DIR) {
+            await delay(250);
+            fs.mkdirSync(process.env.STEPLER_SCREENSHOTS_DIR, {
+              recursive: true,
+            });
+            fs.writeFileSync(
+              path.join(
+                process.env.STEPLER_SCREENSHOTS_DIR,
+                "settings-dark.png",
+              ),
+              (await win.webContents.capturePage()).toPNG(),
+            );
+          }
+          if (process.env.STEPLER_SCREENSHOTS_DIR) {
+            await evaluate(() =>
+              [...document.querySelectorAll('[role="dialog"] button')]
+                .find((b) => b.textContent.trim() === "Light")
+                .click(),
+            );
+            await evaluate(() =>
+              [...document.querySelectorAll('[role="dialog"] button')]
+                .find((b) => b.textContent.trim() === "ქართული")
+                .click(),
+            );
+            await delay(250);
+            fs.writeFileSync(
+              path.join(
+                process.env.STEPLER_SCREENSHOTS_DIR,
+                "settings-georgian-light.png",
+              ),
+              (await win.webContents.capturePage()).toPNG(),
+            );
+            await evaluate(() =>
+              [...document.querySelectorAll('[role="dialog"] button')]
+                .find((b) => b.textContent.trim() === "English")
+                .click(),
+            );
+            await evaluate(() =>
+              [...document.querySelectorAll('[role="dialog"] button')]
+                .find((b) => b.textContent.trim() === "Dark")
+                .click(),
+            );
+          }
+          await evaluate(() =>
+            [...document.querySelectorAll('[role="dialog"] nav button')]
+              .find((b) => b.textContent.trim() === "Shortcuts")
+              .click(),
+          );
+          await until(() =>
+            document
+              .querySelector('[role="dialog"]')
+              .textContent.includes("Show or hide Stepler"),
+          );
+          await evaluate(() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+          );
+          await until(() => !document.querySelector('[role="dialog"]'));
+          if (process.env.STEPLER_SCREENSHOTS_DIR) {
+            await evaluate(() =>
+              document
+                .querySelector("aside")
+                .dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+            );
+            await delay(250);
+            fs.writeFileSync(
+              path.join(process.env.STEPLER_SCREENSHOTS_DIR, "sidebar.png"),
+              (await win.webContents.capturePage()).toPNG(),
+            );
+            await evaluate(() =>
+              document.querySelector("aside").dispatchEvent(
+                new MouseEvent("mouseout", {
+                  bubbles: true,
+                  relatedTarget: document.querySelector("main"),
+                }),
+              ),
+            );
+          }
         },
       );
 
@@ -991,6 +1168,12 @@ app.once("browser-window-created", (_event, created) => {
               );
             };
             win.webContents.send("open-settings");
+            await until(() => document.querySelector('[role="dialog"] nav'));
+            await evaluate(() =>
+              [...document.querySelectorAll('[role="dialog"] nav button')]
+                .find((b) => b.textContent.trim() === "Help & updates")
+                .click(),
+            );
             await until(() =>
               [...document.querySelectorAll("button")].some(
                 (b) => b.textContent.trim() === "Report an issue",
@@ -1113,7 +1296,12 @@ app.once("browser-window-created", (_event, created) => {
                 new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
               ),
           );
-          await delay(200);
+          for (
+            let attempt = 0;
+            attempt < 100 && flat(await data()).length === before;
+            attempt++
+          )
+            await delay(50);
           const snapshot = flat(await data());
           assert.equal(snapshot.length, before + 1);
           assert.equal(

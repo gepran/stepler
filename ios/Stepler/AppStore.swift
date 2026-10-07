@@ -58,6 +58,16 @@ final class AppStore: ObservableObject {
                 try persist()
             } catch { errorMessage = "Could not load the disposable timeline fixture." }
         }
+        if testing, ProcessInfo.processInfo.environment["STEPLER_UI_TEST_MENTION_IMAGE"] == "1" {
+            do {
+                let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).pngData { context in
+                    UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+                }
+                let attachment = try storeAttachment(image, name: "shared-photo.png", image: true)
+                let row: [String: Any] = ["fromUid": "fixture-friend", "fromUsername": "friend", "text": "Photo from a friend", "attachment": attachment.mapValues(\.value), "subtasks": [["id": "fixture-child", "text": "Another photo", "attachment": attachment.mapValues(\.value)]]]
+                mentions = [MentionRecord(row, id: "1577836800000-shared")].compactMap { $0 }
+            } catch { errorMessage = "Could not load the disposable mention fixture." }
+        }
         if !testing {
             ReminderService.refresh(tasks: snapshot.tasks)
             authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in Task { @MainActor in self?.selectUser(user) } }
@@ -322,6 +332,7 @@ final class AppStore: ObservableObject {
             }
             if uid == owner, sessionID == session, !Task.isCancelled {
                 await syncAttachments(owner: owner)
+                await syncMentionAttachments(owner: owner)
                 guard uid == owner, sessionID == session, !Task.isCancelled else { return }
                 syncState = snapshot.pending.isEmpty && snapshot.projectQueue.isEmpty ? "synced" : "syncing"
                 syncErrorCode = ""

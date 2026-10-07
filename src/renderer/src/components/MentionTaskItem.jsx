@@ -40,6 +40,7 @@ export function MentionTaskItem({
   onAddSubtask,
   onDismiss,
   onCopy,
+  renderAttachment,
   variant = "web",
 }) {
   const t = useT();
@@ -162,6 +163,7 @@ export function MentionTaskItem({
           )}
           {formatTaskText(mention.text)}
         </div>
+        {mention.attachment && renderAttachment?.(mention.attachment)}
 
         {subtasks.length > 0 && (
           <div className="relative mt-2 space-y-1 pl-1">
@@ -200,6 +202,7 @@ export function MentionTaskItem({
                   }`}
                 >
                   {formatTaskText(st.text)}
+                  {st.attachment && renderAttachment?.(st.attachment)}
                 </div>
               </div>
             ))}
@@ -351,6 +354,7 @@ MentionTaskItem.propTypes = {
     read: PropTypes.bool,
     completed: PropTypes.bool,
     priority: PropTypes.bool,
+    attachment: PropTypes.object,
     subtasks: PropTypes.array,
     fromUid: PropTypes.string,
     fromUsername: PropTypes.string,
@@ -364,6 +368,7 @@ MentionTaskItem.propTypes = {
   onAddSubtask: PropTypes.func.isRequired,
   onDismiss: PropTypes.func.isRequired,
   onCopy: PropTypes.func,
+  renderAttachment: PropTypes.func,
   /** "web" keeps the actions inline; "desktop" puts them in a bar underneath,
       each matching where that app's own task rows keep theirs. */
   variant: PropTypes.oneOf(["web", "desktop"]),
@@ -396,6 +401,7 @@ export function MentionBadge({
       onClick={onClick}
       title={label}
       aria-label={label}
+      data-testid="mentions-filter"
       aria-pressed={active}
       style={style}
       className={`group ${positioned ? "" : "relative"} flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition-all ${

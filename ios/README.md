@@ -35,7 +35,7 @@ Automatic signing uses the configured development team; change it in Xcode or
 `project.yml` if building under another Apple account. This is a development
 installation, not an App Store or TestFlight release.
 
-Use Settings → Sign in → Continue with Google, with the desktop account, to
+Use Settings → Account & sync → Sign in → Continue with Google, with the desktop account, to
 synchronize. Each account has a separate protected local snapshot and
 attachment directory. Guest tasks remain in a separate guest profile; export
 and import them explicitly if you want to copy them into an account. Pending

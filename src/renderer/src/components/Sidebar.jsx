@@ -1,28 +1,18 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
-import { Settings, Layers } from "lucide-react";
+import { Settings, Layers, Plus, Star } from "lucide-react";
 import { translatePlural as tPlural, useT } from "../lib/i18n";
 import { colorForLabel, labelStyle } from "../lib/labels";
 import SteplerLogo from "./SteplerLogo";
 
-/**
- * Google hands out a profile photo, but this window can never fetch it: the
- * renderer's CSP allows no remote images at all, on purpose — nothing here is
- * meant to touch the network. The first letter of the email says who is signed
- * in just as well.
- */
 function AccountAvatar({ email }) {
-  const initial = (email || "?").trim()[0] || "?";
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-bold uppercase text-neutral-600 dark:bg-neutral-700 dark:text-neutral-200">
-      {initial}
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-neutral-200 text-xs font-semibold uppercase text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+      {(email || "?").trim()[0]}
     </span>
   );
 }
-
-AccountAvatar.propTypes = {
-  email: PropTypes.string,
-};
+AccountAvatar.propTypes = { email: PropTypes.string };
 
 export default function Sidebar({
   show,
@@ -37,225 +27,193 @@ export default function Sidebar({
   const t = useT();
   const [isHovered, setIsHovered] = useState(false);
   const isExpanded = show || isHovered;
+  const rowStyle = (selected) =>
+    `group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-orange-400 ${selected ? "bg-orange-500/10 font-semibold text-orange-700 dark:text-orange-300" : "font-medium text-neutral-600 hover:bg-neutral-200/60 dark:text-neutral-400 dark:hover:bg-neutral-800"}`;
+  const count = (name) =>
+    tasks.filter((task) => task.projects?.includes(name)).length;
 
   return (
-    <div
+    <aside
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`flex flex-col h-full border-r border-neutral-200 dark:border-neutral-800 transition-all duration-300 ease-in-out z-50 relative shrink-0 ${
-        isExpanded ? "w-64" : "w-16"
-      }`}
+      aria-label={t("sidebar.projects")}
+      className={`relative z-40 h-full shrink-0 border-r border-neutral-200 bg-neutral-50 transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 ${isExpanded ? "w-60" : "w-16"}`}
     >
       <div
-        className="absolute top-0 left-0 w-full h-8 shrink-0 border-b border-neutral-200 bg-neutral-100/80 backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/80 z-20"
-        style={{ WebkitAppRegion: "drag", borderRightWidth: 0 }}
+        className="absolute top-0 h-8 w-full border-b border-neutral-200 bg-neutral-100/80 dark:border-neutral-800 dark:bg-neutral-900/80"
+        style={{ WebkitAppRegion: "drag" }}
       />
-
       <div
-        className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-full flex-col bg-white overflow-hidden transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
-          isExpanded
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none"
-        }`}
+        aria-hidden={!isExpanded}
+        inert={!isExpanded}
+        className={`absolute top-8 flex h-[calc(100%-2rem)] w-full flex-col overflow-hidden transition-opacity duration-150 ${isExpanded ? "opacity-100" : "pointer-events-none opacity-0"}`}
       >
-        <div className="px-4 pb-4 pt-3 shrink-0 flex flex-col">
-          <div
-            className="flex items-center text-neutral-800 dark:text-neutral-200"
-            style={{ WebkitAppRegion: "no-drag" }}
-          >
-            <SteplerLogo size={50} className="mr-2.5" />
-            <span className="text-xl font-bold tracking-wide">Stepler</span>
-          </div>
+        <div className="flex shrink-0 items-center gap-2.5 px-5 py-5">
+          <SteplerLogo size={30} />
+          <span className="text-[17px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
+            Stepler
+          </span>
         </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
-          <div className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 mb-3 flex items-center uppercase tracking-wider">
-            <Layers size={13} className="mr-2" /> {t("sidebar.projects")}
-          </div>
-
-          <div data-project-list="sidebar-expanded" className="space-y-2 pb-6">
-            <div
-              onClick={() => onProjectClick?.(null)}
-              className={`btn-tactile group flex items-center p-3 rounded-xl transition-all cursor-pointer border shadow-sm ${
-                selectedProject === null
-                  ? "bg-blue-50 border-blue-200/60 dark:bg-blue-900/30 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 shadow-blue-100/50 dark:shadow-blue-900/20"
-                  : "bg-neutral-50 dark:bg-neutral-800/40 border-neutral-200/60 dark:border-neutral-700/40 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 text-neutral-600 dark:text-neutral-400 hover:shadow-md"
-              }`}
+        <div className="flex min-h-0 flex-1 flex-col px-3">
+          <div className="mb-2 flex items-center justify-between px-3">
+            <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500">
+              {t("sidebar.projects")}
+            </span>
+            <button
+              type="button"
+              onClick={() => onSettingsClick?.("projects")}
+              title={t("settings.projects.add")}
+              aria-label={t("settings.projects.add")}
+              className="rounded-md p-1 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800"
             >
-              <Layers size={16} className="mr-3" />
-              <span className="text-sm font-medium">
+              <Plus size={15} />
+            </button>
+          </div>
+          <div
+            data-project-list="sidebar-expanded"
+            className="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pb-4"
+          >
+            <button
+              type="button"
+              onClick={() => onProjectClick?.(null)}
+              aria-pressed={selectedProject === null}
+              className={rowStyle(selectedProject === null)}
+            >
+              <Layers size={16} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">
                 {t("sidebar.allProjects")}
               </span>
-              <span className="ml-auto text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded text-neutral-500">
+              <span className="text-[11px] font-normal tabular-nums text-neutral-400">
                 {tasks.length}
               </span>
-            </div>
-
-            <div className="my-2 border-t border-neutral-100 dark:border-neutral-800" />
-
-            {availableProjects.map((project) => {
-              const projectTasksCount = tasks.filter((t) =>
-                t.projects?.includes(project.name),
-              ).length;
-              return (
-                <div
-                  key={project.name}
-                  data-project-name={project.name}
-                  onClick={() => onProjectClick?.(project.name)}
-                  className={`btn-tactile group flex items-center p-3 rounded-xl transition-all cursor-pointer border shadow-sm ${
-                    selectedProject === project.name
-                      ? "bg-blue-50 border-blue-200/60 dark:bg-blue-900/30 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 shadow-blue-100/50 dark:shadow-blue-900/20"
-                      : "bg-neutral-50 dark:bg-neutral-800/40 border-neutral-200/60 dark:border-neutral-700/40 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 text-neutral-600 dark:text-neutral-400 hover:shadow-md"
-                  }`}
-                >
-                  <div
-                    style={labelStyle(
-                      colorForLabel(project.name, availableProjects),
-                    )}
-                    className="label-dot w-2.5 h-2.5 rounded-full mr-3 shrink-0"
-                  />
-                  <span className="text-sm font-medium truncate mr-2">
-                    {project.name}
-                  </span>
-                  <span className="ml-auto text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800/80 px-1.5 py-0.5 rounded text-neutral-500">
-                    {projectTasksCount}
-                  </span>
-                </div>
-              );
-            })}
-            {availableProjects.length === 0 && (
-              <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-                {t("sidebar.noProjects")}
-              </div>
-            )}
-          </div>
-        </div>
-        {/* One button, not two. There used to be an account row and a
-            Settings row stacked here, and since both opened the same window
-            the second was only ever asking to be misread as something else.
-            Signed in it wears your face and your address; signed out there is
-            no face to wear, so it falls back to the gear — and either way the
-            trash count rides on it, because the trash lives in Settings and
-            would otherwise vanish from the window altogether. */}
-        <div className="p-4 shrink-0">
-          <button
-            onClick={onSettingsClick}
-            title={account?.email || t("common.settings")}
-            className="btn-tactile flex items-center w-full gap-2 p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-          >
-            {account?.signedIn ? (
-              <>
-                <AccountAvatar email={account.email} />
-                <span className="truncate text-sm font-medium">
-                  {account.email}
-                </span>
-              </>
-            ) : (
-              <>
-                <Settings size={18} className="icon-rubbery" />
-                <span className="text-sm font-medium">
-                  {t("common.settings")}
-                </span>
-              </>
-            )}
-            {deletedCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-500 dark:bg-red-500/10">
-                {deletedCount > 99 ? "99+" : deletedCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div
-        className={`absolute top-8 left-0 flex h-[calc(100%-2rem)] w-full flex-col bg-white transition-opacity duration-300 dark:bg-neutral-900 z-10 ${
-          isExpanded
-            ? "opacity-0 pointer-events-none"
-            : "opacity-100 pointer-events-auto"
-        }`}
-      >
-        <div className="shrink-0 flex justify-center py-4">
-          <SteplerLogo size={50} />
-        </div>
-        <div
-          data-project-list="sidebar-collapsed"
-          className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center py-2 space-y-3 pb-6"
-        >
-          <div
-            onClick={() => onProjectClick?.(null)}
-            className={`btn-tactile group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors ${
-              selectedProject === null
-                ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-900/20 dark:border-blue-800/50 text-blue-600 dark:text-blue-400"
-                : "bg-neutral-100/50 dark:bg-neutral-800/30 border-transparent text-neutral-500 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-600"
-            }`}
-            title={t("sidebar.allProjects")}
-          >
-            <Layers size={18} />
-          </div>
-
-          <div className="w-8 border-t border-neutral-100 dark:border-neutral-800" />
-
-          {availableProjects.map((project) => {
-            const projectTasksCount = tasks.filter((t) =>
-              t.projects?.includes(project.name),
-            ).length;
-            return (
-              <div
+            </button>
+            <div className="mx-3 my-3 border-t border-neutral-200/70 dark:border-neutral-800" />
+            {availableProjects.map((project) => (
+              <button
+                type="button"
                 key={project.name}
                 data-project-name={project.name}
                 onClick={() => onProjectClick?.(project.name)}
-                className={`btn-tactile group relative flex h-11 w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border transition-colors ${
-                  selectedProject === project.name
-                    ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-900/20 dark:border-blue-800/50 text-blue-600 dark:text-blue-400"
-                    : "bg-neutral-100/50 dark:bg-neutral-800/30 border-transparent text-neutral-500 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-600"
-                }`}
-                title={tPlural("sidebar.projectTasks", projectTasksCount, {
-                  name: project.name,
-                })}
+                aria-pressed={selectedProject === project.name}
+                className={rowStyle(selectedProject === project.name)}
               >
-                <div
+                <span
                   style={labelStyle(
                     colorForLabel(project.name, availableProjects),
                   )}
-                  className="label-dot w-2.5 h-2.5 rounded-full"
+                  className="label-dot ml-1 h-2 w-2 shrink-0 rounded-full"
                 />
-                {projectTasksCount > 0 && (
-                  <div className="absolute -right-0.5 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-neutral-600 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900 dark:bg-neutral-400 dark:text-neutral-950">
-                    {projectTasksCount > 99 ? "99+" : projectTasksCount}
-                  </div>
+                <span className="min-w-0 flex-1 truncate" title={project.name}>
+                  {project.name}
+                </span>
+                {project.isFavorite && (
+                  <Star size={10} className="shrink-0 text-neutral-400" />
                 )}
-              </div>
-            );
-          })}
+                <span className="text-[11px] font-normal tabular-nums text-neutral-400">
+                  {count(project.name)}
+                </span>
+              </button>
+            ))}
+            {!availableProjects.length && (
+              <p className="px-3 py-6 text-xs leading-relaxed text-neutral-400">
+                {t("sidebar.noProjects")}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="p-3 shrink-0 flex flex-col items-center gap-2">
-          {account?.signedIn && (
-            <button
-              onClick={onSettingsClick}
-              className="btn-tactile p-2 rounded-full transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              title={account.email || ""}
-            >
-              <AccountAvatar email={account.email} />
-            </button>
-          )}
+        <div className="shrink-0 border-t border-neutral-200/70 p-3 dark:border-neutral-800">
           <button
-            onClick={onSettingsClick}
-            className="btn-tactile relative p-2 rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            type="button"
+            onClick={() => onSettingsClick?.()}
             title={t("common.settings")}
+            className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left text-neutral-500 transition-colors hover:bg-neutral-200/60 dark:text-neutral-400 dark:hover:bg-neutral-800"
           >
-            <Settings size={18} className="icon-rubbery" />
+            {account?.signedIn ? (
+              <AccountAvatar email={account.email} />
+            ) : (
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-200/60 dark:bg-neutral-800">
+                <Settings size={17} />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-semibold text-neutral-700 dark:text-neutral-200">
+                {account?.signedIn ? account.email : t("common.settings")}
+              </span>
+              {account?.signedIn && (
+                <span className="block text-[11px] text-neutral-400">
+                  {t("common.settings")}
+                </span>
+              )}
+            </span>
+            {account?.signedIn && <Settings size={15} className="shrink-0" />}
             {deletedCount > 0 && (
-              <div className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm dark:border-neutral-900">
-                {deletedCount > 99 ? "99+" : deletedCount}
-              </div>
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400"
+                aria-label={String(deletedCount)}
+              />
             )}
           </button>
         </div>
       </div>
-    </div>
+      <div
+        aria-hidden={isExpanded}
+        inert={isExpanded}
+        className={`absolute top-8 flex h-[calc(100%-2rem)] w-full flex-col items-center transition-opacity duration-150 ${isExpanded ? "pointer-events-none opacity-0" : "opacity-100"}`}
+      >
+        <div className="py-5">
+          <SteplerLogo size={30} />
+        </div>
+        <div
+          data-project-list="sidebar-collapsed"
+          className="custom-scrollbar flex min-h-0 flex-1 flex-col items-center gap-1.5 overflow-y-auto pb-4"
+        >
+          <button
+            type="button"
+            onClick={() => onProjectClick?.(null)}
+            title={t("sidebar.allProjects")}
+            aria-pressed={selectedProject === null}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${selectedProject === null ? "bg-orange-500/10 text-orange-600 dark:text-orange-300" : "text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"}`}
+          >
+            <Layers size={17} />
+          </button>
+          <div className="my-2 w-5 border-t border-neutral-200 dark:border-neutral-800" />
+          {availableProjects.map((project) => (
+            <button
+              type="button"
+              key={project.name}
+              data-project-name={project.name}
+              onClick={() => onProjectClick?.(project.name)}
+              aria-pressed={selectedProject === project.name}
+              title={tPlural("sidebar.projectTasks", count(project.name), {
+                name: project.name,
+              })}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${selectedProject === project.name ? "bg-orange-500/10" : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800"}`}
+            >
+              <span
+                style={labelStyle(
+                  colorForLabel(project.name, availableProjects),
+                )}
+                className="label-dot h-2.5 w-2.5 rounded-full"
+              />
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => onSettingsClick?.()}
+          title={t("common.settings")}
+          className="my-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"
+        >
+          {account?.signedIn ? (
+            <AccountAvatar email={account.email} />
+          ) : (
+            <Settings size={18} />
+          )}
+        </button>
+      </div>
+    </aside>
   );
 }
-
 Sidebar.propTypes = {
   show: PropTypes.bool.isRequired,
   tasks: PropTypes.array.isRequired,

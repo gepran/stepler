@@ -22,8 +22,10 @@
 - **Trash and history.** Restore deleted tasks, or pull a finished note from any past day back into today.
 - **Export and import.** One portable JSON file with the attachments embedded.
 - **Optional integrations.** Google Calendar, Jira and Apple Reminders — all off until you turn them on.
-- **English, ქართული and Русский.** Switch the interface language in Settings → General.
-- **Issue reporting.** Settings → Report an issue sends a report to support, with optional basic diagnostics. See [server setup and verification](docs/issue-reporting.md).
+- **English, ქართული and Русский.** Switch the interface language in Settings → Appearance.
+- **Photos in mentions.** Shared tasks show their photos and subtask attachments on desktop, web and iPhone. Each recipient receives a private file copy; other files stay private.
+- **Organized settings.** Appearance, account and sync, keyboard shortcuts, and help each have their own page. Projects use a compact sidebar with quieter selection and counts.
+- **Issue reporting.** Settings → Help & updates → Report an issue sends a report to support, with optional basic diagnostics. See [server setup and verification](docs/issue-reporting.md).
 
 ## 📥 Installing on macOS
 

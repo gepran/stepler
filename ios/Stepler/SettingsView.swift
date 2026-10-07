@@ -25,42 +25,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Account & sync") {
-                    if store.uid != nil {
-                        LabeledContent("Signed in", value: store.email ?? "Firebase account")
-                        Text(store.syncMessage).font(.caption).foregroundStyle(.secondary)
-                        if let profile = store.profile { LabeledContent("Handle", value: "@\(profile.username)") }
-                        Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { store.retrySync() }
-                        Button("Sign out", role: .destructive) { store.signOut() }
-                    } else {
-                        Text("Your tasks are saved on this iPhone. Sign in to sync with your Mac and the web app.").font(.footnote).foregroundStyle(.secondary)
-                        Button("Sign in", systemImage: "person.crop.circle") { auth = true }.disabled(store.testing)
-                    }
-                    Text(store.syncMessage).font(.caption).foregroundStyle(.secondary)
+                Section("Account") {
+                    NavigationLink { accountPage } label: { Label("Account & sync", systemImage: "person.crop.circle") }.accessibilityIdentifier("settings.account.open")
+                    if store.uid != nil { NavigationLink { PeopleView() } label: { Label("People", systemImage: "person.2") } }
                 }
-                Section("Appearance") { Picker("Theme", selection: $theme) { Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark") } }
-                Section("Projects") {
-                    ForEach(store.projects) { project in
-                        Button { editing = project } label: {
-                            HStack { Circle().fill(Color(project: project)).frame(width: 9, height: 9); Text(project.name).foregroundStyle(.primary); Spacer(); if project.isFavorite { Image(systemName: "star.fill").foregroundStyle(.orange) }; Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
-                        }.accessibilityIdentifier("settings.project.\(project.name)")
-                    }
-                    HStack { TextField("Project name", text: $newProject).accessibilityIdentifier("settings.newProject"); Button("Add") { if store.project(ProjectOperation(type: "add", name: newProject)) { newProject = "" } }.disabled(newProject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                Section("Preferences") {
+                    NavigationLink { appearancePage } label: { Label("Appearance", systemImage: "paintpalette") }
+                    NavigationLink { projectsPage } label: { Label("Projects", systemImage: "folder") }.accessibilityIdentifier("settings.projects.open")
+                    NavigationLink { calendarPage } label: { Label("Reminders & calendar", systemImage: "calendar") }
                 }
-                Section("Reminders & calendar") {
-                    Button("Enable notifications", systemImage: "bell.badge") {
-                        Task { do { notice = try await ReminderService.requestPermission() ? "Notifications enabled." : "Allow notifications in iPhone Settings." } catch { store.errorMessage = error.localizedDescription } }
-                    }.disabled(store.testing)
-                    Toggle("Mirror dated tasks to Calendar", isOn: Binding(get: { calendarBridge.calendarEnabled }, set: { enabled in Task { await setCalendar(calendar: enabled, reminders: calendarBridge.remindersEnabled) } })).disabled(store.testing)
-                    Toggle("Mirror dated tasks to Reminders", isOn: Binding(get: { calendarBridge.remindersEnabled }, set: { enabled in Task { await setCalendar(calendar: calendarBridge.calendarEnabled, reminders: enabled) } })).disabled(store.testing)
-                    Text("Mirrors use this iPhone’s default calendar and Reminders list. Enable access when iOS asks.").font(.caption).foregroundStyle(.secondary)
-                }
-                if store.uid != nil { Section("People") { NavigationLink("Connections", destination: PeopleView()) } }
                 Section("Your data") {
-                    NavigationLink { TrashView() } label: { Label("Trash (\(store.trash.count))", systemImage: "trash") }.accessibilityIdentifier("settings.trash")
-                    Button("Export tasks", systemImage: "square.and.arrow.up") { do { document = ExportDocument(data: try store.exportData()); exporting = true } catch { store.errorMessage = error.localizedDescription } }
-                    Button("Import tasks", systemImage: "square.and.arrow.down") { importing = true }
-                    Text("Account profiles are kept separately on this iPhone. Use export/import to copy local tasks into an account.").font(.caption).foregroundStyle(.secondary)
+                    NavigationLink { TrashView() } label: { HStack { Label("Trash", systemImage: "trash"); Spacer(); Text("\(store.trash.count)").foregroundStyle(.secondary) } }.accessibilityIdentifier("settings.trash")
+                    NavigationLink { dataPage } label: { Label("Import & export", systemImage: "arrow.up.arrow.down") }
                 }
                 Section("Support") { Button("Report an issue", systemImage: "ladybug") { reporting = true }.accessibilityIdentifier("report.open") }
                 if let notice { Section { Text(notice).font(.footnote).foregroundStyle(.secondary) } }
@@ -79,6 +55,63 @@ struct SettingsView: View {
                 }
                 .onChange(of: store.snapshot.tasks) { _, tasks in Task { do { try await calendarBridge.refresh(tasks: tasks, account: store.accountKey) } catch { store.errorMessage = error.localizedDescription } } }
         }
+    }
+    private var accountPage: some View {
+        Form {
+                Section("Account & sync") {
+                    if store.uid != nil {
+                        LabeledContent("Signed in", value: store.email ?? "Firebase account")
+                        Text(store.syncMessage).font(.caption).foregroundStyle(.secondary)
+                        if let profile = store.profile { LabeledContent("Handle", value: "@\(profile.username)") }
+                        Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { store.retrySync() }
+                        Button("Sign out", role: .destructive) { store.signOut() }
+                    } else {
+                        Text("Your tasks are saved on this iPhone. Sign in to sync with your Mac and the web app.").font(.footnote).foregroundStyle(.secondary)
+                        Button("Sign in", systemImage: "person.crop.circle") { auth = true }.disabled(store.testing)
+                    }
+                }
+        }.navigationTitle("Account & sync").toolbar { doneToolbar }
+    }
+    private var appearancePage: some View {
+        Form {
+                Section("Appearance") { Picker("Theme", selection: $theme) { Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark") } }
+        }.navigationTitle("Appearance").toolbar { doneToolbar }
+    }
+    private var projectsPage: some View {
+        Form {
+                Section("Projects") {
+                    ForEach(store.projects) { project in
+                        Button { editing = project } label: {
+                            HStack { Circle().fill(Color(project: project)).frame(width: 9, height: 9); Text(project.name).foregroundStyle(.primary); Spacer(); if project.isFavorite { Image(systemName: "star.fill").foregroundStyle(.orange) }; Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
+                        }.accessibilityIdentifier("settings.project.\(project.name)")
+                    }
+                    HStack { TextField("Project name", text: $newProject).accessibilityIdentifier("settings.newProject"); Button("Add") { if store.project(ProjectOperation(type: "add", name: newProject)) { newProject = "" } }.disabled(newProject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                }
+        }.navigationTitle("Projects").toolbar { doneToolbar }
+    }
+    private var calendarPage: some View {
+        Form {
+                Section("Reminders & calendar") {
+                    Button("Enable notifications", systemImage: "bell.badge") {
+                        Task { do { notice = try await ReminderService.requestPermission() ? "Notifications enabled." : "Allow notifications in iPhone Settings." } catch { store.errorMessage = error.localizedDescription } }
+                    }.disabled(store.testing)
+                    Toggle("Mirror dated tasks to Calendar", isOn: Binding(get: { calendarBridge.calendarEnabled }, set: { enabled in Task { await setCalendar(calendar: enabled, reminders: calendarBridge.remindersEnabled) } })).disabled(store.testing)
+                    Toggle("Mirror dated tasks to Reminders", isOn: Binding(get: { calendarBridge.remindersEnabled }, set: { enabled in Task { await setCalendar(calendar: calendarBridge.calendarEnabled, reminders: enabled) } })).disabled(store.testing)
+                    Text("Mirrors use this iPhone’s default calendar and Reminders list. Enable access when iOS asks.").font(.caption).foregroundStyle(.secondary)
+                }
+        }.navigationTitle("Reminders & calendar").toolbar { doneToolbar }
+    }
+    private var dataPage: some View {
+        Form {
+                Section("Your data") {
+                    Button("Export tasks", systemImage: "square.and.arrow.up") { do { document = ExportDocument(data: try store.exportData()); exporting = true } catch { store.errorMessage = error.localizedDescription } }
+                    Button("Import tasks", systemImage: "square.and.arrow.down") { importing = true }
+                    Text("Account profiles are kept separately on this iPhone. Use export/import to copy local tasks into an account.").font(.caption).foregroundStyle(.secondary)
+                }
+        }.navigationTitle("Import & export").toolbar { doneToolbar }
+    }
+    private var doneToolbar: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("settings.done") }
     }
     private func setCalendar(calendar: Bool, reminders: Bool) async {
         do { try await calendarBridge.enable(calendar: calendar, reminders: reminders); try await calendarBridge.refresh(tasks: store.snapshot.tasks, account: store.accountKey) }

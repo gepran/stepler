@@ -153,7 +153,9 @@ export function mentionsAsRows(mentions) {
     text: m.text,
     ymd: m.ymd,
     completed: !!m.completed,
-    priority: false,
+    priority: !!m.priority,
+    attachment: m.attachment,
+    subtasks: Array.isArray(m.subtasks) ? m.subtasks : [],
     mention: m,
   }));
 }

@@ -60,6 +60,7 @@ import {
   initCloudFiles,
   reconcileAttachments,
   resetCloudFiles,
+  fileIdFromPath,
 } from "./attachments-cloud";
 import {
   acceptInvite,
@@ -830,7 +831,7 @@ async function syncFiles() {
     const uid = currentUid;
     const result = await reconcileAttachments({
       uid,
-      tasks: flattenLocal(deps.getData(), deps.todayYMD()),
+      tasks: [...flattenLocal(deps.getData(), deps.todayYMD()), ...mentions],
       disk: deps.disk,
     });
     const patches = result.patches;
@@ -844,6 +845,10 @@ async function syncFiles() {
     const flat = flattenLocal(deps.getData(), today).map((t) =>
       withPatchedAttachments(t, patches),
     );
+    mentions = mentions.map((mention) =>
+      withPatchedAttachments(mention, patches),
+    );
+    emitCollab();
     applyingRemote = true;
     try {
       deps.applyRemote(rebuildLocal(flat, today));
@@ -1024,8 +1029,19 @@ async function startCollab(user) {
     uid,
     (list, meta) => {
       announceNewMentions(list, meta);
-      mentions = list;
+      const localFiles = new Map();
+      for (const row of list) {
+        for (const holder of [row, ...(row.subtasks || [])]) {
+          const path = holder.attachment?.storagePath;
+          const id = fileIdFromPath(uid, path);
+          if (id && deps.disk?.has(id)) localFiles.set(path, { id });
+        }
+      }
+      mentions = list.map((mention) =>
+        withPatchedAttachments(mention, localFiles),
+      );
       emitCollab();
+      scheduleFiles(200);
       // Knowing what was addressed to you is what makes the echoes
       // identifiable, so this is the moment to look for them.
       repairMentionEchoes().catch((err) =>

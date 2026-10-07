@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 struct PersonRecord: Identifiable, Equatable {
     var uid: String
@@ -48,8 +49,35 @@ extension AppStore {
                 guard let self, self.uid == owner else { return }
                 if let error { self.errorMessage = error.localizedDescription; return }
                 self.mentions = snap?.documents.filter { $0.data()["dismissed"] as? Bool != true }.compactMap { MentionRecord($0.data(), id: $0.documentID) } ?? []
+                await self.syncMentionAttachments(owner: owner)
             }
         })
+    }
+    func syncMentionAttachments(owner: String) async {
+        let rows = mentions
+        for mention in rows {
+            for holder in [mention.task] + mention.task.subtasks {
+                guard uid == owner, !Task.isCancelled else { return }
+                guard let attachment = holder.attachment, case .string(let path) = attachment["storagePath"],
+                      let id = FileSafety.cloudFileID(uid: owner, path: path) else { continue }
+                do {
+                    let url = attachmentsDirectory.appendingPathComponent(id)
+                    if !FileManager.default.fileExists(atPath: url.path) {
+                        let data = try await Storage.storage().reference(withPath: path).data(maxSize: Int64(FileSafety.maxBytes))
+                        guard uid == owner, !Task.isCancelled else { return }
+                        try FileManager.default.createDirectory(at: attachmentsDirectory, withIntermediateDirectories: true)
+                        try data.write(to: url, options: [.atomic, .completeFileProtection])
+                    }
+                    guard uid == owner, let index = mentions.firstIndex(where: { $0.id == mention.id }) else { continue }
+                    var next = attachment; next["id"] = .string(id)
+                    if holder.id == mention.task.id, mentions[index].task.attachment?["storagePath"] == .string(path) {
+                        mentions[index].task.attachment = next
+                    } else if let child = mentions[index].task.subtasks.firstIndex(where: { $0.id == holder.id }), mentions[index].task.subtasks[child].attachment?["storagePath"] == .string(path) {
+                        mentions[index].task.subtasks[child].attachment = next
+                    }
+                } catch { /* Cached mentions remain available; retry on the next sync. */ }
+            }
+        }
     }
     private func ensureProfile(_ user: FirebaseAuth.User) async throws -> PersonRecord {
         let target = db.collection("profiles").document(user.uid)

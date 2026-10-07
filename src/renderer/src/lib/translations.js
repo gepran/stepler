@@ -279,6 +279,17 @@ const en = {
     notifyEnable: "Turn on",
   },
   settings: {
+    design: {
+      account: "Account",
+      about: "Help & updates",
+      appearanceHint: "Choose how Stepler looks and which language it speaks.",
+      accountHint: "Your account, password and sync status.",
+      shortcutsHint: "Keyboard shortcuts and how the window behaves.",
+      aboutHint: "App version, updates and a direct way to report a problem.",
+      integrationsHint: "Connect your calendar, reminders and Jira.",
+      advanced: "Developer tools",
+      setup: "Set up connection",
+    },
     sync: {
       title: "Account and sync",
       blurb:
@@ -985,6 +996,17 @@ const ka = {
     notifyEnable: "ჩართვა",
   },
   settings: {
+    design: {
+      account: "ანგარიში",
+      about: "დახმარება და განახლება",
+      appearanceHint: "აირჩიე თემა და აპლიკაციის ენა.",
+      accountHint: "ანგარიში, პაროლი და სინქრონიზაციის მდგომარეობა.",
+      shortcutsHint: "მალსახმობები და ფანჯრის ქცევა.",
+      aboutHint: "ვერსია, განახლებები და პრობლემის შეტყობინება.",
+      integrationsHint: "დაკავშირება კალენდართან, შეხსენებებთან და Jira-სთან.",
+      advanced: "დეველოპერის ხელსაწყოები",
+      setup: "კავშირის დაყენება",
+    },
     sync: {
       title: "ანგარიში და სინქრონიზაცია",
       blurb:
@@ -1656,6 +1678,17 @@ const ru = {
       "\u0421\u0432\u044F\u0437\u044C \u0440\u0430\u0437\u043E\u0440\u0432\u0430\u043D\u0430",
   },
   settings: {
+    design: {
+      account: "Аккаунт",
+      about: "Помощь и обновления",
+      appearanceHint: "Выберите тему и язык приложения.",
+      accountHint: "Аккаунт, пароль и состояние синхронизации.",
+      shortcutsHint: "Горячие клавиши и поведение окна.",
+      aboutHint: "Версия приложения, обновления и сообщение об ошибке.",
+      integrationsHint: "Подключите календарь, напоминания и Jira.",
+      advanced: "Инструменты разработчика",
+      setup: "Настроить подключение",
+    },
     sync: {
       title: "Аккаунт и синхронизация",
       blurb:

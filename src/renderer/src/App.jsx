@@ -15,6 +15,7 @@ import FullScreenSearch from "./components/FullScreenSearch";
 import TaskItem from "./components/TaskItem";
 import TaskInput from "./components/TaskInput";
 import FilePreviewModal from "./components/FilePreviewModal";
+import AttachmentImage from "./components/AttachmentImage";
 import Toasts from "./components/Toasts";
 import { PanelLeft, ChevronDown } from "lucide-react";
 import { localYMD, labelForYMD, taskTimestamp, ymdToDate } from "./lib/format";
@@ -158,6 +159,7 @@ export default function App() {
   const [account, setAccount] = useState({ signedIn: false, email: null });
   const [showSearch, setShowSearch] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  const [settingsTab, setSettingsTab] = useState("general");
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [updateState, setUpdateState] = useState({ status: "idle" });
@@ -1410,7 +1412,33 @@ export default function App() {
           }
           onAddSubtask={(m, text) => collab.addMentionSubtask(m, text)}
           onDismiss={(m) => collab.dismissMention(m)}
-          onCopy={(m) => ipc?.invoke("copy-task", { text: m.text })}
+          onCopy={(m) =>
+            ipc?.invoke("copy-task", {
+              text: m.text,
+              attachmentId: m.attachment?.id,
+              imageExpected: m.attachment?.type === "image",
+            })
+          }
+          renderAttachment={(att) => (
+            <button
+              type="button"
+              onClick={() => setPreviewFile(att)}
+              disabled={!att.id}
+              title={t("common.preview")}
+              className="mt-2 block max-w-full cursor-zoom-in overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 disabled:cursor-default"
+            >
+              {att.type === "image" && att.id ? (
+                <AttachmentImage
+                  att={att}
+                  className="max-h-40 max-w-full object-contain"
+                />
+              ) : (
+                <span className="block px-3 py-2 text-xs text-neutral-500">
+                  {att.name}
+                </span>
+              )}
+            </button>
+          )}
           variant="desktop"
         />
       );
@@ -1480,7 +1508,10 @@ export default function App() {
       <Sidebar
         show={showSidebar}
         tasks={tasks}
-        onSettingsClick={() => setShowSettings(true)}
+        onSettingsClick={(tab = "general") => {
+          setSettingsTab(tab);
+          setShowSettings(true);
+        }}
         account={account}
         deletedCount={deletedTasks.length}
         availableProjects={availableProjects}
@@ -1721,6 +1752,7 @@ export default function App() {
 
         {showSettings && (
           <SettingsPanel
+            initialTab={settingsTab}
             settings={settings}
             onClose={() => setShowSettings(false)}
             onExport={handleExportTasks}
