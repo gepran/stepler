@@ -524,7 +524,16 @@ app.once("browser-window-created", (_event, created) => {
             .querySelector('button[title="Delete subtask"]')
             .click(),
         );
-        await delay(150);
+        await until(async (id) => {
+          const snapshot =
+            await window.electron.ipcRenderer.invoke("load-app-data");
+          return (
+            [
+              ...snapshot.tasks,
+              ...snapshot.history.flatMap((day) => day.tasks),
+            ].find((task) => task.id === id)?.subtasks.length === 1
+          );
+        }, ids[0]);
         assert.equal(
           flat(await data()).find((t) => t.id === ids[0]).subtasks.length,
           1,
