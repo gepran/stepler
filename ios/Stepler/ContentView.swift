@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showSearch = false
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
+    @FocusState private var searchFocused: Bool
     @State private var showProjects = false
     @State private var showSettings = false
     @State private var editing: TaskRecord?
@@ -92,7 +93,28 @@ struct ContentView: View {
                     scrollToBottom(proxy)
                 }
                 .navigationTitle(store.selectedProject ?? (mentionsOnly ? "Mentions" : "Stepler"))
-                .searchable(text: $search, isPresented: $showSearch, prompt: "Search tasks and subtasks")
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if showSearch {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                                TextField("Search tasks and subtasks", text: $search)
+                                    .focused($searchFocused)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .submitLabel(.search)
+                                    .onSubmit { searchFocused = false }
+                                    .accessibilityIdentifier("search.query")
+                            }.padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                            Button("Cancel") { searchFocused = false; showSearch = false; search = "" }
+                                .accessibilityLabel("Close search")
+                                .accessibilityIdentifier("search.close")
+                        }
+                        .padding(.horizontal).padding(.bottom, 10)
+                        .background(.regularMaterial)
+                        .task { searchFocused = true }
+                    }
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Projects", systemImage: "sidebar.left") { showProjects = true }.accessibilityIdentifier("projects.open")
@@ -100,7 +122,7 @@ struct ContentView: View {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         Button("Mentions", systemImage: mentionsOnly ? "at.circle.fill" : "at") { mentionsOnly.toggle() }.accessibilityIdentifier("mentions.filter")
                         Button("Settings", systemImage: "gearshape") { showSettings = true }.accessibilityIdentifier("settings.open")
-                        Button("Search", systemImage: "magnifyingglass") { dismissKeyboard(); showSearch = true }
+                        Button("Search", systemImage: "magnifyingglass") { composerFocused = false; showSearch = true; searchFocused = true }
                             .accessibilityLabel("Search tasks")
                             .accessibilityIdentifier("search.open")
                     }
@@ -156,8 +178,8 @@ struct ContentView: View {
     }
     private func dismissKeyboard() {
         composerFocused = false
-        // Search owns its own focus state inside searchable; resign its
-        // responder too without clearing either search text or the draft.
+        searchFocused = false
+        // Keep the query and unfinished task when dismissing the keyboard.
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }

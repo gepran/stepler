@@ -67,6 +67,10 @@ final class SteplerUITests: XCTestCase {
         XCTAssertEqual(input.value as? String, "Keep this draft")
     }
     func testDismissKeyboardThenSearchAndEditTask() {
+        XCTAssertTrue(app.descendants(matching: .any)["task.draft"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.textFields["search.query"].exists)
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
         add("Find this task")
         let input = app.descendants(matching: .any)["task.draft"]
         input.tap(); input.typeText("Unsent draft")
@@ -77,8 +81,13 @@ final class SteplerUITests: XCTestCase {
         XCTAssertTrue(openSearch.isHittable)
         XCTAssertGreaterThan(openSearch.frame.midX, app.frame.midX)
         openSearch.tap()
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Find this")
+        let search = app.textFields["search.query"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertLessThan(search.frame.maxY, app.frame.height / 2)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        // Type directly: opening search must focus it without another tap.
+        search.typeText("Find this")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Stepler top search with keyboard"; screenshot.lifetime = .keepAlways; add(screenshot)
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'task.row.'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertEqual(row.label, "Find this task")
         tapTimelineBackground(); expectKeyboardDismissed()
@@ -87,6 +96,14 @@ final class SteplerUITests: XCTestCase {
         XCTAssertTrue(app.textViews["editor.text"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         XCTAssertEqual(input.value as? String, "Unsent draft")
+        openSearch.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(search.value as? String, "Find this")
+        app.buttons["search.close"].tap()
+        expectKeyboardDismissed()
+        XCTAssertFalse(search.exists)
+        XCTAssertEqual(input.value as? String, "Unsent draft")
+        XCTAssertTrue(row.isHittable)
     }
     func testCreateEditPriorityAndPersistence() {
         add("Review task")
