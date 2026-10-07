@@ -15,6 +15,7 @@ struct ContentView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var search = ""
+    @State private var showSearch = false
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
     @State private var showProjects = false
@@ -91,7 +92,7 @@ struct ContentView: View {
                     scrollToBottom(proxy)
                 }
                 .navigationTitle(store.selectedProject ?? (mentionsOnly ? "Mentions" : "Stepler"))
-                .searchable(text: $search, prompt: "Search tasks and subtasks")
+                .searchable(text: $search, isPresented: $showSearch, prompt: "Search tasks and subtasks")
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Projects", systemImage: "sidebar.left") { showProjects = true }.accessibilityIdentifier("projects.open")
@@ -99,6 +100,9 @@ struct ContentView: View {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         Button("Mentions", systemImage: mentionsOnly ? "at.circle.fill" : "at") { mentionsOnly.toggle() }.accessibilityIdentifier("mentions.filter")
                         Button("Settings", systemImage: "gearshape") { showSettings = true }.accessibilityIdentifier("settings.open")
+                        Button("Search", systemImage: "magnifyingglass") { dismissKeyboard(); showSearch = true }
+                            .accessibilityLabel("Search tasks")
+                            .accessibilityIdentifier("search.open")
                     }
                 }
                 .safeAreaInset(edge: .bottom) {
@@ -133,7 +137,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.retrySync() } }
         .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
-        .onChange(of: store.uid) { _, _ in draft = ""; editing = nil; creating = false; search = ""; showProjects = false; mentionsOnly = false }
+        .onChange(of: store.uid) { _, _ in draft = ""; editing = nil; creating = false; search = ""; showSearch = false; showProjects = false; mentionsOnly = false }
         .sheet(isPresented: $showProjects) { ProjectSidebar() }
         .sheet(isPresented: $showSettings) { SettingsView(calendarBridge: store.calendarBridge) }
         .sheet(isPresented: $creating) { TaskEditor(projects: store.selectedProject.map { [$0] } ?? []) }

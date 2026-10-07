@@ -169,6 +169,7 @@ const en = {
   },
 
   search: {
+    title: "Search",
     placeholder: "Search tasks, projects, files…",
     noResults: "No tasks found",
     close: "Close (Esc)",
@@ -856,6 +857,7 @@ const ka = {
   },
 
   search: {
+    title: "ძებნა",
     placeholder: "მოძებნე დავალებები, პროექტები, ფაილები…",
     noResults: "დავალებები ვერ მოიძებნა",
     close: "დახურვა (Esc)",
@@ -1521,6 +1523,7 @@ const ru = {
   },
 
   search: {
+    title: "Поиск",
     placeholder: "Поиск по задачам, проектам, файлам…",
     noResults: "Задачи не найдены",
     close: "Закрыть (Esc)",

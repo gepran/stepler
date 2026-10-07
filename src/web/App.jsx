@@ -9,6 +9,7 @@ import {
   Monitor,
   Moon,
   Paperclip,
+  Search,
   Settings,
   Star,
   SunMedium,
@@ -449,7 +450,7 @@ TaskRow.propTypes = {
   onOpen: PropTypes.func.isRequired,
 };
 
-function Timeline({ user, collab, onOpenSettings }) {
+function Timeline({ user, collab, onOpenSettings, searchQuery }) {
   const uid = user.uid;
   const t = useT();
   // Subscribing to the language re-renders the day headings, which are
@@ -624,8 +625,24 @@ function Timeline({ user, collab, onOpenSettings }) {
     const rows = mentionsOnly
       ? mentionsAsRows(mentions)
       : [...tasks, ...mentionsAsRows(mentions)];
-    return groupByDay(rows, todayYMD);
-  }, [tasks, mentions, mentionsOnly, todayYMD]);
+    const query = searchQuery.trim().toLowerCase();
+    const matches = query
+      ? rows.filter((row) =>
+          [
+            row.text,
+            row.jiraKey,
+            row.attachment?.name,
+            ...(row.projects || []),
+            ...(row.subtasks || []).map((child) => child.text),
+          ].some((value) =>
+            String(value || "")
+              .toLowerCase()
+              .includes(query),
+          ),
+        )
+      : rows;
+    return groupByDay(matches, todayYMD);
+  }, [tasks, mentions, mentionsOnly, todayYMD, searchQuery]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -679,8 +696,12 @@ function Timeline({ user, collab, onOpenSettings }) {
 
   // The counter is a promise about YOUR day, so the rows other people
   // addressed to you are left out of it — they are somebody else's to finish.
-  const ownToday =
-    days.find((d) => d.ymd === todayYMD)?.tasks.filter((x) => !x.mention) ?? [];
+  const ownToday = useMemo(
+    () =>
+      groupByDay(tasks, todayYMD).find((day) => day.ymd === todayYMD)?.tasks ??
+      [],
+    [tasks, todayYMD],
+  );
   const doneToday = ownToday.filter((x) => x.completed).length;
   const totalToday = ownToday.length;
 
@@ -704,7 +725,11 @@ function Timeline({ user, collab, onOpenSettings }) {
 
         {ready && !error && days.length === 0 && (
           <p className="py-16 text-center text-sm text-neutral-400 dark:text-neutral-500">
-            {mentionsOnly ? t("collab.noMentions") : t("app.nothingToday")}
+            {searchQuery.trim()
+              ? t("search.noResults")
+              : mentionsOnly
+                ? t("collab.noMentions")
+                : t("app.nothingToday")}
           </p>
         )}
 
@@ -1062,6 +1087,7 @@ Timeline.propTypes = {
     deliver: PropTypes.func.isRequired,
   }).isRequired,
   onOpenSettings: PropTypes.func.isRequired,
+  searchQuery: PropTypes.string.isRequired,
 };
 
 /**
@@ -1352,9 +1378,17 @@ export default function App() {
   const t = useT();
   const [user, setUser] = useState(undefined); // undefined = still deciding
   const [showSettings, setShowSettings] = useState(false);
+  const [search, setSearch] = useState(null);
   const collab = useCollab(user || null);
 
-  useEffect(() => onAuthStateChanged(auth, setUser), []);
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (nextUser) => {
+        setUser(nextUser);
+        setSearch(null);
+      }),
+    [],
+  );
   useAuthRoute(user);
 
   // The count in the browser tab. It has to live above the two early returns
@@ -1386,13 +1420,13 @@ export default function App() {
         className="relative z-30 shrink-0 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <div className="mx-auto flex h-14 w-full max-w-[720px] items-center gap-3 px-4 sm:px-5">
+        <div className="mx-auto flex h-14 w-full max-w-[720px] items-center gap-2 px-4 sm:gap-3 sm:px-5">
           <SteplerLogo size={32} />
-          <span className="text-[17px] font-black tracking-tight text-neutral-900 dark:text-neutral-50">
+          <span className="min-w-0 truncate text-[17px] font-black tracking-tight text-neutral-900 dark:text-neutral-50">
             Stepler
           </span>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <ThemeMenu t={t} />
             <LanguageMenu t={t} />
             <UserMenu
@@ -1401,14 +1435,55 @@ export default function App() {
               onOpenSettings={() => setShowSettings(true)}
               t={t}
             />
+            <button
+              type="button"
+              aria-label={t("search.title")}
+              title={t("search.title")}
+              aria-expanded={search !== null}
+              aria-controls="task-search"
+              onClick={() => setSearch((value) => (value === null ? "" : null))}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-neutral-200 bg-neutral-100 text-neutral-600 transition-shadow hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+            >
+              <Search size={16} />
+            </button>
           </div>
         </div>
+        {search !== null && (
+          <div
+            role="search"
+            className="mx-auto flex w-full max-w-[720px] items-center gap-2 px-4 pb-3 sm:px-5"
+          >
+            <input
+              id="task-search"
+              type="search"
+              autoFocus
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSearch(null);
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+              aria-label={t("search.placeholder")}
+              placeholder={t("search.placeholder")}
+              className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-base text-neutral-900 outline-none focus:border-orange-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            />
+            <button
+              type="button"
+              onClick={() => setSearch(null)}
+              aria-label={t("search.close")}
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
       </header>
 
       <Timeline
         key={user.uid}
         user={user}
         collab={collab}
+        searchQuery={search || ""}
         onOpenSettings={() => setShowSettings(true)}
       />
 

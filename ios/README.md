@@ -9,6 +9,7 @@ Apple Calendar and Reminders mirrors can be enabled in Settings.
 The timeline matches the web app: days run oldest to newest, with newer tasks
 at the bottom of each day's existing ordering. It opens at the bottom, including
 when the first sync snapshot arrives after launch, and shows newly added tasks.
+The Search button at the top right opens task search from any scroll position.
 
 Open `Stepler.xcodeproj` in Xcode. The committed Firebase configuration belongs
 to the existing Stepler project and the `com.stepler.app.ios` registration.

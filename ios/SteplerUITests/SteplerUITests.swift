@@ -73,7 +73,10 @@ final class SteplerUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         tapTimelineBackground(); expectKeyboardDismissed()
         XCTAssertEqual(input.value as? String, "Unsent draft")
-        app.swipeDown()
+        let openSearch = app.buttons["search.open"]
+        XCTAssertTrue(openSearch.isHittable)
+        XCTAssertGreaterThan(openSearch.frame.midX, app.frame.midX)
+        openSearch.tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Find this")
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'task.row.'")).firstMatch
