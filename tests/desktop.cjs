@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "stepler-review-"));
 app.setPath("userData", profile);
@@ -805,12 +806,15 @@ app.once("browser-window-created", (_event, created) => {
             ),
           );
           assert.ok(saved.success);
+          const { serializeMention } = await import(
+            pathToFileURL(path.join(__dirname, "../src/main/sync-data.js")).href
+          );
           win.webContents.send("collab-snapshot", {
             uid: null,
             profile: null,
             connections: [],
             mentions: [
-              {
+              serializeMention({
                 id: `${now}-photo`,
                 taskId: `${now}-photo`,
                 text: "Photo from a friend",
@@ -824,7 +828,7 @@ app.once("browser-window-created", (_event, created) => {
                     attachment: saved.attachment,
                   },
                 ],
-              },
+              }),
             ],
           });
           await until(

@@ -21,6 +21,7 @@ import {
   signature,
   CARRIED,
   taskFromSignature,
+  serializeMention,
 } from "./sync-data.js";
 import { mergeTaskEdits } from "../renderer/src/lib/task-merge.js";
 import { waitForSync, syncFailure } from "./sync-wait.js";
@@ -252,28 +253,7 @@ export function collabSnapshot() {
       photoURL: c.photoURL || "",
       status: c.status || "pending",
     })),
-    mentions: mentions.map((m) => ({
-      id: m.id,
-      taskId: String(m.taskId || m.id),
-      text: m.text || "",
-      ymd: m.ymd || "",
-      completed: !!m.completed,
-      priority: !!m.priority,
-      // Plain objects only: a Firestore array of maps crosses IPC fine, but
-      // anything it picked up along the way would not.
-      subtasks: Array.isArray(m.subtasks)
-        ? m.subtasks.map((st) => ({
-            id: st?.id != null ? String(st.id) : "",
-            text: String(st?.text || ""),
-            completed: !!st?.completed,
-          }))
-        : [],
-      read: !!m.read,
-      fromUid: m.fromUid || "",
-      fromUsername: m.fromUsername || "",
-      fromEmail: m.fromEmail || "",
-      fromName: m.fromName || "",
-    })),
+    mentions: mentions.map(serializeMention),
   };
 }
 

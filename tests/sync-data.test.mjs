@@ -6,6 +6,7 @@ import {
   mergeRemote,
   signature,
   taskFromSignature,
+  serializeMention,
 } from "../src/main/sync-data.js";
 
 const legacyTask = {
@@ -164,4 +165,48 @@ test("day and drag order survive desktop/cloud shape translation", () => {
   assert.equal(local.history[0].ymd, "2026-10-01");
   assert.equal(flattenLocal(local, "2026-10-02")[0].ymd, "2026-10-01");
   assert.equal(flattenLocal(local, "2026-10-02")[0].sortOrder, 123);
+});
+
+test("desktop IPC preserves downloaded mention and subtask photos without cloud objects", () => {
+  const attachment = {
+    id: "mention-copy.png",
+    name: "photo.png",
+    type: "image",
+    w: 640,
+    h: 480,
+    storagePath: "users/recipient/attachments/mention-copy.png",
+    internal: () => {
+      throw new Error("not cloneable");
+    },
+  };
+  const snapshot = structuredClone(
+    serializeMention({
+      id: "mention",
+      taskId: "source",
+      text: "@recipient",
+      read: true,
+      attachment,
+      subtasks: [{ id: 12, text: "Child", completed: true, attachment }],
+      updatedAt: { toDate() {} },
+    }),
+  );
+  const expected = { ...attachment };
+  delete expected.internal;
+  assert.deepEqual(snapshot.attachment, expected);
+  assert.deepEqual(snapshot.subtasks[0].attachment, expected);
+  assert.equal(snapshot.subtasks[0].id, "12");
+  assert.equal(snapshot.subtasks[0].completed, true);
+  assert.equal(snapshot.read, true);
+  assert.equal(snapshot.updatedAt, undefined);
+  const pending = serializeMention({
+    id: "pending",
+    attachment: {
+      storagePath: expected.storagePath,
+      name: "photo.png",
+      type: "image",
+    },
+  });
+  assert.equal(pending.attachment.storagePath, expected.storagePath);
+  assert.equal(pending.attachment.id, undefined);
+  assert.equal(serializeMention({ id: "text" }).attachment, undefined);
 });

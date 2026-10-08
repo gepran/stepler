@@ -223,3 +223,46 @@ export function mergeRemote(localFlat, remoteTasks, shadow = {}) {
   }
   return { merged: [...byId.values()], changed, applied };
 }
+
+/** Only displayable attachment fields cross the desktop IPC boundary. */
+function attachmentSnapshot(attachment) {
+  if (!attachment || typeof attachment !== "object") return undefined;
+  const result = {};
+  for (const key of ["id", "name", "type", "storagePath", "url"]) {
+    if (typeof attachment[key] === "string") result[key] = attachment[key];
+  }
+  for (const key of ["w", "h"]) {
+    if (Number.isFinite(attachment[key])) result[key] = attachment[key];
+  }
+  return result;
+}
+
+/** A received task must retain its photos when sent from sync to the window. */
+export function serializeMention(mention) {
+  const attachment = attachmentSnapshot(mention.attachment);
+  return {
+    id: mention.id,
+    taskId: String(mention.taskId || mention.id),
+    text: mention.text || "",
+    ymd: mention.ymd || "",
+    completed: !!mention.completed,
+    priority: !!mention.priority,
+    ...(attachment ? { attachment } : {}),
+    subtasks: Array.isArray(mention.subtasks)
+      ? mention.subtasks.map((st) => {
+          const attachment = attachmentSnapshot(st?.attachment);
+          return {
+            id: st?.id != null ? String(st.id) : "",
+            text: String(st?.text || ""),
+            completed: !!st?.completed,
+            ...(attachment ? { attachment } : {}),
+          };
+        })
+      : [],
+    read: !!mention.read,
+    fromUid: mention.fromUid || "",
+    fromUsername: mention.fromUsername || "",
+    fromEmail: mention.fromEmail || "",
+    fromName: mention.fromName || "",
+  };
+}
