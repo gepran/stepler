@@ -68,6 +68,7 @@ import {
   useT,
 } from "../renderer/src/lib/i18n";
 import { colorForLabel, labelStyle } from "../renderer/src/lib/labels";
+import { useWindowFocused } from "../renderer/src/lib/window-focus";
 import { requestNotifyPermission, setUnreadTitle } from "./notify";
 
 /**
@@ -464,6 +465,7 @@ function Timeline({ user, collab, onOpenSettings, searchQuery }) {
   const [error, setError] = useState(null);
   const [draft, setDraft] = useState("");
   const [composerFocused, setComposerFocused] = useState(false);
+  const windowFocused = useWindowFocused();
   const [pending, setPending] = useState(null);
   const [notice, setNotice] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -1033,7 +1035,7 @@ function Timeline({ user, collab, onOpenSettings, searchQuery }) {
               aria-label={t("input.addTask")}
               className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:border-neutral-600"
             />
-            {composerFocused && (
+            {composerFocused && windowFocused && (
               <span
                 aria-hidden="true"
                 className="shine-ring"

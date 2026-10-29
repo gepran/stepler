@@ -17,6 +17,7 @@ import {
 import { localYMD, ymdToDate } from "../lib/format";
 import { colorForLabel, labelStyle, projectName } from "../lib/labels";
 import { ipc } from "../lib/attachments";
+import { useWindowFocused } from "../lib/window-focus";
 import {
   X,
   Plus,
@@ -90,6 +91,7 @@ const TaskInput = forwardRef(function TaskInput(
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [isFocused, setIsFocused] = useState(false);
+  const windowFocused = useWindowFocused();
 
   const [draftProjects, setDraftProjects] = useState([]);
   const [draftDate, setDraftDate] = useState(null);
@@ -368,7 +370,11 @@ const TaskInput = forwardRef(function TaskInput(
               !isExpanded && showControls ? "pb-2" : ""
             }`}
           >
-            {isFocused && <span aria-hidden="true" className="shine-ring" />}
+            {/* The ring repaints every frame, so it must not outlive the
+                window's focus — see lib/window-focus. */}
+            {isFocused && windowFocused && (
+              <span aria-hidden="true" className="shine-ring" />
+            )}
 
             <button
               onClick={() => setIsExpanded(!isExpanded)}
